@@ -6,13 +6,16 @@
 <title>Dark Melon — SDR / HDR</title>
 <style>
 :root{font:16px/1.5 system-ui,-apple-system,BlinkMacSystemFont,sans-serif;color:#eee;background:#101113;color-scheme:dark}*{box-sizing:border-box}body{margin:0}main{max-width:1160px;margin:auto;padding:36px 24px}header{display:flex;justify-content:space-between;align-items:center;gap:20px;margin-bottom:36px}a{color:#9ce9d6;text-underline-offset:4px}.brand{font-weight:650;color:#eee;text-decoration:none}h1{font-size:clamp(30px,5vw,52px);line-height:1.1;letter-spacing:-.04em;margin:0 0 16px}p{color:#aeb2ba;max-width:760px}.eyebrow{color:#9ce9d6;font-size:12px;letter-spacing:.14em;text-transform:uppercase}.toolbar{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;margin:28px 0 16px}.modes{display:flex;gap:4px;background:#24262b;padding:4px;border-radius:12px}button{font:inherit;color:#bbb;background:transparent;border:0;padding:8px 18px;border-radius:8px;cursor:pointer}button[aria-pressed=true]{background:#454950;color:white}button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid #9ce9d6;outline-offset:4px}.status{font-size:13px;color:#b4bac3}.stage{--split:50%;position:relative;width:100%;aspect-ratio:3/2;background:#222;border-radius:14px;overflow:hidden;touch-action:pan-y}.stage img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}.stage .sdr{clip-path:inset(0 calc(100% - var(--split)) 0 0)}.divider{position:absolute;top:0;bottom:0;left:var(--split);width:2px;background:white;transform:translateX(-1px);pointer-events:none}.handle{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#15171bcc;border:1px solid #fff;border-radius:50%;width:44px;height:44px;display:grid;place-items:center;font-size:22px}.badge{position:absolute;top:16px;padding:5px 12px;background:#101113c9;border-radius:7px;font-size:12px;font-weight:650;letter-spacing:.06em;pointer-events:none}.left{left:16px}.right{right:16px}.stage[data-mode=sdr] .sdr{clip-path:none}.stage[data-mode=hdr] .sdr{visibility:hidden}.stage:not([data-mode=compare]) .divider,.stage[data-mode=sdr] .right,.stage[data-mode=hdr] .left{display:none}.scrubber{display:flex;align-items:center;gap:16px;margin:18px 0}.scrubber label{white-space:nowrap;font-size:14px}.scrubber input{width:100%;accent-color:#9ce9d6}.scrubber output{min-width:4ch;color:#aeb2ba;font-variant-numeric:tabular-nums}.notes{display:grid;grid-template-columns:1fr 1fr;gap:32px;border-top:1px solid #303239;margin-top:32px;padding-top:24px}h2{font-size:17px;margin:0}footer{font-size:13px;color:#9198a3;margin-top:32px}[hidden]{display:none!important}@media(max-width:600px){main{padding:24px 16px}.notes{grid-template-columns:1fr;gap:16px}header{margin-bottom:28px}.toolbar{gap:10px}button{padding:8px 14px}.badge{top:10px}}
+.samples{display:flex;gap:10px;overflow-x:auto;padding:6px 2px}.samples button{flex:0 0 120px;padding:6px;border:2px solid transparent;background:#202227}.samples button[aria-pressed=true]{border-color:#9ce9d6}.samples img{display:block;width:104px;height:70px;object-fit:cover;border-radius:4px;margin-bottom:5px}.samples span{font-size:12px}.stage{width:min(100%,calc(72vh * var(--aspect,1.5)));aspect-ratio:var(--aspect,1.5);margin-inline:auto}
 </style>
 </head>
 <body><main>
 <header><a class="brand" href="https://github.com/1096bimu/Dark-Melon">Dark Melon</a><a href="https://github.com/1096bimu/Dark-Melon">View on GitHub ↗</a></header>
-<div class="eyebrow">One photograph · two renditions</div>
+<div class="eyebrow">Five photographs · two renditions each</div>
 <h1>A good SDR image.<br>Room for more in HDR.</h1>
 <p>Move the divider or switch between renditions. Both come from the same Dark Melon export: the SDR base is unchanged, and the HDR version adds its embedded gain map.</p>
+
+<div class="samples" role="group" aria-label="Sample photographs"><button type="button" data-sample="DSC00037" aria-pressed="true" aria-label="Show sample DSC00037"><img src="samples/DSC00037-thumb.jpg" alt=""><span>DSC00037</span></button><button type="button" data-sample="DSC07576" aria-pressed="false" aria-label="Show sample DSC07576"><img src="samples/DSC07576-thumb.jpg" alt=""><span>DSC07576</span></button><button type="button" data-sample="DSC07530" aria-pressed="false" aria-label="Show sample DSC07530"><img src="samples/DSC07530-thumb.jpg" alt=""><span>DSC07530</span></button><button type="button" data-sample="DSC01058" aria-pressed="false" aria-label="Show sample DSC01058"><img src="samples/DSC01058-thumb.jpg" alt=""><span>DSC01058</span></button><button type="button" data-sample="DSC07851" aria-pressed="false" aria-label="Show sample DSC07851"><img src="samples/DSC07851-thumb.jpg" alt=""><span>DSC07851</span></button></div>
 <div class="toolbar"><div class="modes" role="group" aria-label="Preview mode"><button type="button" data-mode="compare" aria-pressed="true">Compare</button><button type="button" data-mode="sdr" aria-pressed="false">SDR</button><button type="button" data-mode="hdr" aria-pressed="false">HDR</button></div><span class="status" id="status" role="status">Loading both images…</span></div>
 <div class="stage" id="stage" data-mode="compare">
 <img id="hdr" src="samples/DSC00037.jpg" alt="HDR rendition of a figurine photographed against sunlit green leaves" decoding="async">
@@ -20,8 +23,8 @@
 <div class="badge left">SDR</div><div class="badge right">HDR</div><div class="divider"><div class="handle">↔</div></div>
 </div>
 <div class="scrubber" id="scrubber"><label for="split">Divider</label><input id="split" type="range" min="0" max="100" value="50" aria-label="SDR and HDR comparison divider"><output id="position" for="split">50%</output></div>
-<div class="notes"><section><h2>Look at the highlights</h2><p>The hair, white clothing, and sunlit leaves make useful comparison points. HDR can extend brightness and tonal separation beyond SDR white, while the SDR image remains a complete rendition.</p></section><section><h2>Seeing little or no difference?</h2><p>That is expected on an SDR viewing path. HDR needs a compatible display, browser, OS, and ISO 21496-1 gain-map decoder. The capability indicator reports what the browser advertises; it cannot verify that the gain map was rendered.</p></section></div>
-<footer><a href="samples/DSC00037.jpg" download>Download original HDR JPEG</a> · <a href="samples/DSC00037-sdr.jpg" download>Download SDR base</a><p>The SDR file preserves the original JPEG’s compressed base pixels and color profile. No simulated glow, brightness filter, or SDR re-encoding is used in this comparison.</p></footer>
+<div class="notes"><section><h2>Look at the highlights</h2><p>Choose a photograph above, then compare bright surfaces, lights, and reflections. HDR can extend brightness and tonal separation beyond SDR white, while the SDR image remains a complete rendition.</p></section><section><h2>Seeing little or no difference?</h2><p>That is expected on an SDR viewing path. HDR needs a compatible display, browser, OS, and ISO 21496-1 gain-map decoder. The capability indicator reports what the browser advertises; it cannot verify that the gain map was rendered.</p></section></div>
+<footer><a id="download-hdr" href="samples/DSC00037.jpg" download>Download original HDR JPEG</a> · <a id="download-sdr" href="samples/DSC00037-sdr.jpg" download>Download SDR base</a><p>The SDR file preserves the original JPEG’s compressed base pixels and color profile. No simulated glow, brightness filter, or SDR re-encoding is used in this comparison.</p></footer>
 </main><script>
 const stage=document.querySelector('#stage'),split=document.querySelector('#split'),position=document.querySelector('#position'),scrubber=document.querySelector('#scrubber');
 function setSplit(value){const v=Math.max(0,Math.min(100,value));split.value=v;stage.style.setProperty('--split',v+'%');position.value=Math.round(v)+'%';}
@@ -35,5 +38,22 @@ stage.addEventListener('pointermove',event=>{if(dragging)move(event);});
 const capability=matchMedia('(dynamic-range: high)'),status=document.querySelector('#status');let ready=false;
 function updateStatus(){if(ready)status.textContent=capability.matches?'Browser reports HDR display capability':'Browser reports SDR display capability';}
 capability.addEventListener('change',updateStatus);
-Promise.all([...document.querySelectorAll('.stage img')].map(image=>image.decode())).then(()=>{ready=true;updateStatus();}).catch(()=>{status.textContent='An image could not load. Try the original download links.';});
+let request=0;
+async function selectSample(name){
+ const current=++request;ready=false;status.textContent='Loading '+name+'…';stage.setAttribute('aria-busy','true');
+ const hdr=new Image(),sdr=new Image();hdr.src='samples/'+name+'.jpg';sdr.src='samples/'+name+'-sdr.jpg';
+ try{
+  await Promise.all([hdr.decode(),sdr.decode()]);if(current!==request)return;
+  const shownHDR=document.querySelector('#hdr'),shownSDR=document.querySelector('#sdr');
+  shownHDR.src=hdr.src;shownSDR.src=sdr.src;
+  shownHDR.alt='HDR rendition of sample '+name;shownSDR.alt='SDR base of sample '+name;
+  stage.style.setProperty('--aspect',hdr.naturalWidth/hdr.naturalHeight);
+  document.querySelector('#download-hdr').href=hdr.src;document.querySelector('#download-sdr').href=sdr.src;
+  document.querySelectorAll('button[data-sample]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.sample===name)));
+  ready=true;updateStatus();
+ }catch{if(current===request)status.textContent='Could not load '+name+'. Choose another sample or try again.';}
+ finally{if(current===request)stage.setAttribute('aria-busy','false');}
+}
+document.querySelectorAll('button[data-sample]').forEach(button=>button.addEventListener('click',()=>selectSample(button.dataset.sample)));
+selectSample('DSC00037');
 </script></body></html>
