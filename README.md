@@ -12,6 +12,33 @@ The goal is practical delivery, not merely a file that can technically encode HD
 
 For the platform mechanisms behind this approach, see [Apple's Adaptive HDR overview](https://developer.apple.com/videos/play/wwdc2024/10177/) and [Android's gain-map format documentation](https://developer.android.com/media/platform/hdr-image-format).
 
+## Features
+
+- **RAW, SDR, and HDR image development**, with paired SDR/HDR previews and JPEG, HEIF, and TIFF export.
+- **Batch export on macOS**, using each image's saved settings, concurrent processing with a memory budget, and automatic filename-conflict handling.
+- **Portable XMP sidecar settings**, leaving original images untouched. Once a sidecar exists, edits save automatically when switching files, closing, or quitting.
+- **Copy and paste settings**, with separate choices for Tone, White Balance, Color, HLS, and Effects.
+- **Folder-based file browser** with thumbnails and outlines identifying images with saved edits.
+- **White balance**, including averaged circular sampling and RAW-aware white-balance copying.
+- **Split toning**, saturation-versus-saturation and luminance-versus-saturation controls.
+- **HSL color adjustments and black-and-white conversion** with an adjustable color-sensitivity curve, designed for physically plausible tonal relationships and smooth near-white transitions.
+- **Clarity** for local contrast, using a large-radius high-pass layer blended with Soft Light. Similar in purpose to Lightroom's Clarity, but a different implementation; negative strength softens contrast.
+- **HDF filter** for soft glow, adding a blurred version of the image with adjustable strength and radius.
+- **Film grain** based on cinegrain2, with adjustable size, strength, and tonal distribution—from a shadow-weighted response to a midtone peak—for convincing texture across different tones.
+- **GPU histogram and vectorscope**, with both tone curves drawn over the source histogram.
+- **sRGB, Display P3, and Rec.2020 processing**, plus RAW decoder controls where supported.
+
+## Not yet included
+
+Dark Melon is a focused image developer, not a full replacement for a commercial photo editor or library manager.
+
+- No crop, rotation, perspective correction, or other geometric transforms.
+- No catalog or database; images stay in ordinary folders with optional sidecars.
+- No ratings, flags, reject/keep workflow, or other culling tools.
+- No file-management operations such as deleting, moving, or renaming source images.
+- No updated thumbnails of edits in the file browser. Original files and their embedded previews remain untouched; the browser shows source thumbnails, while the main preview shows the developed result.
+- No masks, brushes, gradients, subject selections, or other spatially selective edits. Color and tonal-range controls are global.
+
 ## Development philosophy: one edit, two useful renditions
 
 Dark Melon aims to make natural-looking SDR and HDR photographs together, using a small, coordinated set of tone controls. The SDR version should be a finished photograph with sensible exposure and contrast. The HDR version should use the display's extra headroom to reveal highlight separation and luminous detail that SDR cannot show, rather than simply turning up the brightness of the whole image.
