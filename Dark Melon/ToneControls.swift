@@ -58,6 +58,8 @@ struct SlopeEditor: View {
     @Binding var mapping: ToneMapping
     var pickingTone = false
     var onPickTone: () -> Void = {}
+    var onToneChanged: () -> Void = {}
+    var onContrastChanged: () -> Void = {}
     var onContrastAdjustment: () -> Void = {}
     var onToneEditingChanged: (Bool) -> Void = { _ in }
     @State private var showLowContrastTip = false
@@ -84,6 +86,7 @@ struct SlopeEditor: View {
                         .frame(width: 22).accessibilityHidden(true)
                 Slider(value: Binding(get: { 1 - mapping.tonePosition },
                                       set: {
+                                          if mapping.tonePosition != 1 - $0 { onToneChanged() }
                                           mapping.tonePosition = 1 - $0
                                           showLowContrastTip = abs(mapping.concentration) <= 0.1
                                       }),
@@ -115,6 +118,7 @@ struct SlopeEditor: View {
                         .frame(width: 22).accessibilityHidden(true)
                     Slider(value: Binding(get: { mapping.concentration },
                                           set: {
+                                              if mapping.concentration != $0 { onContrastChanged() }
                                               mapping.setContrastPreservingHDR($0)
                                               onContrastAdjustment()
                                           }), in: -1...1) { Text("Contrast") }

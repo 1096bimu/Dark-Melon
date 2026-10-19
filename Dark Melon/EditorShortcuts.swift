@@ -17,10 +17,17 @@ enum EditorPanel: String, CaseIterable, Identifiable {
 private struct EditorPanelFocus: FocusedValueKey {
     typealias Value = Binding<EditorPanel>
 }
+private struct TutorialFocus: FocusedValueKey {
+    typealias Value = () -> Void
+}
 private struct BatchExportFocus: FocusedValueKey {
     typealias Value = () -> Void
 }
 extension FocusedValues {
+    var startTutorial: (() -> Void)? {
+        get { self[TutorialFocus.self] }
+        set { self[TutorialFocus.self] = newValue }
+    }
     var batchExport: (() -> Void)? {
         get { self[BatchExportFocus.self] }
         set { self[BatchExportFocus.self] = newValue }
@@ -35,11 +42,16 @@ extension FocusedValues {
 struct EditorCommands: Commands {
     @FocusedBinding(\.editorPanel) private var panel
     @FocusedValue(\.batchExport) private var batchExport
+    @FocusedValue(\.startTutorial) private var startTutorial
     var body: some Commands {
         CommandGroup(after: .newItem) {
             Divider()
             Button("Batch Export…") { batchExport?() }.disabled(batchExport == nil)
             SettingsLink { Text("Settings…") }
+        }
+        CommandGroup(replacing: .help) {
+            Button("Guided Tutorial…") { startTutorial?() }
+                .disabled(startTutorial == nil)
         }
         CommandMenu("Panels") {
             ForEach(EditorPanel.allCases) { item in

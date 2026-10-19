@@ -43,6 +43,8 @@ struct ContentView: View {
     @State private var development: RAWDevelopment?
     @State private var mapping = ToneMapping()
     @State private var pickingWhiteBalance = false
+    @AppStorage("guidedTutorialPresented") private var tutorialPresented = false
+    @State private var tutorial = EditingTutorial()
     @State private var pickingTone = false
     @State private var hoveredPreviewPixel: CGPoint?
     @State private var displayMode = PreviewHistogramMode.hdrLinear
@@ -58,6 +60,10 @@ struct ContentView: View {
     @State private var importing = false
     @State private var loading = false
     @State private var errorMessage: String?
+
+    private var tutorialNeedsSave: Bool {
+        tutorial.active && tutorial.step == .save && !tutorial.fulfilled
+    }
 
     private var currentRecipe: DevelopmentRecipe {
         DevelopmentRecipe(colorSpace: colorSpace, mapping: mapping)
@@ -199,6 +205,13 @@ struct ContentView: View {
                     }
                 }
             }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if tutorial.active {
+                    EditingTutorialGuide(tutorial: tutorial, imageReady: development != nil && !loading,
+                                         hdrEnabled: mapping.hdrEnabled, advance: advanceTutorial,
+                                         close: { tutorial.active = false })
+                }
+            }
             .frame(minWidth: 320)
                 ScrollView {
                     Group {
@@ -230,7 +243,9 @@ struct ContentView: View {
                                 SlopeEditor(mapping: $mapping, pickingTone: pickingTone, onPickTone: {
                                     pickingTone.toggle()
                                     pickingWhiteBalance = false
-                                }, onContrastAdjustment: { hdrPreview = false }) { editing in
+                                }, onToneChanged: { tutorial.record(.tone) },
+                                   onContrastChanged: { tutorial.record(.contrast) },
+                                   onContrastAdjustment: { hdrPreview = false }) { editing in
                                     adjustingTone = editing
                                     if !editing { toneLocatorImage = nil }
                                 }
@@ -248,6 +263,15 @@ struct ContentView: View {
                     .disabled(loading || development == nil)
                 }
                 .frame(minWidth: 320, idealWidth: 360, maxWidth: 480)
+            }
+            .task {
+                if !tutorialPresented {
+                    tutorialPresented = true
+                    startTutorial()
+                }
+            }
+            .onChange(of: recipeSourceURL) { _, _ in
+                if tutorial.active { tutorial.resetForImage() }
             }
             .onChange(of: exportSettings) { _, settings in settings.remember() }
             .onChange(of: mapping.blackAndWhite.isEnabled) { _, _ in
@@ -355,6 +379,7 @@ struct ContentView: View {
             }
             .navigationTitle(filename)
             .focusedSceneValue(\.editorPanel, $panel)
+            .focusedSceneValue(\.startTutorial, { startTutorial() })
             #if os(macOS)
             .focusedSceneValue(\.batchExport, browserModel.directory == nil ? nil : { showingBatchExport = true })
             .sheet(isPresented: $showingBatchExport) {
@@ -369,11 +394,11 @@ struct ContentView: View {
                         }
                         .keyboardShortcut("e", modifiers: [.command, .shift])
                         .disabled(development == nil || loading || exporting)
-                        Button(savingRecipe ? "Saving Edits…" : savedRecipe == currentRecipe ? "Edits Saved" : "Save Edits", systemImage: "square.and.arrow.down") {
+                        Button(savingRecipe ? "Saving Edits…" : savedRecipe == currentRecipe && !tutorialNeedsSave ? "Edits Saved" : "Save Edits", systemImage: "square.and.arrow.down") {
                             saveRecipe()
                         }
                         .keyboardShortcut("s", modifiers: .command)
-                        .disabled(development == nil || loading || savingRecipe || savedRecipe == currentRecipe)
+                        .disabled(development == nil || loading || savingRecipe || (savedRecipe == currentRecipe && !tutorialNeedsSave))
                         .help("Save development settings beside the original image in an XMP sidecar")
                         Picker("Color space", selection: Binding(get: { colorSpace }, set: { selected in
                             guard selected != colorSpace else { return }
@@ -387,7 +412,10 @@ struct ContentView: View {
                         .pickerStyle(.segmented)
                         .frame(width: 260)
                         .disabled(loading || exporting)
-                        Button(hdrPreview ? "Preview: HDR" : "Preview: SDR") { hdrPreview.toggle() }
+                        Button(hdrPreview ? "Preview: HDR" : "Preview: SDR") {
+                            hdrPreview.toggle()
+                            tutorial.previewToggled(hdr: hdrPreview)
+                        }
                             .keyboardShortcut("h", modifiers: [])
                             .disabled(!mapping.hdrEnabled)
                             .help("Toggle HDR or SDR display of the developed image")
@@ -425,7 +453,10 @@ struct ContentView: View {
             }
             .fileExporter(isPresented: $showingSave, document: exportDocument,
                           contentType: exportContentType, defaultFilename: exportName) { result in
-                if case .failure(let error) = result { errorMessage = error.localizedDescription }
+                switch result {
+                case .success: tutorial.record(.export)
+                case .failure(let error): errorMessage = error.localizedDescription
+                }
                 exportDocument = nil
             }
             .fileImporter(isPresented: $importing, allowedContentTypes: [.image]) { result in
@@ -572,6 +603,7 @@ struct ContentView: View {
             if entry.url == recipeSourceURL?.standardizedFileURL {
                 savedRecipe = entry.recipe
                 baselineRecipe = entry.recipe
+                tutorial.record(.save)
             }
         }
     }
@@ -636,7 +668,23 @@ struct ContentView: View {
             savedRecipe = recipe
             baselineRecipe = recipe
             pendingEdits.remove(sourceURL)
+            tutorial.record(.save)
         } catch { errorMessage = "Could not save edits: \(error.localizedDescription) If folder access is denied, open the containing folder in the file browser and try again." }
+    }
+
+    private func startTutorial() {
+        tutorialPresented = true
+        tutorial.start()
+        panel = .tone
+        hdrPreview = false
+    }
+
+    private func advanceTutorial() {
+        tutorial.advance()
+        if tutorial.step == .contrast || tutorial.step == .preview {
+            hdrPreview = false
+        }
+        if tutorial.step == .tone || tutorial.step == .contrast { panel = .tone }
     }
 
     private func prepareExport() {
