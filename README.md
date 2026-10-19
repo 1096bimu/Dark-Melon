@@ -2,6 +2,16 @@
 
 A SwiftUI image development app for RAW, SDR, and HDR images, with tone and color controls, GPU scopes, effects, and gain-map export.
 
+## HDR in formats people actually use
+
+Dark Melon prioritizes **JPEG and HEIF/HEIC with HDR gain maps**: familiar photo formats built around a usable SDR image, with extra HDR information for compatible viewers. JPEG provides the broadest everyday fallback, so people can open the photograph on most phones even when HDR rendering is unavailable. HEIC is a natural option for Apple photo workflows.
+
+The goal is practical delivery, not merely a file that can technically encode HDR. We choose this approach over requiring recipients to use AVIF or JPEG XL, where support for opening the format does not necessarily mean their particular photo app, browser, or sharing service will preserve and display its HDR rendition. Those formats can deliver excellent HDR in supported workflows; they are simply not a prerequisite for viewing a Dark Melon export.
+
+**A good SDR photograph everywhere the base format is supported; an HDR extension where the full viewing path supports it.** Actual HDR still depends on the display, OS, viewer, and preservation of the gain map. Dark Melon writes ISO 21496-1 gain maps; older viewers that only understand a different gain-map variant may show SDR. HEIC is less universally viewable than JPEG, and messaging or social platforms may strip HDR metadata during conversion.
+
+For the platform mechanisms behind this approach, see [Apple's Adaptive HDR overview](https://developer.apple.com/videos/play/wwdc2024/10177/) and [Android's gain-map format documentation](https://developer.android.com/media/platform/hdr-image-format).
+
 ## Development philosophy: one edit, two useful renditions
 
 Dark Melon aims to make natural-looking SDR and HDR photographs together, using a small, coordinated set of tone controls. The SDR version should be a finished photograph with sensible exposure and contrast. The HDR version should use the display's extra headroom to reveal highlight separation and luminous detail that SDR cannot show, rather than simply turning up the brightness of the whole image.
