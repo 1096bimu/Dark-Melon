@@ -117,7 +117,14 @@ struct ImageFileBrowser: View {
     let open: (URL) -> Void
     var model: ImageBrowserModel
     var selection: Binding<Set<URL>>? = nil
+    var changeDirectory: ((URL, Bool) -> Void)? = nil
     @State private var choosingFolder = false
+
+    private func navigate(_ url: URL, choose: Bool = false) {
+        if let changeDirectory { changeDirectory(url, choose) }
+        else if choose { model.choose(url) }
+        else { model.navigate(to: url) }
+    }
 
     var body: some View {
         // Read observable collections here, not inside deferred lazy-container
@@ -142,7 +149,7 @@ struct ImageFileBrowser: View {
             if let directory = model.directory {
                 HStack {
                     Button("Up", systemImage: "chevron.up") {
-                        model.navigate(to: directory.deletingLastPathComponent())
+                        navigate(directory.deletingLastPathComponent())
                     }
                     .labelStyle(.iconOnly)
                     .disabled(selection != nil || directory.standardizedFileURL == model.root?.standardizedFileURL)
@@ -160,7 +167,7 @@ struct ImageFileBrowser: View {
                                 ForEach(folders) { entry in
                                     let rank = recent.firstIndex(of: entry.url.standardizedFileURL)
                                     let warmth: Color = rank == 0 ? .orange : rank == 1 ? .yellow : .cyan
-                                    Button { model.navigate(to: entry.url) } label: {
+                                    Button { navigate(entry.url) } label: {
                                         HStack {
                                             Image(systemName: "folder")
                                                 .foregroundStyle(rank == nil ? Color.secondary : warmth.opacity(rank == 0 ? 1 : rank == 1 ? 0.65 : 0.4))
@@ -255,7 +262,7 @@ struct ImageFileBrowser: View {
         }
         .fileImporter(isPresented: $choosingFolder, allowedContentTypes: [.folder]) { result in
             switch result {
-            case .success(let url): model.choose(url)
+            case .success(let url): navigate(url, choose: true)
             case .failure(let error): model.error = error.localizedDescription
             }
         }

@@ -2,20 +2,24 @@
 import SwiftUI
 import QuartzCore
 
+enum PreviewSampleTool { case whiteBalance, tone }
+
 /// Keeps HDR presentation on the image layer while zooming and panning.
 struct HDRImagePreview: NSViewRepresentable {
     let image: CGImage
     let hdr: Bool
     let sourceID: UUID
-    let pickingWhiteBalance: Bool
+    let sampleTool: PreviewSampleTool?
+    let hover: (CGPoint?) -> Void
     let sample: (CGPoint, CGFloat) -> Void
 
     func makeNSView(context: Context) -> ImageDisplay { ImageDisplay() }
 
     func updateNSView(_ view: ImageDisplay, context: Context) {
+        view.hover = hover
         view.display(image, hdr: hdr, sourceID: sourceID)
         view.sample = sample
-        view.picking = pickingWhiteBalance
+        view.sampleTool = sampleTool
     }
 
     final class ImageDisplay: NSView {
@@ -24,9 +28,60 @@ struct HDRImagePreview: NSViewRepresentable {
         private var sampleCenter: CGPoint?
         private var sampleRadius: CGFloat = 0
         var sample: ((CGPoint, CGFloat) -> Void)?
-        var picking = false {
+        var hover: ((CGPoint?) -> Void)?
+        private var hoverTracking: NSTrackingArea?
+        private var hoverUpdateScheduled = false
+        private var reportedHover: CGPoint?
+
+        override func updateTrackingAreas() {
+            super.updateTrackingAreas()
+            if let hoverTracking { removeTrackingArea(hoverTracking) }
+            let tracking = NSTrackingArea(rect: .zero,
+                options: [.mouseEnteredAndExited, .mouseMoved, .activeInKeyWindow, .inVisibleRect],
+                owner: self, userInfo: nil)
+            addTrackingArea(tracking)
+            hoverTracking = tracking
+            scheduleHoverUpdate()
+        }
+
+        override func mouseEntered(with event: NSEvent) { scheduleHoverUpdate() }
+        override func mouseMoved(with event: NSEvent) { scheduleHoverUpdate() }
+        override func mouseExited(with event: NSEvent) {
+            reportedHover = nil
+            hover?(nil)
+        }
+
+        private func scheduleHoverUpdate() {
+            guard !hoverUpdateScheduled else { return }
+            hoverUpdateScheduled = true
+            // Also called by layout/updateNSView: defer SwiftUI state changes and coalesce events.
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.hoverUpdateScheduled = false
+                var location: CGPoint?
+                if let window = self.window, window.isKeyWindow {
+                    let point = self.convert(window.mouseLocationOutsideOfEventStream, from: nil)
+                    let rect = self.imageLayer.frame
+                    if self.visibleRect.contains(point), rect.contains(point),
+                       rect.width > 0, rect.height > 0, self.imageSize.width > 0, self.imageSize.height > 0 {
+                        // Pixel centers suppress repeated sampling within the same image pixel.
+                        let x = floor((point.x - rect.minX) / rect.width * self.imageSize.width)
+                        let y = floor((point.y - rect.minY) / rect.height * self.imageSize.height)
+                        location = CGPoint(x: (x + 0.5) / self.imageSize.width,
+                                           y: (y + 0.5) / self.imageSize.height)
+                    }
+                }
+                if location != self.reportedHover {
+                    self.reportedHover = location
+                    self.hover?(location)
+                }
+            }
+        }
+
+        private var picking: Bool { sampleTool != nil }
+        var sampleTool: PreviewSampleTool? {
             didSet {
-                if picking != oldValue {
+                if sampleTool != oldValue {
                     sampleCenter = nil
                     sampleRadius = 0
                     circle.path = nil
@@ -93,6 +148,7 @@ struct HDRImagePreview: NSViewRepresentable {
                                       y: bounds.midY - size.height / 2 + offset.y,
                                       width: size.width, height: size.height)
             CATransaction.commit()
+            scheduleHoverUpdate()
         }
 
         private func changeZoom(_ factor: CGFloat, event: NSEvent) {
@@ -136,6 +192,7 @@ struct HDRImagePreview: NSViewRepresentable {
             }
         }
         override func mouseDragged(with event: NSEvent) {
+            scheduleHoverUpdate()
             let point = convert(event.locationInWindow, from: nil)
             if picking {
                 guard let center = sampleCenter else { return }

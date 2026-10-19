@@ -42,7 +42,7 @@ nonisolated struct DevelopmentRecipe: Codable, Equatable, Sendable {
         guard m.hls.count == 6,
               within(m.black, 0...1), within(m.white, 0...1), m.white - m.black >= ToneMapping.minimumRange * 0.999,
               within(m.tonePosition, 0...1), within(m.concentration, -1...1),
-              within(m.hdrMax, 1...20), within(m.hdrConcentrationOffset, -1...1),
+              within(m.hdrMax, 1...20), within(m.hdrConcentrationOffset, -2...2),
               within(m.clarity, -2...2), within(m.clarityRadius, 15...90),
               within(m.hdf, 0...0.2), within(m.hdfRadius, 50...200),
               within(m.grain.size, 0.2...3), within(m.grain.strength, 0...5), within(m.grain.distribution, 0...1),

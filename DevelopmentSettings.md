@@ -5,6 +5,20 @@ Reopening the source restores its recipe before automatic tone initialization.
 Changes are saved explicitly; the toolbar changes to Edits Saved only when the
 current persistent settings match the last successful save.
 
+Switching images keeps changed recipes in a folder-scoped, in-memory pending list,
+including images that already have sidecars. Selecting an entry restores its edits
+and queues changes to the image being left. Save writes all pending recipes (and
+any newer edits to the current image); successfully saved entries leave the list.
+Ignore asks before discarding the list and reloads the current image from disk.
+Changing folders, opening an individual file, and normal macOS close/quit require
+Save All, Discard, or Cancel when edits are pending. There is no automatic save.
+Untouched automatic import adjustments do not count as user edits. SDR imports
+without a saved recipe start with HDR Gain off.
+
+The queue is memory-only: force quit, crashes, and OS process termination cannot
+be intercepted to show a confirmation. RAW decoder controls remain excluded from
+persistent recipes as described below.
+
 Move/copy the sidecar with the source; rename both matching prefixes together.
 No absolute source path is stored. Including the original extension avoids
 collisions between, for example, photo.dng and photo.jpg. The application-specific

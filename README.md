@@ -24,7 +24,7 @@ An original 2736 × 1824 JPEG export with an embedded ISO 21496-1 HDR gain map. 
 
 - **RAW, SDR, and HDR image development**, with paired SDR/HDR previews and JPEG, HEIF, and TIFF export.
 - **Batch export on macOS**, using each image's saved settings, concurrent processing with a memory budget, and automatic filename-conflict handling.
-- **Portable XMP sidecar settings**, leaving original images untouched. Once a sidecar exists, edits save automatically when switching files, closing, or quitting.
+- **Portable XMP sidecar settings**, leaving original images untouched. Unsaved recipes stay in a pending-edits list when switching images. Save commits them to sidecars; folder changes and normal close/quit ask before discarding pending work.
 - **Copy and paste settings**, with separate choices for Tone, White Balance, Color, HLS, and Effects.
 - **Folder-based file browser** with thumbnails and outlines identifying images with saved edits.
 - **White balance**, including averaged circular sampling and RAW-aware white-balance copying.

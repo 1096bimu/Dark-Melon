@@ -1,21 +1,26 @@
 import CoreGraphics
 import Foundation
 
-/// Outer projection of the entire smaller RGB cube onto Y′UV chroma.
+/// Outer projection of the entire smaller RGB cube onto Lab a*/b*.
 /// Inside is not proof of membership: the scope discards lightness.
 nonisolated enum ScopeGamutBoundary {
     struct Boundary {
         let name: String
         let points: [CGPoint]
     }
-    private static let cache: [ProcessingColorSpace: [Boundary]] = Dictionary(uniqueKeysWithValues:
-        ProcessingColorSpace.allCases.map { working in
-            let smaller: [ProcessingColorSpace] = working == .rec2020 ? [.sRGB, .displayP3] : working == .displayP3 ? [.sRGB] : []
-            return (working, smaller.map { boundary(from: $0, to: working) })
-        })
-    static func boundaries(in space: ProcessingColorSpace) -> [Boundary] { cache[space]! }
+    // Lab is independent of the working RGB space, so each outline is built only once.
+    private static let cache: [ProcessingColorSpace: Boundary] = [
+        .sRGB: boundary(from: .sRGB), .displayP3: boundary(from: .displayP3)
+    ]
+    static func boundaries(in space: ProcessingColorSpace) -> [Boundary] {
+        switch space {
+        case .sRGB: []
+        case .displayP3: [cache[.sRGB]!]
+        case .rec2020: [cache[.sRGB]!, cache[.displayP3]!]
+        }
+    }
 
-    private static func boundary(from source: ProcessingColorSpace, to target: ProcessingColorSpace) -> Boundary {
+    private static func boundary(from source: ProcessingColorSpace) -> Boundary {
         // Sample all six surfaces, including black and white edges, in encoded RGB.
         // Expand by one angular cell and a small radial margin for sampling error.
         let bins = 360, steps = 48
@@ -29,17 +34,15 @@ nonisolated enum ScopeGamutBoundary {
                         components[(axis + 1) % 3] = Double(i) / Double(steps)
                         components[(axis + 2) % 3] = Double(j) / Double(steps)
                         components[3] = 1
-                        guard let c = CGColor(colorSpace: source.encoded, components: components)?.converted(
-                            to: target.encoded, intent: .relativeColorimetric, options: nil)?.components else { continue }
-                        let r = Double(c[0]), g = Double(c[1]), b = Double(c[2])
-                        let point = ScopeProjection.point(r: r, g: g, b: b)
+                        let point = ScopeProjection.point(r: components[0], g: components[1],
+                                                          b: components[2], space: source)
                         let chroma = hypot(point.x, point.y)
                         guard chroma > 0.00001 else { continue }
                         let angle = (atan2(point.y, point.x) / (2 * .pi) + 1).truncatingRemainder(dividingBy: 1)
                         let bin = Int(angle * Double(bins)) % bins
                         for offset in -1...1 {
                             let index = (bin + offset + bins) % bins
-                            radii[index] = max(radii[index], min(1, chroma + 0.015))
+                            radii[index] = max(radii[index], chroma + 0.015)
                         }
                     }
                 }

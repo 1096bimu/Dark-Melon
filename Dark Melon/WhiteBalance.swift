@@ -9,11 +9,10 @@ nonisolated struct WhiteBalance: Codable, Equatable, Sendable {
     mutating func nudge(dx: Double, dy: Double, colorSpace: ProcessingColorSpace = .sRGB) {
         let distance = hypot(dx, dy)
         guard distance > 0 else { return }
-        // Invert the scope's U/right, V/up direction into an RGB adjustment.
-        let u = dx / distance, v = -dy / distance
-        let rgb = SIMD3(v / 0.877,
-                        -(0.299 * v / 0.877 + 0.114 * u / 0.492) / 0.587,
-                        u / 0.492)
+        // Lab axes: right is +a (magenta), upward is +b (yellow).
+        let neutral = ScopeProjection.linear(SIMD3(50, 0, 0), space: colorSpace)
+        let shifted = ScopeProjection.linear(SIMD3(50, dx / distance, -dy / distance), space: colorSpace)
+        let rgb = (shifted - neutral) / neutral
         let normalized = rgb / max(abs(rgb.x), abs(rgb.y), abs(rgb.z))
         let direction = (normalized.x, normalized.y, normalized.z)
         let weights = colorSpace.luminance

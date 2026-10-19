@@ -130,7 +130,7 @@ actor RAWDeveloper {
         }
         try Task.checkCancellation()
         return PreviewImages(sdr: sdr, hdr: hdr,
-                             temperatureSamples: TemperatureLocus.samples(encodedPixels: pixels))
+                             temperatureSamples: TemperatureLocus.samples(encodedPixels: pixels, space: colorSpace))
     }
 
     func preview(_ source: CGImage, mapping: ToneMapping, hdr: Bool = true) throws -> CGImage {
@@ -140,7 +140,7 @@ actor RAWDeveloper {
     }
 
     /// Average a circular region of the unedited linear preview, at at most 256 pixels across.
-    func sampleWhiteBalance(_ source: CGImage, center: CGPoint, radius: CGFloat) throws -> WhiteBalance {
+    private func sampleMean(_ source: CGImage, center: CGPoint, radius: CGFloat) throws -> SIMD3<Double> {
         let image = CIImage(cgImage: source)
         let r = radius * image.extent.width
         guard r > 0 else { throw DevelopmentError.decode }
@@ -176,7 +176,11 @@ actor RAWDeveloper {
         }
         try Task.checkCancellation()
         guard weight > 0 else { throw DevelopmentError.decode }
-        let mean = sum / weight
+        return sum / weight
+    }
+
+    func sampleWhiteBalance(_ source: CGImage, center: CGPoint, radius: CGFloat) throws -> WhiteBalance {
+        let mean = try sampleMean(source, center: center, radius: radius)
         guard min(mean.x, mean.y, mean.z) > 1e-6 else { throw DevelopmentError.decode }
         let inverse = SIMD3(1 / mean.x, 1 / mean.y, 1 / mean.z)
         let weights = colorSpace.luminance
@@ -184,8 +188,19 @@ actor RAWDeveloper {
         return WhiteBalance(red: inverse.x / normalization, green: inverse.y / normalization, blue: inverse.z / normalization)
     }
 
-    func mappedImage(_ image: CIImage, mapping: ToneMapping, hdr: Bool) throws -> CIImage {
-        try Task.checkCancellation()
+    func sampleTone(_ source: CGImage, center: CGPoint, radius: CGFloat,
+                    mapping: ToneMapping) throws -> (tone: Double, balance: WhiteBalance) {
+        let mean = try sampleMean(source, center: center, radius: radius)
+        let balance = ScopeProjection.correctedBalance(sample: mean, balance: mapping.whiteBalance, space: colorSpace)
+        let rgb = mean * SIMD3(balance.red, balance.green, balance.blue)
+        let w = colorSpace.luminance
+        let luminance = rgb.x*w.x + rgb.y*w.y + rgb.z*w.z
+        let tone = min(1, max(0, (luminance - mapping.black) / max(ToneMapping.minimumRange, mapping.white-mapping.black)))
+        return (tone, balance)
+    }
+
+    /// Shared input domain for tone mapping and the temporary Tone locator.
+    private func toneInput(_ image: CIImage, mapping: ToneMapping) throws -> CIImage {
         let gains = mapping.blackAndWhite.isEnabled ? WhiteBalance() : mapping.whiteBalance
         var balanced = image.applyingFilter("CIColorMatrix", parameters: [
             "inputRVector": CIVector(x: gains.red, y: 0, z: 0, w: 0),
@@ -200,6 +215,36 @@ actor RAWDeveloper {
             ]) else { throw DevelopmentError.decode }
             balanced = gray
         }
+        return balanced
+    }
+
+    private let toneLocatorKernel = CIColorKernel(source: """
+        kernel vec4 toneLocator(__sample sourcePixel, __sample preview, vec3 weights,
+                                float position, float width) {
+            vec3 rgb = unpremultiply(sourcePixel).rgb;
+            float distance = abs(dot(rgb, weights) - position);
+            float mask = 1.0 - smoothstep(width * 0.35, width, distance);
+            vec4 base = unpremultiply(preview);
+            return premultiply(vec4(mix(base.rgb, vec3(1.0, 0.0, 0.65), mask * 0.9), base.a));
+        }
+        """)
+
+    /// One GPU composite over the cached preview; never enters the export or analysis pipeline.
+    func toneLocator(_ source: CGImage, preview: CGImage, mapping: ToneMapping, hdr: Bool) throws -> CGImage {
+        try Task.checkCancellation()
+        let input = try toneInput(CIImage(cgImage: source), mapping: mapping)
+        let weights = colorSpace.luminance
+        guard let image = toneLocatorKernel?.apply(extent: input.extent, arguments: [
+            input, CIImage(cgImage: preview),
+            CIVector(x: weights.x, y: weights.y, z: weights.z),
+            mapping.peakPosition, max(0.0001, (mapping.white - mapping.black) * 0.025)
+        ]) else { throw DevelopmentError.decode }
+        return try displayPreview(image, hdr: hdr, headroom: mapping.hdrMax)
+    }
+
+    func mappedImage(_ image: CIImage, mapping: ToneMapping, hdr: Bool) throws -> CIImage {
+        try Task.checkCancellation()
+        let balanced = try toneInput(image, mapping: mapping)
         var color = mapping.color
         if mapping.blackAndWhite.isEnabled {
             color.saturationStart = 1; color.saturationEnd = 1; color.saturationCurve = 0

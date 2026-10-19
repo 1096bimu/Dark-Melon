@@ -2,6 +2,9 @@ import SwiftUI
 
 struct VectorscopeView: View {
     let source: CGImage?
+    let hoverSource: CGImage?
+    let hoverPosition: CGPoint?
+    let hoverRevision: UUID
     let temperatureSamples: [TemperatureLocus.Sample]
     let revision: UUID
     let colorSpace: ProcessingColorSpace
@@ -11,6 +14,12 @@ struct VectorscopeView: View {
     private var balance: WhiteBalance {
         get { mapping.whiteBalance }
         nonmutating set { mapping.whiteBalance = newValue }
+    }
+    @State private var hoverSampler = ScopeHoverSampler()
+    @State private var hoveredPoint: CGPoint?
+    @State private var sampledRevision: UUID?
+    private var hoverMarker: CGPoint? {
+        hoverPosition != nil && sampledRevision == hoverRevision ? hoveredPoint : nil
     }
     @State private var zoom = 2.0
     @GestureState private var pinch = 1.0
@@ -44,7 +53,7 @@ struct VectorscopeView: View {
                 Text("Click center, drag radius, click again to apply. Click the eyedropper to cancel.")
                     .foregroundStyle(.secondary)
             }
-            Text("SDR · \(colorSpace.rawValue) · Y′UV · BT.601")
+            Text("SDR · \(colorSpace.rawValue) · Lab · D50")
                 .foregroundStyle(.secondary)
             GeometryReader { geometry in
                 let diameter = max(1, min(geometry.size.width, geometry.size.height) - 36)
@@ -64,7 +73,7 @@ struct VectorscopeView: View {
                                 width: r * 2, height: r * 2)),
                                 with: .color(.white.opacity(0.2)), lineWidth: 0.5)
                         }
-                        context.draw(Text("\(0.75 / magnification, format: .number.precision(.fractionLength(3)))")
+                        context.draw(Text("\(128.0 / magnification, format: .number.precision(.fractionLength(0)))")
                             .font(.caption2).foregroundStyle(.secondary),
                             at: CGPoint(x: center.x, y: center.y + radius - 8))
                         var axes = Path()
@@ -73,8 +82,19 @@ struct VectorscopeView: View {
                         axes.move(to: CGPoint(x: center.x, y: center.y - radius))
                         axes.addLine(to: CGPoint(x: center.x, y: center.y + radius))
                         context.stroke(axes, with: .color(.white.opacity(0.25)), style: StrokeStyle(lineWidth: 0.5, dash: [3, 3]))
-                        context.draw(Text("+U").font(.caption2).foregroundStyle(.secondary), at: CGPoint(x: center.x + radius - 14, y: center.y - 10))
-                        context.draw(Text("+V").font(.caption2).foregroundStyle(.secondary), at: CGPoint(x: center.x + 14, y: center.y - radius + 10))
+                        context.draw(Text("+a").font(.caption2).foregroundStyle(.secondary), at: CGPoint(x: center.x + radius - 14, y: center.y - 10))
+                        context.draw(Text("+b").font(.caption2).foregroundStyle(.secondary), at: CGPoint(x: center.x + 14, y: center.y - radius + 10))
+                        context.draw(Text("−a").font(.caption2).foregroundStyle(.green),
+                                     at: CGPoint(x: center.x - radius + 14, y: center.y - 10))
+                        context.draw(Text("−b").font(.caption2).foregroundStyle(.blue),
+                                     at: CGPoint(x: center.x + 14, y: center.y + radius - 10))
+                        // b = -a in Lab; screen Y runs down.
+                        let diagonal = radius / sqrt(2.0)
+                        var boundaryLine = Path()
+                        boundaryLine.move(to: CGPoint(x: center.x - diagonal, y: center.y - diagonal))
+                        boundaryLine.addLine(to: CGPoint(x: center.x + diagonal, y: center.y + diagonal))
+                        context.stroke(boundaryLine, with: .color(.orange.opacity(0.8)),
+                                       style: StrokeStyle(lineWidth: 1, dash: [5, 3]))
                         var clipped = context
                         clipped.clip(to: Path(ellipseIn: CGRect(x: center.x - radius, y: center.y - radius,
                                                                width: diameter, height: diameter)))
@@ -93,7 +113,7 @@ struct VectorscopeView: View {
                         let primaries: [(Double, Double, Double)] = [(1,0,0), (1,1,0), (0,1,0), (0,1,1), (0,0,1), (1,0,1)]
                         for index in 0..<6 {
                             let rgb = primaries[index]
-                            let p = ScopeProjection.point(r: rgb.0, g: rgb.1, b: rgb.2)
+                            let p = ScopeProjection.point(r: rgb.0, g: rgb.1, b: rgb.2, space: colorSpace)
                             let length = hypot(p.x, p.y)
                             let dx = p.x / length, dy = p.y / length
                             var line = Path()
@@ -136,6 +156,24 @@ struct VectorscopeView: View {
                             context.draw(text.foregroundStyle(.black), at: CGPoint(x: label.x + 1, y: label.y + 1))
                             context.draw(text.foregroundStyle(.yellow), at: label)
                         }
+                        if let marker = hoverMarker {
+                            let x = marker.x * magnification, y = marker.y * magnification
+                            let distance = hypot(x, y)
+                            let scale = distance > 1 ? 0.97 / distance : 1
+                            let point = CGPoint(x: center.x + x * scale * radius,
+                                                y: center.y + y * scale * radius)
+                            let color: Color = distance > 1 ? .orange : .white
+                            let ring = Path(ellipseIn: CGRect(x: point.x - 5, y: point.y - 5, width: 10, height: 10))
+                            context.stroke(ring, with: .color(.black), lineWidth: 4)
+                            context.stroke(ring, with: .color(color), lineWidth: 2)
+                            var cross = Path()
+                            cross.move(to: CGPoint(x: point.x - 9, y: point.y))
+                            cross.addLine(to: CGPoint(x: point.x + 9, y: point.y))
+                            cross.move(to: CGPoint(x: point.x, y: point.y - 9))
+                            cross.addLine(to: CGPoint(x: point.x, y: point.y + 9))
+                            context.stroke(cross, with: .color(.black), lineWidth: 3)
+                            context.stroke(cross, with: .color(color), lineWidth: 1)
+                        }
                     }
                 }
                 .contentShape(Rectangle())
@@ -165,6 +203,9 @@ struct VectorscopeView: View {
                 }
                 .help("Approximate outer gamut projections across all lightness levels. Outside indicates out of gamut; inside does not guarantee membership because this scope omits lightness.")
             }
+            Text("Dashed diagonal: a + b = 0 · warm side ↗")
+                .foregroundStyle(.orange)
+                .help("Tone sampling moves an input color on the green/blue side to this boundary. This is a color constraint, not skin detection.")
             Text(whitePoint != nil ? "Kelvin guide · RAW white-balance reference" : "Warm–cool guide · midpoint of black–white range")
                 .foregroundStyle(.yellow.opacity(0.85))
                 .help("Reference pixels start at linear luminance halfway between the black and white points and follow the image’s white balance and SDR tone curve. Warm and Cool indicate relative reference directions. For RAW, Kelvin labels use a chromatic-adaptation approximation based on the decoder’s recorded white point, including tint. Other images show relative directions only.")
@@ -176,6 +217,20 @@ struct VectorscopeView: View {
         }
         .font(.caption)
         .padding(12)
+        .task(id: ScopeHoverRequest(position: hoverPosition, revision: hoverRevision, space: colorSpace)) {
+            guard let hoverPosition, let hoverSource else {
+                hoveredPoint = nil
+                return
+            }
+            do {
+                let point = try await hoverSampler.sample(hoverSource, revision: hoverRevision,
+                                                          position: hoverPosition, space: colorSpace)
+                try Task.checkCancellation()
+                hoveredPoint = point
+                sampledRevision = hoverRevision
+            } catch is CancellationError {
+            } catch { hoveredPoint = nil }
+        }
         .task(id: colorSpace) {
             let space = colorSpace
             let result = await Task.detached(priority: .userInitiated) { ScopeGamutBoundary.boundaries(in: space) }.value
@@ -200,4 +255,11 @@ private struct ScopeRequest: Equatable {
     let revision: UUID
     let mapping: ToneMapping
     let zoom: Double
+}
+
+
+private struct ScopeHoverRequest: Equatable {
+    let position: CGPoint?
+    let revision: UUID
+    let space: ProcessingColorSpace
 }

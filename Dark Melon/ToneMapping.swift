@@ -17,12 +17,45 @@ nonisolated struct ToneMapping: Codable, Equatable, Sendable {
     var concentration = 0.2
     var hdrMax = 4.0
     var hdrEnabled: Bool { hdrMax > 1 }
-    var hdrConcentrationOffset = 0.0
+    var hdrConcentrationOffset = -0.2
 
     var hdrConcentration: Double {
         min(1, max(-1, concentration + hdrConcentrationOffset))
     }
+    /// The HDR slider is an offset; compensate it when changing SDR contrast.
+    mutating func setContrastPreservingHDR(_ value: Double) {
+        let preserved = hdrConcentration
+        concentration = min(1, max(-1, value))
+        hdrConcentrationOffset = preserved - concentration
+    }
+
     static let minimumRange = 1.0 / 2048
+
+    /// HDR output scales linearly with gain. On each shared piecewise-linear
+    /// interval SDR/HDR is monotonic, so the maximum occurs at a knot.
+    var minimumNonCrossingHDRGain: Double {
+        var reference = self
+        reference.hdrMax = 2 // Keep the HDR branch active; divide out this gain below.
+        let sdr = curve(hdr: false), hdr = reference.curve(hdr: true)
+        var required = 1.0
+        for curve in [sdr, hdr] {
+            for index in curve.values.indices {
+                let input = curve.black + (curve.white - curve.black)
+                    * Double(index) / Double(curve.values.count - 1)
+                let target = sdr.value(at: input) - 0.000001 // Same tolerance as the warning.
+                guard target > 0 else { continue }
+                let unitHDR = hdr.value(at: input) / 2
+                guard unitHDR > 0 else { return .infinity }
+                required = max(required, target / unitHDR)
+            }
+        }
+        // Avoid a warning caused solely by floating-point rounding at the limiting knot.
+        return required * (1 + 1e-12)
+    }
+
+    mutating func setAutomaticHDRGain() {
+        hdrMax = min(20, max(2, minimumNonCrossingHDRGain))
+    }
 
     var hdrFallsBelowSDR: Bool {
         guard hdrEnabled else { return false }

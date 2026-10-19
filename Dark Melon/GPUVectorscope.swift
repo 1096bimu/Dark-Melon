@@ -1,5 +1,6 @@
 import CoreImage
 import Metal
+import simd
 
 actor GPUVectorscope {
     private let device: MTLDevice
@@ -41,7 +42,7 @@ actor GPUVectorscope {
         try Task.checkCancellation()
         let width = max(1, Int(image.extent.width)), height = max(1, Int(image.extent.height))
         if input?.width != width || input?.height != height {
-            let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .rgba8Unorm,
+            let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .rgba16Float,
                 width: width, height: height, mipmapped: false)
             descriptor.usage = [.shaderRead, .shaderWrite, .renderTarget]
             descriptor.storageMode = .private
@@ -56,7 +57,7 @@ actor GPUVectorscope {
         guard let input, let counts, let output = device.makeTexture(descriptor: descriptor),
               let command = queue.makeCommandBuffer() else { throw ScopeError.unavailable }
         context.render(image, to: input, commandBuffer: command,
-                       bounds: CGRect(x: 0, y: 0, width: width, height: height), colorSpace: space.encoded)
+                       bounds: CGRect(x: 0, y: 0, width: width, height: height), colorSpace: space.linear)
         guard let clear = command.makeBlitCommandEncoder() else { throw ScopeError.unavailable }
         clear.fill(buffer: counts, range: 0..<counts.length, value: 0)
         clear.endEncoding()
@@ -66,6 +67,11 @@ actor GPUVectorscope {
         encoder.setTexture(input, index: 0)
         encoder.setBuffer(counts, offset: 0, index: 0)
         encoder.setBytes(&magnification, length: 4, index: 1)
+        let matrix = ScopeProjection.matrix(space)
+        var columns = [SIMD4<Float>(Float(matrix.columns.0.x), Float(matrix.columns.0.y), Float(matrix.columns.0.z), 0),
+                       SIMD4<Float>(Float(matrix.columns.1.x), Float(matrix.columns.1.y), Float(matrix.columns.1.z), 0),
+                       SIMD4<Float>(Float(matrix.columns.2.x), Float(matrix.columns.2.y), Float(matrix.columns.2.z), 0)]
+        columns.withUnsafeMutableBytes { encoder.setBytes($0.baseAddress!, length: $0.count, index: 2) }
         encoder.dispatchThreads(MTLSize(width: width, height: height, depth: 1),
             threadsPerThreadgroup: MTLSize(width: pipeline.threadExecutionWidth, height: 4, depth: 1))
         encoder.memoryBarrier(scope: .buffers)
@@ -93,13 +99,15 @@ actor GPUVectorscope {
     kernel void scopeCount(texture2d<float, access::read> source [[texture(0)]],
                            device atomic_uint *counts [[buffer(0)]],
                            constant float &zoom [[buffer(1)]],
+                           constant float4 *columns [[buffer(2)]],
                            uint2 p [[thread_position_in_grid]]) {
         if (p.x >= source.get_width() || p.y >= source.get_height()) return;
         float3 rgb = clamp(source.read(p).rgb, 0.0, 1.0);
-        // BT.601 Y′UV, matching ScopeProjection. Positive V is upward.
-        float luma = dot(rgb, float3(0.299, 0.587, 0.114));
-        float2 uv = float2(0.492 * (rgb.b - luma), -0.877 * (rgb.r - luma));
-        float2 plotted = uv * (zoom / 0.75);
+        float3 xyz = columns[0].xyz * rgb.r + columns[1].xyz * rgb.g + columns[2].xyz * rgb.b;
+        float3 f = select((24389.0/27.0 * xyz + 16.0)/116.0,
+                          pow(max(xyz, 0.0), float3(1.0/3.0)), xyz > 216.0/24389.0);
+        float2 ab = float2(500.0*(f.x-f.y), -200.0*(f.y-f.z));
+        float2 plotted = ab * (zoom / 128.0);
         if (length(plotted) > 1.000001) return;
         int x = 256 + int(round(plotted.x * 256));
         int y = 256 + int(round(plotted.y * 256));

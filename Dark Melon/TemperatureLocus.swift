@@ -22,7 +22,7 @@ nonisolated struct RAWWhitePoint: Sendable {
 nonisolated enum TemperatureLocus {
     struct Sample: Sendable {
         let kelvin: Int
-        let point: CGPoint // Same screen-oriented Y′UV coordinates as the GPU scope.
+        let point: CGPoint // Same screen-oriented Lab a*/b* coordinates as the GPU scope.
     }
     static let marks = [2000, 3200, 4000, 5000, 6500, 8000]
     static let temperatures = Array(stride(from: 2000, through: 8000, by: 25))
@@ -40,12 +40,12 @@ nonisolated enum TemperatureLocus {
                        format: .RGBAf, colorSpace: space.linear)
     }
 
-    static func samples(encodedPixels: [UInt8]) -> [Sample] {
+    static func samples(encodedPixels: [UInt8], space: ProcessingColorSpace = .sRGB) -> [Sample] {
         temperatures.enumerated().map { index, kelvin in
             let offset = index * 4
             return plotted(kelvin: kelvin, r: Double(encodedPixels[offset]) / 255,
                            g: Double(encodedPixels[offset + 1]) / 255,
-                           b: Double(encodedPixels[offset + 2]) / 255)
+                           b: Double(encodedPixels[offset + 2]) / 255, space: space)
         }
     }
 
@@ -104,7 +104,7 @@ nonisolated enum TemperatureLocus {
                      -0.0085287*adapted.x + 0.0400428*adapted.y + 0.9684867*adapted.z)
     }
 
-    private static func plotted(kelvin: Int, r: Double, g: Double, b: Double) -> Sample {
-        return Sample(kelvin: kelvin, point: ScopeProjection.point(r: r, g: g, b: b))
+    private static func plotted(kelvin: Int, r: Double, g: Double, b: Double, space: ProcessingColorSpace) -> Sample {
+        return Sample(kelvin: kelvin, point: ScopeProjection.point(r: r, g: g, b: b, space: space))
     }
 }

@@ -4,29 +4,28 @@ import AppKit
 
 @MainActor final class SaveLifecycleAppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        do {
-            for window in sender.windows {
-                if let delegate = window.delegate as? FileSaveLifecycle.Coordinator { try delegate.save() }
+        let delegates = sender.windows.compactMap { $0.delegate as? FileSaveLifecycle.Coordinator }
+        for delegate in delegates {
+            if !delegate.requestClose() {
+                delegates.forEach { $0.resetApproval() }
+                return .terminateCancel
             }
-            return .terminateNow
-        } catch {
-            NSAlert(error: error).runModal()
-            return .terminateCancel
         }
+        return .terminateNow
     }
 }
 
-/// Preserve SwiftUI's window delegate while gating closure on a successful flush.
+/// Preserve SwiftUI's window delegate while gating closure on an explicit pending-edit decision.
 struct FileSaveLifecycle: NSViewRepresentable {
-    let save: () throws -> Void
-    func makeCoordinator() -> Coordinator { Coordinator(save: save) }
+    let approveClose: () -> Bool
+    func makeCoordinator() -> Coordinator { Coordinator(approveClose: approveClose) }
     func makeNSView(context: Context) -> Host {
         let view = Host()
         view.coordinator = context.coordinator
         return view
     }
     func updateNSView(_ view: Host, context: Context) {
-        context.coordinator.save = save
+        context.coordinator.approveClose = approveClose
         if let window = view.window { context.coordinator.attach(to: window) }
     }
     final class Host: NSView {
@@ -37,10 +36,17 @@ struct FileSaveLifecycle: NSViewRepresentable {
         }
     }
     final class Coordinator: NSObject, NSWindowDelegate {
-        var save: () throws -> Void
+        var approveClose: () -> Bool
+        private var approved = false
         private weak var original: (any NSWindowDelegate)?
         private weak var window: NSWindow?
-        init(save: @escaping () throws -> Void) { self.save = save }
+        init(approveClose: @escaping () -> Bool) { self.approveClose = approveClose }
+        func resetApproval() { approved = false }
+        func requestClose() -> Bool {
+            if approved { return true }
+            approved = approveClose()
+            return approved
+        }
         func attach(to window: NSWindow) {
             guard window.delegate !== self else { return }
             self.window = window
@@ -48,14 +54,10 @@ struct FileSaveLifecycle: NSViewRepresentable {
             window.delegate = self
         }
         func windowShouldClose(_ sender: NSWindow) -> Bool {
-            do { try save() }
-            catch { NSAlert(error: error).runModal(); return false }
-            return original?.windowShouldClose?(sender) ?? true
+            guard original?.windowShouldClose?(sender) ?? true else { return false }
+            return requestClose()
         }
         func windowWillClose(_ notification: Notification) {
-            // Also covers programmatic closes that bypass windowShouldClose.
-            do { try save() }
-            catch { NSAlert(error: error).runModal() }
             original?.windowWillClose?(notification)
         }
         override func responds(to selector: Selector!) -> Bool {

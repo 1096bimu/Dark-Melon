@@ -3,7 +3,11 @@ import CoreImage
 import UniformTypeIdentifiers
 
 struct ContentView: View {
-    @Environment(\.scenePhase) private var scenePhase
+    @State private var pendingEdits = PendingEdits()
+    @State private var pendingControlsWidth: CGFloat = 120
+    @State private var baselineRecipe: DevelopmentRecipe?
+    @State private var pendingTransition: (() -> Void)?
+    @State private var confirmingDiscard = false
     @State private var showingPasteSettings = false
     @State private var resettingTone = false
     @State private var browserModel = ImageBrowserModel()
@@ -39,8 +43,16 @@ struct ContentView: View {
     @State private var development: RAWDevelopment?
     @State private var mapping = ToneMapping()
     @State private var pickingWhiteBalance = false
-    @State private var hdrPreview = true
+    @State private var pickingTone = false
+    @State private var hoveredPreviewPixel: CGPoint?
+    @State private var displayMode = PreviewHistogramMode.hdrLinear
+    private var hdrPreview: Bool {
+        get { displayMode.hdr }
+        nonmutating set { displayMode.hdr = newValue }
+    }
     @State private var previewImages: PreviewImages?
+    @State private var adjustingTone = false
+    @State private var toneLocatorImage: CGImage?
     @State private var previewRevision = UUID()
     @State private var filename = "Dark Melon"
     @State private var importing = false
@@ -66,7 +78,7 @@ struct ContentView: View {
     var body: some View {
         NavigationStack {
             EditorColumns {
-                ImageFileBrowser(selectedURL: sourceURL, open: { load($0, resetEdits: true) }, model: browserModel)
+                ImageFileBrowser(selectedURL: sourceURL, open: { load($0, resetEdits: true) }, model: browserModel, changeDirectory: changeDirectory)
                     .frame(minWidth: 180, idealWidth: 220, maxWidth: 320)
                     .disabled(loading)
             VStack(spacing: 0) {
@@ -74,24 +86,36 @@ struct ContentView: View {
                     Color.black
                     if let previewImages {
                         #if os(macOS)
-                        HDRImagePreview(image: hdrPreview ? previewImages.hdr : previewImages.sdr,
+                        HDRImagePreview(image: (adjustingTone ? toneLocatorImage : nil) ?? (hdrPreview ? previewImages.hdr : previewImages.sdr),
                                         hdr: hdrPreview, sourceID: development?.id ?? previewRevision,
-                                        pickingWhiteBalance: pickingWhiteBalance) { center, radius in
+                                        sampleTool: pickingTone ? .tone : pickingWhiteBalance ? .whiteBalance : nil,
+                                        hover: { hoveredPreviewPixel = $0 }) { center, radius in
+                            let toneSample = pickingTone
+                            let sampledMapping = mapping
+                            pickingTone = false
                             pickingWhiteBalance = false
                             guard let development else { return }
                             let sourceID = development.id
                             let worker = developer
                             Task {
                                 do {
-                                    let balance = try await worker.sampleWhiteBalance(development.preview, center: center, radius: radius)
-                                    guard self.development?.id == sourceID, !loading else { return }
-                                    mapping.whiteBalance = balance
+                                    if toneSample {
+                                        let result = try await worker.sampleTone(development.preview, center: center, radius: radius,
+                                                                                mapping: sampledMapping)
+                                        guard self.development?.id == sourceID, !loading, mapping == sampledMapping else { return }
+                                        mapping.whiteBalance = result.balance
+                                        mapping.tonePosition = result.tone
+                                    } else {
+                                        let balance = try await worker.sampleWhiteBalance(development.preview, center: center, radius: radius)
+                                        guard self.development?.id == sourceID, !loading, mapping == sampledMapping else { return }
+                                        mapping.whiteBalance = balance
+                                    }
                                 } catch { errorMessage = error.localizedDescription }
                             }
                         }
                             .padding(16)
                         #else
-                        Image(decorative: hdrPreview ? previewImages.hdr : previewImages.sdr, scale: 1)
+                        Image(decorative: (adjustingTone ? toneLocatorImage : nil) ?? (hdrPreview ? previewImages.hdr : previewImages.sdr), scale: 1)
                             .allowedDynamicRange(hdrPreview ? .high : .standard)
                             .resizable()
                             .scaledToFit()
@@ -113,6 +137,39 @@ struct ContentView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .overlay(alignment: .bottomLeading) {
+                    if !pendingEdits.entries.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Unsaved edits (\(pendingEdits.entries.count))").font(.caption.bold())
+                                .lineLimit(1).frame(width: pendingControlsWidth, alignment: .leading)
+                            ScrollView {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    ForEach(pendingEdits.entries) { entry in
+                                        Button(entry.url.lastPathComponent) { load(entry.url, resetEdits: true) }
+                                            .buttonStyle(.plain)
+                                            .foregroundStyle(entry.url == sourceURL?.standardizedFileURL ? Color.accentColor : .primary)
+                                            .lineLimit(1).help(entry.url.path)
+                                    }
+                                }.frame(maxWidth: .infinity, alignment: .leading)
+                            }.frame(width: pendingControlsWidth).frame(maxHeight: 110)
+                            HStack {
+                                Button("Save") { do { try savePendingEdits() } catch { errorMessage = error.localizedDescription } }
+                                Button("Ignore") {
+                                    requestDiscard {
+                                        if let sourceURL { load(sourceURL, resetEdits: true) }
+                                    }
+                                }
+                            }.buttonStyle(.bordered)
+                                .fixedSize()
+                                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { pendingControlsWidth = $0 }
+                        }
+                        .fixedSize(horizontal: true, vertical: false)
+                        .padding(10)
+                        .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 8))
+                        .padding(.leading, 12).padding(.bottom, 64)
+                        .disabled(loading)
+                    }
+                }
                 .overlay(alignment: .bottomTrailing) {
                     HStack(spacing: 8) {
                         Button("Copy", systemImage: "doc.on.doc") {
@@ -166,11 +223,21 @@ struct ContentView: View {
                                                 histogramError: histogramError, binCount: $histogramBins,
                                                 mapping: $mapping, sdrSource: previewImages?.sdr,
                                                 revision: previewRevision, colorSpace: colorSpace,
-                                                resettingTone: resettingTone, resetTone: resetTone)
+                                                resettingTone: resettingTone, resetTone: resetTone,
+                                                showingSDR: $displayMode.sdrHistogram,
+                                                hoverPosition: hoveredPreviewPixel)
                                 Divider()
-                                SlopeEditor(mapping: $mapping)
+                                SlopeEditor(mapping: $mapping, pickingTone: pickingTone, onPickTone: {
+                                    pickingTone.toggle()
+                                    pickingWhiteBalance = false
+                                }, onContrastAdjustment: { hdrPreview = false }) { editing in
+                                    adjustingTone = editing
+                                    if !editing { toneLocatorImage = nil }
+                                }
                                 Divider()
                                 VectorscopeView(source: development?.preview,
+                                                hoverSource: previewImages?.sdr, hoverPosition: hoveredPreviewPixel,
+                                                hoverRevision: previewRevision,
                                                 temperatureSamples: previewImages?.temperatureSamples ?? [], revision: development?.id ?? previewRevision,
                                                 colorSpace: colorSpace, whitePoint: development?.whitePoint, mapping: Binding(
                                             get: { previewMapping },
@@ -183,15 +250,27 @@ struct ContentView: View {
                 .frame(minWidth: 320, idealWidth: 360, maxWidth: 480)
             }
             .onChange(of: exportSettings) { _, settings in settings.remember() }
-            .onChange(of: mapping.blackAndWhite.isEnabled) { _, _ in pickingWhiteBalance = false }
+            .onChange(of: mapping.blackAndWhite.isEnabled) { _, _ in
+                pickingWhiteBalance = false
+                pickingTone = false
+            }
+            .onChange(of: pickingWhiteBalance) { _, active in
+                if active { pickingTone = false }
+            }
             .onChange(of: panel) { _, _ in
                 pickingWhiteBalance = false
+                pickingTone = false
+                adjustingTone = false
+                toneLocatorImage = nil
                 comparingColor = false
                 comparingEffects = false
                 comparingHLS = false
             }
             .onChange(of: development?.id) { _, _ in
                 pickingWhiteBalance = false
+                pickingTone = false
+                adjustingTone = false
+                toneLocatorImage = nil
                 comparingColor = false
                 comparingEffects = false
                 comparingHLS = false
@@ -199,11 +278,24 @@ struct ContentView: View {
             .onChange(of: mapping.white) { _, _ in
                 if !loading { hdrPreview = false }
             }
-            .onChange(of: mapping.hdrConcentrationOffset) { _, _ in
-                if !loading { hdrPreview = mapping.hdrEnabled }
+            .onChange(of: mapping.hdrConcentration) { old, new in
+                // Compensation during SDR Contrast edits must not switch the preview to HDR.
+                if !loading, abs(new - old) > 1e-10 { hdrPreview = mapping.hdrEnabled }
             }
             .onChange(of: mapping.hdrMax) { _, _ in
                 if !loading { hdrPreview = mapping.hdrEnabled }
+            }
+            .task(id: ToneLocatorRequest(active: adjustingTone, mapping: previewMapping,
+                                         revision: previewRevision, hdr: hdrPreview)) {
+                guard adjustingTone, let development, let previewImages else { return }
+                do {
+                    let image = try await developer.toneLocator(development.preview,
+                        preview: hdrPreview ? previewImages.hdr : previewImages.sdr,
+                        mapping: previewMapping, hdr: hdrPreview)
+                    try Task.checkCancellation()
+                    toneLocatorImage = image
+                } catch is CancellationError {
+                } catch { errorMessage = error.localizedDescription }
             }
             .task(id: PreviewRequest(mapping: previewMapping,
                                      sourceID: development?.id, loading: loading, waitingForAutoWhite: pendingAutoWhite != nil)) {
@@ -224,7 +316,9 @@ struct ContentView: View {
                         guard mapping == renderedMapping, self.development?.id == development.id else { return }
                         if let statistics = SDRStatistics(counts: result.sdrLuma),
                            let contrast = AutoContrast.suggestion(median: statistics.median, mapping: mapping, space: colorSpace) {
-                            mapping.concentration = contrast
+                            mapping.setContrastPreservingHDR(contrast)
+                            mapping.setAutomaticHDRGain()
+                            baselineRecipe = currentRecipe
                         }
                     }
                 } catch is CancellationError {
@@ -249,6 +343,8 @@ struct ContentView: View {
                         // Do not overwrite edits made while the asynchronous histogram loaded.
                         if mapping == pending.mapping, let white = result.overlapWhitePoint {
                             mapping.white = min(1, max(mapping.black + ToneMapping.minimumRange, white))
+                            mapping.setAutomaticHDRGain()
+                            baselineRecipe = currentRecipe
                             pendingAutoContrast = AutoWhiteRequest(sourceID: development.id, mapping: mapping)
                         } else if mapping != pending.mapping {
                             pendingAutoContrast = nil
@@ -315,6 +411,7 @@ struct ContentView: View {
                     comparingHLS = false
                     comparingEffects = false
                     pickingWhiteBalance = false
+                    pickingTone = false
                     mapping = pastedSettings.applying(selection, to: mapping, reference: development?.whitePoint, space: colorSpace)
                 }
             }
@@ -334,7 +431,7 @@ struct ContentView: View {
             .fileImporter(isPresented: $importing, allowedContentTypes: [.image]) { result in
                 switch result {
                 case .success(let url):
-                    load(url, resetEdits: true)
+                    requestDiscard { load(url, resetEdits: true) }
                 case .failure(let error): errorMessage = error.localizedDescription
                 }
             }
@@ -345,32 +442,30 @@ struct ContentView: View {
             } message: { Text(errorMessage ?? "") }
         }
         .preferredColorScheme(.dark)
-        .onChange(of: scenePhase) { _, phase in
-            if phase == .background {
-                do { try autosaveCurrentFile() }
-                catch { errorMessage = "Could not automatically save edits: \(error.localizedDescription)" }
+        .alert("Unsaved edits", isPresented: $confirmingDiscard) {
+            Button("Save All and Continue") {
+                do { try savePendingEdits(); finishTransition() }
+                catch { errorMessage = error.localizedDescription; pendingTransition = nil }
             }
+            Button("Discard Edits", role: .destructive) { finishTransition() }
+            Button("Cancel", role: .cancel) { pendingTransition = nil }
+        } message: {
+            Text("There are unsaved edits for \(pendingEdits.entries.count) file(s). Save them or discard them before continuing.")
         }
         #if os(macOS)
-        .background(FileSaveLifecycle(save: autosaveCurrentFile).frame(width: 0, height: 0))
+        .background(FileSaveLifecycle(approveClose: confirmClose).frame(width: 0, height: 0))
         #endif
         #if os(macOS)
         .frame(minWidth: 1000, minHeight: 600)
         #endif
     }
     private func load(_ url: URL, resetEdits: Bool) {
-        if resetEdits {
-            do { try autosaveCurrentFile() }
-            catch {
-                errorMessage = "Could not automatically save edits: \(error.localizedDescription)"
-                return
-            }
-        }
+        if resetEdits { rememberCurrentEdits() }
         sourceURL = url
         pendingAutoWhite = nil
         pendingAutoContrast = nil
         loading = true
-        if resetEdits { mapping = ToneMapping(); savedRecipe = nil; recipeSourceURL = nil }
+        if resetEdits { mapping = ToneMapping(); savedRecipe = nil; recipeSourceURL = nil; baselineRecipe = nil }
         development = nil
         previewImages = nil
         histogram = nil
@@ -379,10 +474,15 @@ struct ContentView: View {
             defer { loading = false }
             do {
                 var restored: DevelopmentRecipe?
+                let draft = resetEdits ? pendingEdits.entry(for: url) : nil
                 if resetEdits {
                     do { restored = try await RecipeStore.shared.load(for: url) }
                     catch { errorMessage = "Could not restore saved edits: \(error.localizedDescription)" }
-                    if let restored {
+                    if let draft {
+                        colorSpace = draft.recipe.colorSpace
+                        mapping = draft.recipe.mapping
+                        savedRecipe = draft.savedRecipe
+                    } else if let restored {
                         colorSpace = restored.colorSpace
                         mapping = restored.mapping
                         savedRecipe = restored
@@ -390,7 +490,7 @@ struct ContentView: View {
                         colorSpace = try await developer.suggestedColorSpace(for: url)
                     }
                 }
-                let initializeEdits = resetEdits && restored == nil
+                let initializeEdits = resetEdits && restored == nil && draft == nil
                 let options: RAWSettings? = resetEdits ? nil : rawSettings
                 developer = RAWDeveloper(colorSpace: colorSpace, rawSettings: options)
                 histogramWorker = RAWDeveloper(colorSpace: colorSpace, rawSettings: options)
@@ -398,9 +498,11 @@ struct ContentView: View {
                 let loaded = try await developer.develop(url)
                 if resetEdits { rawSettings = loaded.rawDefaults ?? RAWSettings() }
                 if resetEdits {
-                    if initializeEdits, loaded.isRAW, let ev = loaded.metadata.ev100 { mapping.hdrMax = CameraMetadata.hdrGain(forEV: ev) }
+                    if initializeEdits, loaded.isRAW { mapping.setAutomaticHDRGain() }
+                    if initializeEdits, !loaded.isRAW, loaded.sourceHeadroom <= 1 { mapping.hdrMax = 1 }
                     hdrPreview = mapping.hdrEnabled
                 }
+                if resetEdits { baselineRecipe = draft?.baseline ?? currentRecipe }
                 recipeSourceURL = url
                 development = loaded
                 if initializeEdits, loaded.isRAW { pendingAutoContrast = AutoWhiteRequest(sourceID: loaded.id, mapping: mapping) }
@@ -428,10 +530,8 @@ struct ContentView: View {
             do {
                 // Analyze a fresh recipe so preserved color/effect edits cannot bias the default.
                 var automatic = ToneMapping()
+                if !development.isRAW, development.sourceHeadroom <= 1 { automatic.hdrMax = 1 }
                 if development.isRAW {
-                    if let ev = development.metadata.ev100 {
-                        automatic.hdrMax = CameraMetadata.hdrGain(forEV: ev)
-                    }
                     let sourceHistogram: HistogramData
                     if let existingHistogram { sourceHistogram = existingHistogram }
                     else {
@@ -448,8 +548,9 @@ struct ContentView: View {
                                                                  sourceID: UUID(), bins: 256)
                     if let statistics = SDRStatistics(counts: result.sdrLuma),
                        let contrast = AutoContrast.suggestion(median: statistics.median, mapping: automatic, space: space) {
-                        automatic.concentration = contrast
+                        automatic.setContrastPreservingHDR(contrast)
                     }
+                    automatic.setAutomaticHDRGain()
                 }
                 guard self.development?.id == development.id, mapping == original else { return }
                 mapping = SettingsPasteSelection(tone: true, whiteBalance: false, color: false,
@@ -458,14 +559,72 @@ struct ContentView: View {
         }
     }
 
-    private func autosaveCurrentFile() throws {
-        guard let sourceURL = recipeSourceURL,
-              savedRecipe != currentRecipe,
-              savedRecipe != nil || FileManager.default.fileExists(atPath: RecipeStore.sidecarURL(for: sourceURL).path) else { return }
-        let recipe = currentRecipe
-        try RecipeStore.shared.saveSynchronously(recipe, for: sourceURL)
-        savedRecipe = recipe
+    private func rememberCurrentEdits() {
+        guard let url = recipeSourceURL, let baselineRecipe else { return }
+        pendingEdits.remember(url: url, recipe: currentRecipe, baseline: baselineRecipe, saved: savedRecipe)
     }
+
+    private func savePendingEdits() throws {
+        rememberCurrentEdits()
+        for entry in pendingEdits.entries {
+            try RecipeStore.shared.saveSynchronously(entry.recipe, for: entry.url)
+            pendingEdits.remove(entry.url)
+            if entry.url == recipeSourceURL?.standardizedFileURL {
+                savedRecipe = entry.recipe
+                baselineRecipe = entry.recipe
+            }
+        }
+    }
+
+    private func requestDiscard(_ action: @escaping () -> Void) {
+        rememberCurrentEdits()
+        pendingTransition = action
+        if pendingEdits.entries.isEmpty { finishTransition() }
+        else { confirmingDiscard = true }
+    }
+
+    private func finishTransition() {
+        let action = pendingTransition
+        pendingTransition = nil
+        pendingEdits.clear()
+        // Prevent load from stashing the deliberately discarded current edits again.
+        baselineRecipe = currentRecipe
+        action?()
+    }
+
+    private func changeDirectory(_ url: URL, choose: Bool) {
+        guard url.standardizedFileURL != browserModel.directory?.standardizedFileURL else {
+            if choose { browserModel.choose(url) } else { browserModel.navigate(to: url) }
+            return
+        }
+        requestDiscard {
+            sourceURL = nil; recipeSourceURL = nil; baselineRecipe = nil; savedRecipe = nil
+            development = nil; previewImages = nil; histogram = nil
+            filename = "Dark Melon"
+            if choose { browserModel.choose(url) } else { browserModel.navigate(to: url) }
+        }
+    }
+
+    #if os(macOS)
+    private func confirmClose() -> Bool {
+        rememberCurrentEdits()
+        guard !pendingEdits.entries.isEmpty else { return true }
+        let alert = NSAlert()
+        alert.messageText = "Unsaved edits"
+        alert.informativeText = "Save edits for \(pendingEdits.entries.count) file(s) before closing?"
+        alert.addButton(withTitle: "Save All")
+        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: "Discard Edits")
+        switch alert.runModal() {
+        case .alertFirstButtonReturn:
+            do { try savePendingEdits(); return true }
+            catch { NSAlert(error: error).runModal(); return false }
+        case .alertThirdButtonReturn:
+            return true
+        default: return false
+        }
+    }
+    #endif
 
     private func saveRecipe() {
         guard let sourceURL, development != nil, !loading else { return }
@@ -475,6 +634,8 @@ struct ContentView: View {
         do {
             try RecipeStore.shared.saveSynchronously(recipe, for: sourceURL)
             savedRecipe = recipe
+            baselineRecipe = recipe
+            pendingEdits.remove(sourceURL)
         } catch { errorMessage = "Could not save edits: \(error.localizedDescription) If folder access is denied, open the containing folder in the file browser and try again." }
     }
 
@@ -497,6 +658,27 @@ struct ContentView: View {
 
 }
 
+/// Only valid preview/histogram combinations can be represented.
+private enum PreviewHistogramMode {
+    case hdrLinear, sdrLinear, sdrOutput
+
+    var hdr: Bool {
+        get { self == .hdrLinear }
+        set {
+            if newValue { self = .hdrLinear }
+            else if self == .hdrLinear { self = .sdrLinear }
+        }
+    }
+
+    var sdrHistogram: Bool {
+        get { self == .sdrOutput }
+        set {
+            if newValue { self = .sdrOutput }
+            else if self == .sdrOutput { self = .sdrLinear }
+        }
+    }
+}
+
 private struct LinearHistogram: View {
     let development: RAWDevelopment?
     let histogram: HistogramData?
@@ -508,7 +690,22 @@ private struct LinearHistogram: View {
     let colorSpace: ProcessingColorSpace
     let resettingTone: Bool
     let resetTone: () -> Void
-    @State private var showingSDR = false
+    @Binding var showingSDR: Bool
+    let hoverPosition: CGPoint?
+    @State private var hoverSampler = ScopeHoverSampler()
+    @State private var hoveredRGB: SIMD3<Double>?
+    @State private var sampledHover: HistogramHoverRequest?
+    private var hoverRequest: HistogramHoverRequest {
+        HistogramHoverRequest(position: hoverPosition,
+                              revision: showingSDR ? revision : development?.id,
+                              encoded: showingSDR, space: colorSpace)
+    }
+    private var hoverLuminance: Double? {
+        guard sampledHover == hoverRequest, hoverPosition != nil, let rgb = hoveredRGB else { return nil }
+        let weights = colorSpace.luminance
+        // Linear Y for the source; encoded luma for SDR, matching its histogram statistics.
+        return rgb.x * weights.x + rgb.y * weights.y + rgb.z * weights.z
+    }
     @State private var sdrHistogram: HistogramData?
     @State private var sdrError: String?
     @State private var sdrWorker: GPUHistogram?
@@ -576,6 +773,24 @@ private struct LinearHistogram: View {
                 if !showingSDR { HistogramToneCurve(mapping: mapping).allowsHitTesting(false) }
             }
             .overlay {
+                Canvas { context, size in
+                    guard let value = hoverLuminance else { return }
+                    let x = min(size.width - 1, max(1, min(1, max(0, value)) * size.width))
+                    var line = Path()
+                    line.move(to: CGPoint(x: x, y: 0))
+                    line.addLine(to: CGPoint(x: x, y: size.height))
+                    context.stroke(line, with: .color(.black.opacity(0.9)), lineWidth: 3)
+                    context.stroke(line, with: .color(.white),
+                                   style: StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
+                    let label = Text("Y" + (value < 0 ? "‹" : value > 1 ? "›" : ""))
+                        .font(.caption2.bold())
+                    let point = CGPoint(x: min(size.width - 12, max(12, x)), y: 9)
+                    context.draw(label.foregroundStyle(.black), at: CGPoint(x: point.x + 1, y: point.y + 1))
+                    context.draw(label.foregroundStyle(.white), at: point)
+                }
+                .allowsHitTesting(false)
+            }
+            .overlay {
                 if !showingSDR { HistogramPoints(mapping: $mapping) }
             }
             .frame(height: 190)
@@ -610,6 +825,22 @@ private struct LinearHistogram: View {
         .font(.caption.monospacedDigit())
         .padding(12)
         .background(.bar)
+        .task(id: hoverRequest) {
+            let request = hoverRequest
+            guard let position = request.position, let id = request.revision,
+                  let source = showingSDR ? sdrSource : development?.preview else {
+                hoveredRGB = nil
+                return
+            }
+            do {
+                let rgb = try await hoverSampler.sampleRGB(source, revision: id, position: position,
+                                                           space: colorSpace, encoded: showingSDR)
+                try Task.checkCancellation()
+                hoveredRGB = rgb
+                sampledHover = request
+            } catch is CancellationError {
+            } catch { hoveredRGB = nil }
+        }
         .task(id: SDRHistogramRequest(revision: revision, bins: 256, space: colorSpace)) {
             guard let sdrSource else { sdrHistogram = nil; return }
             do {
@@ -655,3 +886,19 @@ private struct SDRHistogramRequest: Equatable {
     let space: ProcessingColorSpace
 }
 
+
+
+private struct ToneLocatorRequest: Equatable {
+    let active: Bool
+    let mapping: ToneMapping
+    let revision: UUID
+    let hdr: Bool
+}
+
+
+private struct HistogramHoverRequest: Equatable {
+    let position: CGPoint?
+    let revision: UUID?
+    let encoded: Bool
+    let space: ProcessingColorSpace
+}

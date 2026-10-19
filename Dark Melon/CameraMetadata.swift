@@ -34,10 +34,6 @@ nonisolated struct CameraMetadata: Sendable {
         guard let aperture, let exposure, let iso else { return nil }
         return log2(aperture * aperture / exposure) - log2(iso / 100)
     }
-    static func hdrGain(forEV ev: Double) -> Double {
-        guard ev.isFinite, ev > 4 else { return 1 }
-        return min(20, max(2, exp2((ev - 4) * 3 / 8)))
-    }
     var exposureDescription: String {
         var parts: [String] = []
         if let aperture { parts.append("ƒ/" + aperture.formatted(.number.precision(.fractionLength(1)))) }

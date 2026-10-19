@@ -56,6 +56,10 @@ struct HistogramPoints: View {
 
 struct SlopeEditor: View {
     @Binding var mapping: ToneMapping
+    var pickingTone = false
+    var onPickTone: () -> Void = {}
+    var onContrastAdjustment: () -> Void = {}
+    var onToneEditingChanged: (Bool) -> Void = { _ in }
     @State private var showLowContrastTip = false
 
     var body: some View {
@@ -64,6 +68,16 @@ struct SlopeEditor: View {
                 HStack {
                     Text("Tone")
                     Text(mapping.tonePosition, format: .number.precision(.fractionLength(3)))
+                    Spacer()
+                    #if os(macOS)
+                    Button(pickingTone ? "Cancel Tone Sample" : "Sample Tone", systemImage: "eyedropper") {
+                        onPickTone()
+                    }
+                    .labelStyle(.iconOnly)
+                    .tint(pickingTone ? .accentColor : .primary)
+                    .disabled(mapping.blackAndWhite.isEnabled)
+                    .help("Sample a circle to set Tone and move green/blue input casts to the Lab diagonal.")
+                    #endif
                 }
                 HStack {
                     Image(systemName: "swirl.circle.righthalf.filled")
@@ -75,8 +89,14 @@ struct SlopeEditor: View {
                                       }),
                        in: 0...1) {
                     Text("Tone")
+                } onEditingChanged: { editing in
+                    onToneEditingChanged(editing)
                 }
                         .labelsHidden()
+                }
+                if pickingTone {
+                    Text("Click center, drag radius, click again to set Tone and white balance.")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
                 if showLowContrastTip {
                     Label("Tone adjustment is ineffective at low contrast.", systemImage: "info.circle")
@@ -93,7 +113,14 @@ struct SlopeEditor: View {
                 HStack {
                     Image(systemName: "circle.lefthalf.striped.horizontal")
                         .frame(width: 22).accessibilityHidden(true)
-                    Slider(value: $mapping.concentration, in: -1...1) { Text("Contrast") }
+                    Slider(value: Binding(get: { mapping.concentration },
+                                          set: {
+                                              mapping.setContrastPreservingHDR($0)
+                                              onContrastAdjustment()
+                                          }), in: -1...1) { Text("Contrast") }
+                        onEditingChanged: { editing in
+                            if editing { onContrastAdjustment() }
+                        }
                         .labelsHidden()
                 }
                     .help("Zero is linear. Negative values reduce contrast around the tone position.")
@@ -107,11 +134,11 @@ struct SlopeEditor: View {
                 HStack {
                     Image(systemName: "circle.lefthalf.filled.righthalf.striped.horizontal")
                         .frame(width: 22).accessibilityHidden(true)
-                    Slider(value: $mapping.hdrConcentrationOffset, in: -1...1) { Text("HDR Contrast") }
+                    Slider(value: $mapping.hdrConcentrationOffset, in: -2...2) { Text("HDR Contrast") }
                         .labelsHidden()
                         .disabled(!mapping.hdrEnabled)
                 }
-                    .help("Offset from Contrast for the HDR curve.")
+                    .help("Offset from Contrast for the HDR curve. Adjusts automatically when Contrast changes to preserve the HDR curve.")
                 if mapping.hdrFallsBelowSDR {
                     Label("HDR cannot be darker than SDR. The curves cross.", systemImage: "exclamationmark.triangle")
                         .font(.caption)
