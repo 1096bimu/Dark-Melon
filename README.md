@@ -12,6 +12,12 @@ The goal is practical delivery, not merely a file that can technically encode HD
 
 For the platform mechanisms behind this approach, see [Apple's Adaptive HDR overview](https://developer.apple.com/videos/play/wwdc2024/10177/) and [Android's gain-map format documentation](https://developer.android.com/media/platform/hdr-image-format).
 
+## Sample image
+
+[![Dark Melon JPEG export with an ISO HDR gain map](docs/samples/DSC00037.jpg)](https://raw.githubusercontent.com/1096bimu/Dark-Melon/main/docs/samples/DSC00037.jpg)
+
+An original 2736 × 1824 JPEG export with an embedded ISO 21496-1 HDR gain map. Compatible viewers can show the HDR rendition; other viewers display the SDR base. Click the image to open the original file. HDR appearance depends on the browser, display, and system settings.
+
 ## Features
 
 - **RAW, SDR, and HDR image development**, with paired SDR/HDR previews and JPEG, HEIF, and TIFF export.
