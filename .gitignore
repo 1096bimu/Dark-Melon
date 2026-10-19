@@ -1,0 +1,15 @@
+# macOS
+.DS_Store
+
+# Xcode local state and build products
+xcuserdata/
+*.xcuserstate
+DerivedData/
+build/
+*.xcarchive
+*.ipa
+*.dSYM/
+*.dSYM.zip
+
+# Local development settings
+*.darkmelon.xmp
