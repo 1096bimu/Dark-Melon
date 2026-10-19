@@ -15,7 +15,7 @@
 <h1>A good SDR image.<br>Room for more in HDR.</h1>
 <p>Move the divider or switch between renditions. Both come from the same Dark Melon export: the SDR base is unchanged, and the HDR version adds its embedded gain map.</p>
 
-<div class="samples" role="group" aria-label="Sample photographs"><button type="button" data-sample="DSC00037" aria-pressed="true" aria-label="Show sample DSC00037"><img src="samples/DSC00037-thumb.jpg" alt=""><span>DSC00037</span></button><button type="button" data-sample="DSC07576" aria-pressed="false" aria-label="Show sample DSC07576"><img src="samples/DSC07576-thumb.jpg" alt=""><span>DSC07576</span></button><button type="button" data-sample="DSC07530" aria-pressed="false" aria-label="Show sample DSC07530"><img src="samples/DSC07530-thumb.jpg" alt=""><span>DSC07530</span></button><button type="button" data-sample="DSC01058" aria-pressed="false" aria-label="Show sample DSC01058"><img src="samples/DSC01058-thumb.jpg" alt=""><span>DSC01058</span></button><button type="button" data-sample="DSC07851" aria-pressed="false" aria-label="Show sample DSC07851"><img src="samples/DSC07851-thumb.jpg" alt=""><span>DSC07851</span></button></div>
+<div class="samples" role="group" aria-label="Sample photographs"><button type="button" data-sample="DSC00037" aria-pressed="true" aria-label="Show sample DSC00037"><img src="samples/DSC00037-thumb.jpg" alt=""><span>DSC00037</span></button><button type="button" data-sample="DSC07576" aria-pressed="false" aria-label="Show sample DSC07576"><img src="samples/DSC07576-thumb.jpg" alt=""><span>DSC07576</span></button><button type="button" data-sample="DSC07530" aria-pressed="false" aria-label="Show sample DSC07530"><img src="samples/DSC07530-thumb.jpg" alt=""><span>DSC07530</span></button><button type="button" data-sample="DSC01058" aria-pressed="false" aria-label="Show sample DSC01058"><img src="samples/DSC01058-thumb.jpg" alt=""><span>DSC01058</span></button><button type="button" data-sample="DSC07851" aria-pressed="false" aria-label="Show sample DSC07851"><img src="samples/DSC07851-thumb.jpg?v=rgb-2" alt=""><span>DSC07851</span></button></div>
 <div class="toolbar"><div class="modes" role="group" aria-label="Preview mode"><button type="button" data-mode="compare" aria-pressed="true">Compare</button><button type="button" data-mode="sdr" aria-pressed="false">SDR</button><button type="button" data-mode="hdr" aria-pressed="false">HDR</button></div><span class="status" id="status" role="status">Loading both images…</span></div>
 <div class="stage" id="stage" data-mode="compare">
 <img id="hdr" src="samples/DSC00037.jpg" alt="HDR rendition of a figurine photographed against sunlit green leaves" decoding="async">
@@ -41,7 +41,8 @@ capability.addEventListener('change',updateStatus);
 let request=0;
 async function selectSample(name){
  const current=++request;ready=false;status.textContent='Loading '+name+'…';stage.setAttribute('aria-busy','true');
- const hdr=new Image(),sdr=new Image();hdr.src='samples/'+name+'.jpg';sdr.src='samples/'+name+'-sdr.jpg';
+ const version=name==='DSC07851'?'?v=rgb-2':'';
+ const hdr=new Image(),sdr=new Image();hdr.src='samples/'+name+'.jpg'+version;sdr.src='samples/'+name+'-sdr.jpg'+version;
  try{
   await Promise.all([hdr.decode(),sdr.decode()]);if(current!==request)return;
   const shownHDR=document.querySelector('#hdr'),shownSDR=document.querySelector('#sdr');
