@@ -190,7 +190,7 @@ private struct VerticalCurveEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text(title).fontWeight(.medium)
+                Text(LocalizedStringKey(title)).fontWeight(.medium)
                 if let info { ControlInfo(info) }
                 Spacer()
                 Text(multiplier
@@ -230,9 +230,9 @@ private struct VerticalCurveEditor: View {
                         }
                         context.stroke(curve, with: .color(.accentColor), lineWidth: 2)
                     }
-                    handle(0, start, size, label: multiplier ? "\(lowLabel) multiplier" : "Shadow amount") { start = $0 }
-                    handle(1, end, size, label: multiplier ? "\(highLabel) multiplier" : "Highlight amount") { end = $0 }
-                    handle(0.5, value(0.5), size, label: "\(title) midpoint") {
+                    handle(0, start, size, label: multiplier ? String(localized: "\(String(localized: String.LocalizationValue(lowLabel))) multiplier") : "Shadow amount") { start = $0 }
+                    handle(1, end, size, label: multiplier ? String(localized: "\(String(localized: String.LocalizationValue(highLabel))) multiplier") : "Highlight amount") { end = $0 }
+                    handle(0.5, value(0.5), size, label: String(localized: "\(String(localized: String.LocalizationValue(title))) midpoint")) {
                         coefficient = (4 * ($0 - (start + end) / 2)).clamped(to: limits)
                     }
                 }
@@ -240,9 +240,9 @@ private struct VerticalCurveEditor: View {
             }
             .frame(height: 170)
             HStack {
-                Text(multiplier ? lowLabel : "Shadows")
+                Text(LocalizedStringKey(multiplier ? lowLabel : "Shadows"))
                 Spacer()
-                Text(multiplier ? highLabel : "Highlights")
+                Text(LocalizedStringKey(multiplier ? highLabel : "Highlights"))
             }.font(.caption).foregroundStyle(.secondary)
         }
     }
@@ -261,7 +261,7 @@ private struct VerticalCurveEditor: View {
                 update((range.lowerBound + fraction * (range.upperBound - range.lowerBound)).clamped(to: range))
                 coefficient = coefficient.clamped(to: limits)
             })
-            .accessibilityLabel(label)
+            .accessibilityLabel(LocalizedStringKey(label))
             .accessibilityValue(String(format: "%.3f", y))
             .accessibilityAdjustableAction { direction in
                 let step = (range.upperBound - range.lowerBound) / 100

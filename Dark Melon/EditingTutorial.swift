@@ -6,28 +6,28 @@ struct EditingTutorial {
         case tone, contrast, preview, save, export, complete
         var title: String {
             switch self {
-            case .tone: "Find the skin tones"
-            case .contrast: "Set the contrast"
-            case .preview: "Compare SDR and HDR"
-            case .save: "Save your settings"
-            case .export: "Export your photo"
-            case .complete: "Tutorial complete"
+            case .tone: String(localized: "Find the skin tones")
+            case .contrast: String(localized: "Set the contrast")
+            case .preview: String(localized: "Compare SDR and HDR")
+            case .save: String(localized: "Save your settings")
+            case .export: String(localized: "Export your photo")
+            case .complete: String(localized: "Tutorial complete")
             }
         }
         var instruction: String {
             switch self {
             case .tone:
-                "In the Tone panel, drag Tone until the grey overlay highlights the neutral skin tones you want to emphasize. The overlay appears while you drag. Choose Continue when the range looks right."
+                String(localized: "In the Tone panel, drag Tone until the grey overlay highlights the neutral skin tones you want to emphasize. The overlay appears while you drag. Choose Continue when the range looks right.")
             case .contrast:
-                "Adjust Contrast until the SDR image looks good, then choose Continue. HDR contrast is compensated automatically to preserve its curve."
+                String(localized: "Adjust Contrast until the SDR image looks good, then choose Continue. The HDR extension updates automatically from the SDR curve.")
             case .preview:
-                "Use Preview: SDR in the top bar (or H) to view HDR, then toggle back to SDR. Compare the highlight detail and overall appearance."
+                String(localized: "Use Preview: SDR in the top bar (or H) to view HDR, then toggle back to SDR. Compare the highlight detail and overall appearance.")
             case .save:
-                "Choose Save Edits in the top bar (⌘S on Mac). This saves an XMP sidecar beside your original, so your development settings can be restored."
+                String(localized: "Choose Save Edits in the top bar (⌘S on Mac). This saves an XMP sidecar beside your original, so your development settings can be restored.")
             case .export:
-                "Choose Export… in the top bar (⇧⌘E on Mac), pick a format and settings, then save the exported image. JPEG or HEIF with HDR enabled can include a gain map for compatible displays."
+                String(localized: "Choose Export… in the top bar (⇧⌘E on Mac), pick a format and settings, then save the exported image. JPEG or HEIF with HDR enabled can include a gain map for compatible displays.")
             case .complete:
-                "Your settings and exported image are saved. You can repeat this guide from Help → Guided Tutorial."
+                String(localized: "Your settings and exported image are saved. You can repeat this guide from Help → Guided Tutorial.")
             }
         }
     }
@@ -86,7 +86,7 @@ struct EditingTutorialGuide: View {
                     .buttonStyle(.plain)
             }
             Text(imageReady ? tutorial.step.instruction :
-                    "Open a photo with skin tones from the file browser to begin. The guide will wait while the image loads.")
+                    String(localized: "Open a photo with skin tones from the file browser to begin. The guide will wait while the image loads."))
                 .font(.callout)
                 .fixedSize(horizontal: false, vertical: true)
             if imageReady, tutorial.step == .preview, !hdrEnabled {

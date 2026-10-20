@@ -30,7 +30,7 @@ struct HLSControls: View {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
                         Circle().fill(colors[index]).frame(width: 10, height: 10)
-                        Text(names[index]).font(.headline)
+                        Text(LocalizedStringKey(names[index])).font(.headline)
                         Spacer()
                         Button("Reset") { adjustments[index] = HLSAdjustment() }
                             .disabled(adjustments[index].isIdentity)
@@ -41,14 +41,14 @@ struct HLSControls: View {
                         Text("\(adjustments[index].saturation, format: .number.precision(.fractionLength(2)))×")
                             .monospacedDigit().foregroundStyle(.secondary)
                     }
-                    Slider(value: $adjustments[index].saturation, in: 0...2) { Text("\(names[index]) saturation") }
+                    Slider(value: $adjustments[index].saturation, in: 0...2) { Text("\(String(localized: String.LocalizationValue(names[index]))) saturation") }
                         .labelsHidden()
                     HStack {
                         Text("Lightness")
                         Text(String(format: "%+.0f%%", adjustments[index].lightness * 25))
                             .monospacedDigit().foregroundStyle(.secondary)
                     }
-                    Slider(value: $adjustments[index].lightness, in: -1...1) { Text("\(names[index]) lightness") }
+                    Slider(value: $adjustments[index].lightness, in: -1...1) { Text("\(String(localized: String.LocalizationValue(names[index]))) lightness") }
                         .labelsHidden()
                 }
                 if index < 5 { Divider() }
@@ -118,8 +118,8 @@ private struct HueToneCurve: View {
             .gesture(DragGesture(minimumDistance: 0, coordinateSpace: .named(coordinates)).onChanged {
                 value.wrappedValue = (30 - Double(($0.location.y - 12) / max(1, size.height - 24)) * 60).clamped(to: -30...30)
             })
-            .accessibilityLabel(label)
-            .accessibilityValue(String(format: "%+.0f degrees", value.wrappedValue))
+            .accessibilityLabel(LocalizedStringKey(label))
+            .accessibilityValue(String(localized: "\(value.wrappedValue.formatted(.number.precision(.fractionLength(0)))) degrees"))
             .accessibilityAdjustableAction { direction in
                 value.wrappedValue = (value.wrappedValue + (direction == .increment ? 1 : -1)).clamped(to: -30...30)
             }

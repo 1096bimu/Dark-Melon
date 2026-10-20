@@ -6,6 +6,7 @@ enum EditorPanel: String, CaseIterable, Identifiable {
     case color = "Color"
     case hls = "HLS"
     case effects = "Effects"
+    case transform = "Transform"
     case raw = "RAW"
     var id: Self { self }
     var shortcut: String? {
@@ -71,11 +72,11 @@ struct EditorCommands: Commands {
         CommandMenu("Panels") {
             ForEach(EditorPanel.allCases) { item in
                 if let shortcut = item.shortcut {
-                    Button(item.rawValue) { panel = item }
+                    Button(LocalizedStringKey(item.rawValue)) { panel = item }
                         .keyboardShortcut(KeyEquivalent(Character(shortcut)), modifiers: [])
                         .disabled(panel == nil)
                 } else {
-                    Button(item.rawValue) { panel = item }
+                    Button(LocalizedStringKey(item.rawValue)) { panel = item }
                         .disabled(panel == nil)
                 }
             }
@@ -144,7 +145,7 @@ struct EditorSettingsView: View {
     }
 
     private func shortcut(_ title: String, _ keys: String) -> some View {
-        LabeledContent(title) { Text(keys).monospaced().foregroundStyle(.secondary) }
+        LabeledContent(LocalizedStringKey(title)) { Text(keys).monospaced().foregroundStyle(.secondary) }
     }
 }
 #endif

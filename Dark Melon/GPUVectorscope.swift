@@ -129,7 +129,7 @@ actor GPUVectorscope {
 
 private enum ScopeError: LocalizedError {
     case unavailable
-    var errorDescription: String? { "Unable to render the GPU vectorscope." }
+    var errorDescription: String? { String(localized: "Unable to render the GPU vectorscope.") }
 }
 
 nonisolated struct ScopeTexture: @unchecked Sendable {

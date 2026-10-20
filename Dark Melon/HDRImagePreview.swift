@@ -16,6 +16,10 @@ struct HDRImagePreview: NSViewRepresentable {
     let hdr: Bool
     let sourceID: UUID
     let viewport: PreviewViewport
+    let cropRatio: Double?
+    @Binding var cropTransform: CropTransform
+    let savedTransform: TransformSettings?
+    let cropChanged: ([CGPoint]) -> Void
     let sampleTool: PreviewSampleTool?
     let hover: (CGPoint?) -> Void
     let sample: (CGPoint, CGFloat) -> Void
@@ -23,6 +27,10 @@ struct HDRImagePreview: NSViewRepresentable {
     func makeNSView(context: Context) -> ImageDisplay { ImageDisplay(viewport: viewport) }
 
     func updateNSView(_ view: ImageDisplay, context: Context) {
+        view.cropChanged = cropChanged
+        view.transformChanged = { cropTransform = $0 }
+        view.cropTransform = cropTransform
+        view.configureCrop(ratio: cropRatio, saved: savedTransform)
         view.hover = hover
         view.display(image, hdr: hdr, sourceID: sourceID)
         view.sample = sample
@@ -32,6 +40,27 @@ struct HDRImagePreview: NSViewRepresentable {
     final class ImageDisplay: NSView {
         private let imageLayer = CALayer()
         private let circle = CAShapeLayer()
+        private let cropShade = CAShapeLayer()
+        private let cropBorder = CAShapeLayer()
+        var cropRatio: Double?
+        var cropTransform = CropTransform()
+        var transformChanged: ((CropTransform) -> Void)?
+        var cropChanged: (([CGPoint]) -> Void)?
+        private var pendingCropPolygon: [CGPoint] = []
+        private var reportedCropPolygon: [CGPoint] = []
+        private var cropUpdateScheduled = false
+        private let transformControls = CAShapeLayer()
+        private var transformDrag: (CropTransform.Handle, CGPoint, CropTransform)?
+        private var restoreCrop: TransformSettings?
+        func configureCrop(ratio: Double?, saved: TransformSettings?) {
+            if cropRatio == nil, ratio != nil { restoreCrop = saved }
+            if cropRatio != nil, ratio == nil {
+                zoom = 1; offset = .zero
+                rememberViewport()
+            }
+            cropRatio = ratio
+        }
+
         private var sampleCenter: CGPoint?
         private var sampleRadius: CGFloat = 0
         var sample: ((CGPoint, CGFloat) -> Void)?
@@ -68,8 +97,16 @@ struct HDRImagePreview: NSViewRepresentable {
                 var location: CGPoint?
                 if let window = self.window, window.isKeyWindow {
                     let point = self.convert(window.mouseLocationOutsideOfEventStream, from: nil)
-                    let rect = self.imageLayer.frame
-                    if self.visibleRect.contains(point), rect.contains(point),
+                    let center = self.imageLayer.position
+                    var local = self.cropRatio != nil
+                        ? self.cropTransform.unproject(CGPoint(x: point.x - center.x, y: point.y - center.y), in: CropGeometry.frame(in: self.bounds, ratio: self.cropRatio!))
+                        : CGPoint(x: point.x - center.x, y: point.y - center.y)
+                    if self.cropRatio != nil, let value = local {
+                        local = CGPoint(x: value.x - self.offset.x, y: value.y - self.offset.y)
+                    }
+                    let rect = CGRect(x: -self.imageLayer.bounds.width / 2, y: -self.imageLayer.bounds.height / 2,
+                                      width: self.imageLayer.bounds.width, height: self.imageLayer.bounds.height)
+                    if let point = local, self.visibleRect.contains(self.convert(window.mouseLocationOutsideOfEventStream, from: nil)), rect.contains(point),
                        rect.width > 0, rect.height > 0, self.imageSize.width > 0, self.imageSize.height > 0 {
                         // Pixel centers suppress repeated sampling within the same image pixel.
                         let x = floor((point.x - rect.minX) / rect.width * self.imageSize.width)
@@ -116,15 +153,30 @@ struct HDRImagePreview: NSViewRepresentable {
             circle.shadowOpacity = 1
             circle.shadowRadius = 2
             container.addSublayer(circle)
+            cropShade.fillRule = .evenOdd
+            cropShade.fillColor = NSColor.black.withAlphaComponent(0.65).cgColor
+            container.addSublayer(cropShade)
+            cropBorder.fillColor = nil
+            cropBorder.strokeColor = NSColor.white.cgColor
+            cropBorder.lineWidth = 1
+            container.addSublayer(cropBorder)
+            transformControls.fillColor = nil
+            transformControls.strokeColor = NSColor.white.cgColor
+            transformControls.lineWidth = 2
+            transformControls.shadowColor = NSColor.black.cgColor
+            transformControls.shadowOpacity = 0.8
+            transformControls.shadowRadius = 2
+            container.addSublayer(transformControls)
             layer = container
             wantsLayer = true
-            toolTip = "Pinch to zoom. Swipe with two fingers to pan. Double-click to fit."
+            toolTip = String(localized: "Pinch to zoom. Swipe with two fingers to pan. Double-click to fit.")
         }
         required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
         func display(_ image: CGImage, hdr: Bool, sourceID: UUID) {
             if self.sourceID != sourceID {
                 self.sourceID = sourceID
+                reportedCropPolygon = []
                 zoom = viewport.zoom
                 offset = viewport.offset
                 sampleCenter = nil
@@ -158,23 +210,71 @@ struct HDRImagePreview: NSViewRepresentable {
         private func positionImage() {
             guard imageSize.width > 0, imageSize.height > 0, bounds.width > 0, bounds.height > 0 else { return }
             let fit = min(bounds.width / imageSize.width, bounds.height / imageSize.height)
-            let size = CGSize(width: imageSize.width * fit * zoom, height: imageSize.height * fit * zoom)
-            let limitX = max(0, (size.width - bounds.width) / 2)
-            let limitY = max(0, (size.height - bounds.height) / 2)
-            offset.x = min(limitX, max(-limitX, offset.x))
-            offset.y = min(limitY, max(-limitY, offset.y))
+            let crop = cropRatio.map { CropGeometry.frame(in: bounds, ratio: $0) }
+            let fitted = CGSize(width: imageSize.width * fit, height: imageSize.height * fit)
+            let size: CGSize
+            if let crop {
+                if let saved = restoreCrop {
+                    let restored = cropTransform.restoredViewport(saved, crop: crop, bounds: bounds, fittedSize: fitted, flippedY: true)
+                    zoom = restored.zoom; offset = restored.pan
+                    restoreCrop = nil
+                }
+                let layout = cropTransform.layout(crop: crop, bounds: bounds, fittedSize: fitted, zoom: zoom, pan: offset)
+                size = layout.size
+                offset = layout.pan
+            } else {
+                size = CGSize(width: fitted.width * zoom, height: fitted.height * zoom)
+                let limitX = max(0, (size.width - bounds.width) / 2)
+                let limitY = max(0, (size.height - bounds.height) / 2)
+                offset.x = min(limitX, max(-limitX, offset.x))
+                offset.y = min(limitY, max(-limitY, offset.y))
+            }
             CATransaction.begin()
             CATransaction.setDisableActions(true)
+            transformControls.isHidden = crop == nil
+            if crop != nil { transformControls.path = CropTransform.controls(in: bounds) }
+            cropShade.isHidden = crop == nil
+            cropBorder.isHidden = crop == nil
+            if let crop {
+                let shade = CGMutablePath()
+                shade.addRect(bounds)
+                shade.addRect(crop)
+                cropShade.path = shade
+                let border = CGMutablePath()
+                border.addRect(crop)
+                for fraction in [CGFloat(1.0 / 3), CGFloat(2.0 / 3)] {
+                    border.move(to: CGPoint(x: crop.minX + crop.width * fraction, y: crop.minY))
+                    border.addLine(to: CGPoint(x: crop.minX + crop.width * fraction, y: crop.maxY))
+                    border.move(to: CGPoint(x: crop.minX, y: crop.minY + crop.height * fraction))
+                    border.addLine(to: CGPoint(x: crop.maxX, y: crop.minY + crop.height * fraction))
+                }
+                cropBorder.path = border
+            }
             // 1:1 means one preview image pixel per physical display pixel.
             let backingSize = convertToBacking(CGRect(origin: .zero, size: size)).size
             let pixelScale = min(backingSize.width / imageSize.width, backingSize.height / imageSize.height)
             let filter: CALayerContentsFilter = pixelScale >= 1 ? .nearest : .linear
             imageLayer.magnificationFilter = filter
             imageLayer.minificationFilter = filter
-            imageLayer.frame = CGRect(x: bounds.midX - size.width / 2 + offset.x,
-                                      y: bounds.midY - size.height / 2 + offset.y,
-                                      width: size.width, height: size.height)
+            imageLayer.bounds = CGRect(origin: .zero, size: size)
+            imageLayer.position = crop == nil ? CGPoint(x: bounds.midX + offset.x, y: bounds.midY + offset.y)
+                                             : CGPoint(x: bounds.midX, y: bounds.midY)
+            imageLayer.transform = crop == nil ? CATransform3DIdentity : cropTransform.matrix(in: crop ?? bounds, pan: offset)
             CATransaction.commit()
+            if let crop {
+                pendingCropPolygon = cropTransform.sourcePolygon(crop: crop, bounds: bounds, imageSize: size,
+                                                                 center: imageLayer.position, pan: offset, flippedY: true)
+                if !cropUpdateScheduled {
+                    cropUpdateScheduled = true
+                    DispatchQueue.main.async { [weak self] in
+                        guard let self else { return }
+                        self.cropUpdateScheduled = false
+                        guard self.cropRatio != nil, self.pendingCropPolygon != self.reportedCropPolygon else { return }
+                        self.reportedCropPolygon = self.pendingCropPolygon
+                        self.cropChanged?(self.pendingCropPolygon)
+                    }
+                }
+            }
             scheduleHoverUpdate()
         }
 
@@ -188,9 +288,11 @@ struct HDRImagePreview: NSViewRepresentable {
             let old = zoom
             zoom = min(16, max(1, zoom * factor))
             let point = convert(event.locationInWindow, from: nil)
+            let relative = CGPoint(x: point.x - bounds.midX, y: point.y - bounds.midY)
+            let anchor = cropRatio == nil ? relative : (cropTransform.unproject(relative, in: CropGeometry.frame(in: bounds, ratio: cropRatio!)) ?? .zero)
             let ratio = zoom / old
-            offset.x = (offset.x - (point.x - bounds.midX)) * ratio + point.x - bounds.midX
-            offset.y = (offset.y - (point.y - bounds.midY)) * ratio + point.y - bounds.midY
+            offset.x = (offset.x - anchor.x) * ratio + anchor.x
+            offset.y = (offset.y - anchor.y) * ratio + anchor.y
             positionImage()
             rememberViewport()
         }
@@ -199,12 +301,19 @@ struct HDRImagePreview: NSViewRepresentable {
         override func scrollWheel(with event: NSEvent) {
             guard !picking, event.hasPreciseScrollingDeltas,
                   !event.phase.isEmpty || !event.momentumPhase.isEmpty else { return }
-            offset.x += event.scrollingDeltaX
-            offset.y -= event.scrollingDeltaY
+            let delta = CGPoint(x: event.scrollingDeltaX, y: -event.scrollingDeltaY)
+            let movement = cropRatio == nil ? delta : cropTransform.panDelta(delta)
+            offset.x += movement.x
+            offset.y += movement.y
             positionImage()
             rememberViewport()
         }
         override func mouseDown(with event: NSEvent) {
+            let location = convert(event.locationInWindow, from: nil)
+            if cropRatio != nil, let handle = CropTransform.hit(location, in: bounds) {
+                transformDrag = (handle, location, cropTransform)
+                return
+            }
             if picking {
                 let point = convert(event.locationInWindow, from: nil)
                 let rect = imageLayer.frame
@@ -226,9 +335,18 @@ struct HDRImagePreview: NSViewRepresentable {
                 rememberViewport()
             }
         }
+        override func mouseUp(with event: NSEvent) { transformDrag = nil }
+
         override func mouseDragged(with event: NSEvent) {
             scheduleHoverUpdate()
             let point = convert(event.locationInWindow, from: nil)
+            if let (handle, start, original) = transformDrag {
+                cropTransform = original.dragged(handle, from: start, to: point, in: bounds)
+                positionImage()
+                rememberViewport()
+                transformChanged?(cropTransform)
+                return
+            }
             if picking {
                 guard let center = sampleCenter else { return }
                 sampleRadius = hypot(point.x - center.x, point.y - center.y)

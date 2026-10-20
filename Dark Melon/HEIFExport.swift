@@ -68,8 +68,8 @@ nonisolated enum HEIFExportError: LocalizedError {
     case encoding, gainMap
     var errorDescription: String? {
         switch self {
-        case .encoding: "The image encoder could not save this image."
-        case .gainMap: "The encoder could not create an ISO HDR gain map for this SDR/HDR pair."
+        case .encoding: String(localized: "The image encoder could not save this image.")
+        case .gainMap: String(localized: "The encoder could not create an ISO HDR gain map for this SDR/HDR pair.")
         }
     }
 }
@@ -104,8 +104,9 @@ struct HEIFExportOptions: View {
     @State private var sizeError: String?
     @FocusState private var editingDimension: Dimension?
     private enum Dimension: Hashable { case width, height }
-    private var outputWidth: Int { max(1, Int((Double(width) * settings.scale).rounded())) }
-    private var outputHeight: Int { max(1, Int((Double(height) * settings.scale).rounded())) }
+    private var baseSize: CGSize { mapping.transform?.resolution(width: width, height: height) ?? CGSize(width: width, height: height) }
+    private var outputWidth: Int { max(1, Int((Double(baseSize.width) * settings.scale).rounded())) }
+    private var outputHeight: Int { max(1, Int((Double(baseSize.height) * settings.scale).rounded())) }
 
     private func syncDimensions() {
         if editingDimension != .width { widthText = String(outputWidth) }
@@ -113,14 +114,14 @@ struct HEIFExportOptions: View {
     }
     private func updateDimension(_ text: String, dimension: Dimension) {
         guard editingDimension == dimension, let pixels = Int(text), pixels > 0 else { return }
-        let original = dimension == .width ? width : height
+        let original = Int(dimension == .width ? baseSize.width : baseSize.height)
         guard pixels <= original else { return }
         settings.scale = Double(pixels) / Double(max(1, original))
         syncDimensions()
     }
     private func commitDimension(_ dimension: Dimension?) {
         guard let dimension else { return }
-        let original = dimension == .width ? width : height
+        let original = Int(dimension == .width ? baseSize.width : baseSize.height)
         let text = dimension == .width ? widthText : heightText
         let current = dimension == .width ? outputWidth : outputHeight
         if let pixels = Int(text), pixels != current {
@@ -243,7 +244,7 @@ struct HEIFExportOptions: View {
             if hdrEnabled && format == .heif {
                 Picker("HDR encoding", selection: $settings.heifHDRMode) {
                     ForEach(HEIFHDRMode.allCases) { mode in
-                        Text(mode.rawValue).tag(mode)
+                        Text(LocalizedStringKey(mode.rawValue)).tag(mode)
                     }
                 }.pickerStyle(.segmented)
                 if settings.heifHDRMode == .direct {

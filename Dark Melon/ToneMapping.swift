@@ -1,6 +1,7 @@
 import Foundation
 
 nonisolated struct ToneMapping: Codable, Equatable, Sendable {
+    var transform: TransformSettings? = nil
     var whiteBalance = WhiteBalance()
     var rawWhiteBalance: RAWWhiteBalance?
     var blackAndWhite = BlackAndWhiteSettings()
@@ -11,6 +12,7 @@ nonisolated struct ToneMapping: Codable, Equatable, Sendable {
     var hdf = 0.0
     var hdfRadius = 100.0
     var grain = FilmGrainSettings()
+    var halation = HalationSettings()
     var black = 0.0
     var white = 1.0
     var tonePosition = 0.0

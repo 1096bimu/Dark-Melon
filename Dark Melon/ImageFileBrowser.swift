@@ -262,7 +262,7 @@ struct ImageFileBrowser: View {
 
                                     }
                                     .buttonStyle(.plain)
-                                    .help(entry.url.lastPathComponent + (entry.hasSavedSettings ? " · Saved development settings" : ""))
+                                    .help(entry.url.lastPathComponent + (entry.hasSavedSettings ? " · " + String(localized: "Saved development settings") : ""))
                                     .accessibilityValue(entry.hasSavedSettings ? "Saved development settings" : "")
                                     .contextMenu {
                                         if let fileAction {

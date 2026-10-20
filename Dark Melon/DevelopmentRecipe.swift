@@ -28,6 +28,18 @@ nonisolated struct DevelopmentRecipe: Codable, Equatable, Sendable {
             mapping["hdrGain"] = old > 1 ? 1.0 : 0.0
             document["mapping"] = mapping
         }
+        // Migrate the former Halation amount to the new input-curve control.
+        if var mapping = document["mapping"] as? [String: Any],
+           var halation = mapping["halation"] as? [String: Any] {
+            if halation["inputCurve"] == nil, let strength = halation["strength"] {
+                halation["inputCurve"] = strength
+            }
+            if let transmission = halation["transmission"] as? Double, transmission > 0.5, transmission <= 1 {
+                halation["transmission"] = 0.5
+            }
+            mapping["halation"] = halation
+            document["mapping"] = mapping
+        }
         // Missing fields inherit current defaults; unknown fields are ignored by Codable.
         // This allows additive controls without invalidating existing recipes.
         let defaults = try JSONSerialization.jsonObject(with: Self(colorSpace: .sRGB, mapping: ToneMapping()).encoded()) as! [String: Any]
@@ -53,6 +65,7 @@ nonisolated struct DevelopmentRecipe: Codable, Equatable, Sendable {
                 guard value.isFinite, (control.minimum...control.maximum).contains(value) else { throw RecipeError.invalid }
             }
         }
+        if let transform = mapping.transform, !transform.isValid { throw RecipeError.invalid }
         let m = mapping
         func within(_ value: Double, _ range: ClosedRange<Double>) -> Bool { value.isFinite && range.contains(value) }
         if let wb = m.rawWhiteBalance {
@@ -64,6 +77,7 @@ nonisolated struct DevelopmentRecipe: Codable, Equatable, Sendable {
               within(m.hdrRolloff, 0...1), within(m.hdrTarget, 1...20), within(m.hdrGain, 0...20),
               within(m.clarity, -2...2), within(m.clarityRadius, 15...90),
               within(m.hdf, 0...0.2), within(m.hdfRadius, 50...200),
+              within(m.halation.inputCurve, 0...1), within(m.halation.radius, 0.5...3), within(m.halation.transmission, 0...0.5),
               within(m.grain.size, 0.2...3), within(m.grain.strength, 0...5), within(m.grain.distribution, 0...1),
               [m.whiteBalance.red, m.whiteBalance.green, m.whiteBalance.blue].allSatisfy({ within($0, 0.000001...10000) }),
               (0..<5).allSatisfy({ within(m.blackAndWhite.value(at: $0), 0...2) }),
@@ -81,8 +95,8 @@ nonisolated enum RecipeError: LocalizedError {
     case unsupported, invalid
     var errorDescription: String? {
         switch self {
-        case .unsupported: "This development recipe uses an unsupported version or is too large."
-        case .invalid: "The saved development settings contain invalid values."
+        case .unsupported: String(localized: "This development recipe uses an unsupported version or is too large.")
+        case .invalid: String(localized: "The saved development settings contain invalid values.")
         }
     }
 }

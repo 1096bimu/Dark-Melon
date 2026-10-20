@@ -66,8 +66,8 @@ struct SpectralSensitivityPlot: View {
                                         onCommit()
                                     }
                             )
-                            .accessibilityLabel("\(names[index]), \(wavelengths[index]) nanometers sensitivity")
-                            .accessibilityValue(String(format: "%.2f times", value))
+                            .accessibilityLabel("\(String(localized: String.LocalizationValue(names[index]))), \(wavelengths[index]) nanometers sensitivity")
+                            .accessibilityValue(String(localized: "\(value.formatted(.number.precision(.fractionLength(2)))) times"))
                     }
                 }
             }

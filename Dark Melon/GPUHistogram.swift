@@ -158,8 +158,8 @@ private enum HistogramError: LocalizedError {
     case unavailable, allocation
     var errorDescription: String? {
         switch self {
-        case .unavailable: "Metal histogram processing is unavailable on this device."
-        case .allocation: "Unable to allocate GPU resources for the histogram."
+        case .unavailable: String(localized: "Metal histogram processing is unavailable on this device.")
+        case .allocation: String(localized: "Unable to allocate GPU resources for the histogram.")
         }
     }
 }

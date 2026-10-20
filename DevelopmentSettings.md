@@ -29,7 +29,7 @@ The XMP property `darkmelon:Recipe`, namespace
 - `version`: schema/processing recipe version, currently 1
 - `colorSpace`: sRGB, Display P3, or Rec.2020
 - `mapping`: ToneMapping's stored values (tone, white balance, monochrome,
-  color, HLS and effects), including RGB gains and RAW temperature/tint
+  color, HLS, effects and transform), including RGB gains and RAW temperature/tint
 - `rawSettings`: optional RAW decoder adjustments, including exposure, shadow bias,
   noise reduction and supported corrections
 
@@ -53,3 +53,22 @@ Tests: work/DevelopmentRecipeCheck.swift and work/RecipeStoreCheck.swift in the
 Codex task workspace cover round trips, validation, missing fields, metadata
 preservation, portable rename, corrupt-sidecar protection, and untouched source
 bytes. GUI interaction and sandbox permission flows require in-app testing.
+
+Transform settings store four normalized source-image corners, the output aspect
+ratio control, rotation, and perspective controls. Older recipes without a
+transform remain uncropped. The same geometry applies to SDR and HDR before
+export resizing and gain-map generation. Output dimensions are rounded down
+using the shorter opposing source-space edges, constrained to the crop aspect
+ratio. Original image pixels remain untouched.
+
+Processing order is RAW decoding (including decoder white balance), tone mapping,
+Effects (Clarity, HDF, Halation, Film Grain), RGB white balance or monochrome
+conversion, Color, HLS, then crop/geometry and export resizing. Grain distribution
+uses source-linear luminance. HDF blurs the full linear source; Halation blurs its
+full red and green channels without black/white-point thresholds or normalization.
+Halation’s slider shapes these inputs before blur with exponent 1/value (zero is
+off, one is linear); values above one retain their linear headroom. Its blend
+strength is HDR output brightness divided by 5, capped at 1.0 and shared by both renditions.
+Green uses red’s blur radius divided by sqrt(2), with Transmission controlling its
+contribution. These source references remain independent of tone and later color
+adjustments; the effects are blended into the tone-mapped rendition.

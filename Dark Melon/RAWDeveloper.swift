@@ -47,6 +47,8 @@ nonisolated struct HistogramData: Sendable {
 nonisolated struct PreviewImages: @unchecked Sendable {
     let sdr: CGImage
     let hdr: CGImage
+    let fullSDR: CGImage
+    let fullHDR: CGImage
 }
 
 actor RAWDeveloper {
@@ -68,6 +70,7 @@ actor RAWDeveloper {
     ])
 
     private var filmGrain: FilmGrain?
+    private lazy var halation = Halation()
 
     private lazy var hdfKernel = CIColorKernel(source: """
         kernel vec4 hdfAdd(__sample pixel, __sample blurred, float amount, float ceiling) {
@@ -116,10 +119,19 @@ actor RAWDeveloper {
         """)
 
     func previews(_ source: CGImage, mapping: ToneMapping) throws -> PreviewImages {
-        let sdr = try preview(source, mapping: mapping, hdr: false)
-        let hdr = mapping.hdrEnabled ? try preview(source, mapping: mapping, hdr: true) : sdr
+        var fullMapping = mapping
+        fullMapping.transform = nil
+        let fullSDR = try preview(source, mapping: fullMapping, hdr: false)
+        let fullHDR = mapping.hdrEnabled ? try preview(source, mapping: fullMapping, hdr: true) : fullSDR
+        let sdr = try transformedPreview(fullSDR, mapping: mapping, hdr: false)
+        let hdr = mapping.hdrEnabled ? try transformedPreview(fullHDR, mapping: mapping, hdr: true) : sdr
         try Task.checkCancellation()
-        return PreviewImages(sdr: sdr, hdr: hdr)
+        return PreviewImages(sdr: sdr, hdr: hdr, fullSDR: fullSDR, fullHDR: fullHDR)
+    }
+
+    private func transformedPreview(_ source: CGImage, mapping: ToneMapping, hdr: Bool) throws -> CGImage {
+        guard let transform = mapping.transform else { return source }
+        return try displayPreview(transform.apply(to: CIImage(cgImage: source)), hdr: hdr, headroom: mapping.hdrMax)
     }
 
     func preview(_ source: CGImage, mapping: ToneMapping, hdr: Bool = true) throws -> CGImage {
@@ -128,9 +140,8 @@ actor RAWDeveloper {
         return try displayPreview(mapped, hdr: hdr, headroom: mapping.hdrMax)
     }
 
-    /// Average a circular region of the unedited linear preview, at at most 256 pixels across.
-    private func sampleMean(_ source: CGImage, center: CGPoint, radius: CGFloat) throws -> SIMD3<Double> {
-        let image = CIImage(cgImage: source)
+    /// Average a circular region at at most 256 pixels across.
+    private func sampleMean(_ image: CIImage, center: CGPoint, radius: CGFloat) throws -> SIMD3<Double> {
         let r = radius * image.extent.width
         guard r > 0 else { throw DevelopmentError.decode }
         let point = CGPoint(x: center.x * image.extent.width, y: center.y * image.extent.height)
@@ -197,8 +208,11 @@ actor RAWDeveloper {
         return automatic
     }
 
-    func sampleWhiteBalance(_ source: CGImage, center: CGPoint, radius: CGFloat) throws -> WhiteBalance {
-        let mean = try sampleMean(source, center: center, radius: radius)
+    func sampleWhiteBalance(_ source: CGImage, center: CGPoint, radius: CGFloat, mapping: ToneMapping) throws -> WhiteBalance {
+        let input = CIImage(cgImage: source)
+        let toned = try applyTone(input, curve: mapping.curve(hdr: false))
+        let effected = try applyEffects(toned, source: input, mapping: mapping, hdr: false)
+        let mean = try sampleMean(effected, center: center, radius: radius)
         guard min(mean.x, mean.y, mean.z) > 1e-6 else { throw DevelopmentError.decode }
         let inverse = SIMD3(1 / mean.x, 1 / mean.y, 1 / mean.z)
         let weights = colorSpace.luminance
@@ -206,8 +220,8 @@ actor RAWDeveloper {
         return WhiteBalance(red: inverse.x / normalization, green: inverse.y / normalization, blue: inverse.z / normalization)
     }
 
-    /// Shared input domain for tone mapping and the temporary Tone locator.
-    private func toneInput(_ image: CIImage, mapping: ToneMapping) throws -> CIImage {
+    /// RGB white balance and monochrome conversion follow tone and spatial effects.
+    private func applyWhiteBalance(_ image: CIImage, mapping: ToneMapping) throws -> CIImage {
         let gains = mapping.blackAndWhite.isEnabled ? WhiteBalance() : mapping.whiteBalance
         var balanced = image.applyingFilter("CIColorMatrix", parameters: [
             "inputRVector": CIVector(x: gains.red, y: 0, z: 0, w: 0),
@@ -241,7 +255,7 @@ actor RAWDeveloper {
     /// One GPU composite over the cached preview; never enters the export or analysis pipeline.
     func toneLocator(_ source: CGImage, preview: CGImage, mapping: ToneMapping, hdr: Bool, clipping: Bool = false) throws -> CGImage {
         try Task.checkCancellation()
-        let input = try toneInput(CIImage(cgImage: source), mapping: mapping)
+        let input = CIImage(cgImage: source)
         let weights = colorSpace.luminance
         guard let image = toneLocatorKernel?.apply(extent: input.extent, arguments: [
             input, CIImage(cgImage: preview),
@@ -249,26 +263,34 @@ actor RAWDeveloper {
             clipping ? mapping.white : mapping.peakPosition, max(0.0001, (mapping.white - mapping.black) * 0.025),
             clipping ? 1.0 : 0.0
         ]) else { throw DevelopmentError.decode }
-        return try displayPreview(image, hdr: hdr, headroom: mapping.hdrMax)
+        return try displayPreview(try mapping.transform?.apply(to: image) ?? image, hdr: hdr, headroom: mapping.hdrMax)
     }
 
     func mappedImage(_ image: CIImage, mapping: ToneMapping, hdr: Bool) throws -> CIImage {
+        let developed = try developedImage(image, mapping: mapping, hdr: hdr)
+        return try mapping.transform?.apply(to: developed) ?? developed
+    }
+
+    private func developedImage(_ image: CIImage, mapping: ToneMapping, hdr: Bool) throws -> CIImage {
         try Task.checkCancellation()
-        let balanced = try toneInput(image, mapping: mapping)
         var color = mapping.color
         if mapping.blackAndWhite.isEnabled {
             color.saturationStart = 1; color.saturationEnd = 1; color.saturationCurve = 0
             color.luminanceSaturationStart = 1; color.luminanceSaturationEnd = 1; color.luminanceSaturationCurve = 0
         }
-        let toned = try applyTone(balanced, curve: mapping.curve(hdr: hdr))
+        // Shared by preview and export: tone → effects → RGB WB/monochrome → Color → HLS.
+        // RAW decoder white balance is already part of the decoded source.
+        let toned = try applyTone(image, curve: mapping.curve(hdr: hdr))
+        let effected = try applyEffects(toned, source: image, mapping: mapping, hdr: hdr)
+        let balanced = try applyWhiteBalance(effected, mapping: mapping)
         try Task.checkCancellation()
         let split = color.splitTone
         let hasHLS = !mapping.blackAndWhite.isEnabled && !mapping.hls.allSatisfy(\.isIdentity)
         // All tonal color controls share the SDR black/white points and tone curve.
-        let reference = hdr && mapping.hdrEnabled && (!split.isIdentity || hasHLS || !color.isLuminanceSaturationIdentity || mapping.grain.strength > 0)
-            ? try applyTone(balanced, curve: mapping.curve(hdr: false)) : toned
-        let mapped = try applyHLS(toned, reference: reference, mapping: mapping, hdr: hdr)
-        guard !color.isIdentity else { return try applyEffects(mapped, reference: reference, mapping: mapping, hdr: hdr) }
+        let reference = hdr && mapping.hdrEnabled && (!split.isIdentity || hasHLS || !color.isLuminanceSaturationIdentity)
+            ? try applyTone(image, curve: mapping.curve(hdr: false)) : toned
+        let mapped = balanced
+        guard !color.isIdentity else { return try applyHLS(mapped, reference: reference, mapping: mapping, hdr: hdr) }
         let start = split.huePoint(at: 0), end = split.huePoint(at: 1)
         let naturalRadius = hypot(split.chordMidpoint.x, split.chordMidpoint.y)
         let radius = (split.midpointRadius ?? naturalRadius).clamped(to: 0...1)
@@ -294,7 +316,7 @@ actor RAWDeveloper {
             CIVector(x: split.shadowAmount, y: split.highlightAmount, z: split.amountCurveA.clamped(to: amountLimits)),
             CIVector(x: colorSpace.luminance.x, y: colorSpace.luminance.y, z: colorSpace.luminance.z)
         ]) else { throw DevelopmentError.decode }
-        return try applyEffects(colored, reference: reference, mapping: mapping, hdr: hdr)
+        return try applyHLS(colored, reference: reference, mapping: mapping, hdr: hdr)
     }
 
     private func applyHLS(_ image: CIImage, reference: CIImage, mapping: ToneMapping, hdr: Bool) throws -> CIImage {
@@ -315,20 +337,26 @@ actor RAWDeveloper {
         return result
     }
 
-    private func applyEffects(_ image: CIImage, reference: CIImage, mapping: ToneMapping, hdr: Bool) throws -> CIImage {
+    private func applyEffects(_ image: CIImage, source: CIImage, mapping: ToneMapping, hdr: Bool) throws -> CIImage {
         let clarified = try applyClarity(image, mapping: mapping, hdr: hdr)
-        let base = try applyHDF(clarified, mapping: mapping, hdr: hdr)
+        var base = try applyHDF(clarified, source: source, mapping: mapping, hdr: hdr)
+        if mapping.hdrEnabled && mapping.halation.inputCurve > 0 {
+            base = try halation.apply(to: base, source: source, settings: mapping.halation,
+                                      hdrBrightness: mapping.hdrMax,
+                                      ceiling: hdr ? mapping.hdrMax : 1)
+        }
         guard mapping.grain.strength > 0 else { return base }
         if filmGrain == nil { filmGrain = try FilmGrain() }
-        return try filmGrain!.apply(to: base, reference: reference, settings: mapping.grain,
+        return try filmGrain!.apply(to: base, source: source, settings: mapping.grain,
                                    weights: colorSpace.luminance, ceiling: hdr && mapping.hdrEnabled ? mapping.hdrMax : 1)
     }
 
-    private func applyHDF(_ base: CIImage, mapping: ToneMapping, hdr: Bool) throws -> CIImage {
+    private func applyHDF(_ base: CIImage, source: CIImage, mapping: ToneMapping, hdr: Bool) throws -> CIImage {
         guard mapping.hdf != 0 else { return base }
         let scale = EffectResolution.scale(shortSide: min(base.extent.width, base.extent.height))
         let radius = min(200, max(50, mapping.hdfRadius)) * scale
-        let blurred = base.clampedToExtent()
+        // Preserve scene-linear highlight energy before either rendition clips or compresses it.
+        let blurred = source.clampedToExtent()
             .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: radius])
             .cropped(to: base.extent)
         guard let result = hdfKernel?.apply(extent: base.extent, arguments: [
@@ -486,7 +514,9 @@ actor RAWDeveloper {
     }
 
     func exportImage(_ source: CIImage, mapping: ToneMapping, settings: HEIFSettings) throws -> Data {
-        let bounds = source.extent.integral
+        let sourceBounds = source.extent.integral
+        let transformedSize = mapping.transform?.resolution(width: Int(sourceBounds.width), height: Int(sourceBounds.height)) ?? sourceBounds.size
+        let bounds = CGRect(origin: .zero, size: transformedSize)
         let width = max(1, Int((bounds.width * settings.scale).rounded()))
         let height = max(1, Int((bounds.height * settings.scale).rounded()))
         func resized(_ image: CIImage) -> CIImage {
@@ -683,8 +713,8 @@ private enum DevelopmentError: LocalizedError {
     case unsupported, decode
     var errorDescription: String? {
         switch self {
-        case .unsupported: "This image format is not supported by Core Image."
-        case .decode: "Core Image could not decode this image."
+        case .unsupported: String(localized: "This image format is not supported by Core Image.")
+        case .decode: String(localized: "Core Image could not decode this image.")
         }
     }
 }

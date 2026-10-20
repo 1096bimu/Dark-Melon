@@ -1,0 +1,3527 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "": {
+      "shouldTranslate": false
+    },
+    "—": {
+      "shouldTranslate": false
+    },
+    "…": {
+      "shouldTranslate": false
+    },
+    "%@": {
+      "shouldTranslate": false
+    },
+    "%@ degrees": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 度"
+          }
+        }
+      }
+    },
+    "%@ lightness": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@明度"
+          }
+        }
+      }
+    },
+    "%@ midpoint": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@中间点"
+          }
+        }
+      }
+    },
+    "%@ MP": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 百万像素"
+          }
+        }
+      }
+    },
+    "%@ multiplier": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@倍数"
+          }
+        }
+      }
+    },
+    "%@ saturation": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@饱和度"
+          }
+        }
+      }
+    },
+    "%@ times": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 倍"
+          }
+        }
+      }
+    },
+    "%@, %lld nanometers sensitivity": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@，%lld 纳米感光度"
+          }
+        }
+      }
+    },
+    "%@×": {
+      "shouldTranslate": false
+    },
+    "%lld": {
+      "shouldTranslate": false
+    },
+    "%lld × %lld": {
+      "shouldTranslate": false
+    },
+    "%lld failed.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 张失败。"
+          }
+        }
+      }
+    },
+    "%lld of 5": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "第 %lld 步，共 5 步"
+          }
+        }
+      }
+    },
+    "%lld selected": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已选择 %lld 项"
+          }
+        }
+      }
+    },
+    "%lld°  ·  %lld°": {
+      "shouldTranslate": false
+    },
+    "%lldnm": {
+      "shouldTranslate": false
+    },
+    "×": {
+      "shouldTranslate": false
+    },
+    "0×–2×": {
+      "shouldTranslate": false
+    },
+    "1.0 · SDR white": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1.0 · SDR 白色"
+          }
+        }
+      }
+    },
+    "1×": {
+      "shouldTranslate": false
+    },
+    "8 bit": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "8 位"
+          }
+        }
+      }
+    },
+    "10-bit PQ HDR without a gain map. SDR appearance is determined by the viewer.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不含增益图的 10 位 PQ HDR。SDR 显示效果由查看器决定。"
+          }
+        }
+      }
+    },
+    "16 bit": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "16 位"
+          }
+        }
+      }
+    },
+    "About %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关于%@"
+          }
+        }
+      }
+    },
+    "Access to a different folder does not allow reading or saving this image’s sidecar.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "授权访问其他文件夹并不能读取或保存此图像的附属文件。"
+          }
+        }
+      }
+    },
+    "Adjust Contrast until the SDR image looks good, then choose Continue. The HDR extension updates automatically from the SDR curve.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "调整对比度，直到 SDR 图像效果满意，然后点击“继续”。HDR 延伸部分会根据 SDR 曲线自动更新。"
+          }
+        }
+      }
+    },
+    "Adjust white point when you release the Tone slider. The hidden HDR Target follows Tone and Contrast adjustments.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "松开影调滑块时调整白场。隐藏的 HDR 目标值会随影调和对比度更新。"
+          }
+        }
+      }
+    },
+    "ALL": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全部"
+          }
+        }
+      }
+    },
+    "Allow Access": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "允许访问"
+          }
+        }
+      }
+    },
+    "Allow Access to Containing Folder…": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "允许访问所在文件夹…"
+          }
+        }
+      }
+    },
+    "Allow access to this image’s folder?": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "允许访问此图像所在的文件夹？"
+          }
+        }
+      }
+    },
+    "Allow Sidecar Folder Access": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "允许访问附属文件所在文件夹"
+          }
+        }
+      }
+    },
+    "Amount": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "强度"
+          }
+        }
+      }
+    },
+    "Approx. %lld × %lld pixels": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "约 %lld × %lld 像素"
+          }
+        }
+      }
+    },
+    "Approximate outer gamut projections across all lightness levels. Outside indicates out of gamut; inside does not guarantee membership because this scope omits lightness.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所有明度下的色域外轮廓近似投影。轮廓外表示超出色域；由于示波器未显示明度，轮廓内不一定属于该色域。"
+          }
+        }
+      }
+    },
+    "Aspect Ratio": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "宽高比"
+          }
+        }
+      }
+    },
+    "Auto": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自动"
+          }
+        }
+      }
+    },
+    "Auto Tones": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自动影调"
+          }
+        }
+      }
+    },
+    "Auto Tones attempts to adjust the other settings based on a user-selected shade of interest, usually set to skin tones. Select shadows for lighter skin tones and highlights for darker skin tones.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自动影调会根据所选的关注色阶调整其他设置，通常用于肤色。较浅肤色可选择阴影区域，较深肤色可选择高光区域。"
+          }
+        }
+      }
+    },
+    "B": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "黑"
+          }
+        }
+      }
+    },
+    "Batch Export": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "批量导出"
+          }
+        }
+      }
+    },
+    "Batch Export…": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "批量导出…"
+          }
+        }
+      }
+    },
+    "Bit depth": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "位深度"
+          }
+        }
+      }
+    },
+    "Black & White": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "黑白"
+          }
+        }
+      }
+    },
+    "Black peak": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "黑色峰值"
+          }
+        }
+      }
+    },
+    "Black point": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "黑场"
+          }
+        }
+      }
+    },
+    "Blue": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "蓝色"
+          }
+        }
+      }
+    },
+    "Browse images and subfolders.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "浏览图像和子文件夹。"
+          }
+        }
+      }
+    },
+    "Calculating…": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在计算…"
+          }
+        }
+      }
+    },
+    "Cancel": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消"
+          }
+        }
+      }
+    },
+    "Cancel Export": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消导出"
+          }
+        }
+      }
+    },
+    "Cancel White Balance Sample": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消白平衡取样"
+          }
+        }
+      }
+    },
+    "Cancelled.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已取消。"
+          }
+        }
+      }
+    },
+    "Choose Export… in the top bar (⇧⌘E on Mac), pick a format and settings, then save the exported image. JPEG or HEIF with HDR enabled can include a gain map for compatible displays.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点击顶部的“导出…”（Mac 上为 ⇧⌘E），选择格式和设置，然后保存导出的图像。启用 HDR 的 JPEG 或 HEIF 可包含供兼容显示设备使用的增益图。"
+          }
+        }
+      }
+    },
+    "Choose Folder…": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择文件夹…"
+          }
+        }
+      }
+    },
+    "Choose Save Edits in the top bar (⌘S on Mac). This saves an XMP sidecar beside your original, so your development settings can be restored.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点击顶部的“保存编辑”（Mac 上为 ⌘S），在原图旁保存 XMP 附属文件，以便恢复显影设置。"
+          }
+        }
+      }
+    },
+    "Choose which development settings to paste": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择要粘贴的显影设置"
+          }
+        }
+      }
+    },
+    "Cinegrain 2": {
+      "shouldTranslate": false
+    },
+    "Cinegrain 2 source": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cinegrain 2 源代码"
+          }
+        }
+      }
+    },
+    "Clarity": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清晰度"
+          }
+        }
+      }
+    },
+    "Click a center in the preview, drag a circle, then click again to set white balance. Shortcut: W.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在预览中点击圆心，拖出圆形，再次点击以设置白平衡。快捷键：W。"
+          }
+        }
+      }
+    },
+    "Click center, drag radius, click again to apply. Click the eyedropper to cancel.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点击圆心，拖动设置半径，再次点击以应用。点击吸管可取消。"
+          }
+        }
+      }
+    },
+    "Close": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关闭"
+          }
+        }
+      }
+    },
+    "Close Tutorial": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关闭教程"
+          }
+        }
+      }
+    },
+    "Colder": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "偏冷"
+          }
+        }
+      }
+    },
+    "Color": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "色彩"
+          }
+        }
+      }
+    },
+    "Color gain map": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "彩色增益图"
+          }
+        }
+      }
+    },
+    "Color Noise Reduction": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "色彩降噪"
+          }
+        }
+      }
+    },
+    "Color space": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "色彩空间"
+          }
+        }
+      }
+    },
+    "Commonly used in video production, this graph lets you modify the saturation of pixels based on their luminance. For example the midpoint tends to control the saturation of skin tones.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此类曲线常用于视频制作，可根据像素亮度调整饱和度。例如，中间控制点通常影响肤色的饱和度。"
+          }
+        }
+      }
+    },
+    "Compare": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "对比"
+          }
+        }
+      }
+    },
+    "Compare SDR and HDR": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "对比 SDR 与 HDR"
+          }
+        }
+      }
+    },
+    "Completed %lld of %lld · %lld running": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已完成 %lld/%lld · 正在处理 %lld 项"
+          }
+        }
+      }
+    },
+    "Continue": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "继续"
+          }
+        }
+      }
+    },
+    "Continue Without Access": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不授权并继续"
+          }
+        }
+      }
+    },
+    "Contrast": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "对比度"
+          }
+        }
+      }
+    },
+    "Contrast indicates the level of contrast centered around the luminance indicated by Tone.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "对比度控制以影调所指亮度为中心的反差程度。"
+          }
+        }
+      }
+    },
+    "Convert to WB": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "转换为白平衡"
+          }
+        }
+      }
+    },
+    "Cool": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "冷"
+          }
+        }
+      }
+    },
+    "Copy": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复制"
+          }
+        }
+      }
+    },
+    "Copy all development settings": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复制所有显影设置"
+          }
+        }
+      }
+    },
+    "Copy development settings": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复制显影设置"
+          }
+        }
+      }
+    },
+    "Copy development settings from an image first.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请先从一张图像复制显影设置。"
+          }
+        }
+      }
+    },
+    "Copy Edit": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复制编辑"
+          }
+        }
+      }
+    },
+    "Copyright © 2026 Dark Melon contributors. Distributed without warranty.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "版权所有 © 2026 Dark Melon 贡献者。本软件不提供任何担保。"
+          }
+        }
+      }
+    },
+    "Copyright © 2026 mr-berndt. GPL-3.0-or-later.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "版权所有 © 2026 mr-berndt。GPL-3.0-or-later。"
+          }
+        }
+      }
+    },
+    "Core Image could not decode this image.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Core Image 无法解码此图像。"
+          }
+        }
+      }
+    },
+    "Could not restore saved edits: %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法恢复已保存的编辑：%@"
+          }
+        }
+      }
+    },
+    "Could not save edits: %@ If folder access is denied, open the containing folder in the file browser and try again.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法保存编辑：%@ 如果文件夹访问被拒绝，请在文件浏览器中打开所在文件夹，然后重试。"
+          }
+        }
+      }
+    },
+    "Crop": {
+      "extractionState": "stale",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "裁剪"
+          }
+        }
+      }
+    },
+    "Crops out the signal floor that would be irrelevant in normal photos. Set to zero if you need extreme shadow detail.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "裁去普通照片中通常无关紧要的底部信号。如需恢复极暗处的细节，请设为零。"
+          }
+        }
+      }
+    },
+    "Curve: SDR": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "曲线：SDR"
+          }
+        }
+      }
+    },
+    "Cyan": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "青色"
+          }
+        }
+      }
+    },
+    "Dark Melon": {
+      "shouldTranslate": false
+    },
+    "Dark Melon needs access to %@ to read and save the image’s edit sidecar. Select that folder once to remember access for future sessions. Opening only the image does not grant access to its sidecar.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dark Melon 需要访问 %@ 才能读取和保存图像的编辑附属文件。选择该文件夹一次后，即可记住访问权限。仅打开图像不会授予其附属文件的访问权限。"
+          }
+        }
+      }
+    },
+    "Delete Edit": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除编辑"
+          }
+        }
+      }
+    },
+    "Delete Edits": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除编辑"
+          }
+        }
+      }
+    },
+    "Delete Edits (%lld)": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除编辑（%lld）"
+          }
+        }
+      }
+    },
+    "Delete Edits?": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除编辑？"
+          }
+        }
+      }
+    },
+    "Deselect All": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消全选"
+          }
+        }
+      }
+    },
+    "Detail": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "细节"
+          }
+        }
+      }
+    },
+    "Direct HDR": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "直接 HDR"
+          }
+        }
+      }
+    },
+    "Discard Edits": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "放弃编辑"
+          }
+        }
+      }
+    },
+    "Distribution": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分布"
+          }
+        }
+      }
+    },
+    "Done": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完成"
+          }
+        }
+      }
+    },
+    "Drag toward a hue to increase that color in the image.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "向某个色相拖动以增加图像中的该颜色。"
+          }
+        }
+      }
+    },
+    "Edits Saved": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "编辑已保存"
+          }
+        }
+      }
+    },
+    "Effects": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "效果"
+          }
+        }
+      }
+    },
+    "Encoded size": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "编码后大小"
+          }
+        }
+      }
+    },
+    "Enter transform mode; click again to apply.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "进入变换模式；再次点击以应用。"
+          }
+        }
+      }
+    },
+    "EV": {
+      "shouldTranslate": false
+    },
+    "EV100 %@": {
+      "shouldTranslate": false
+    },
+    "EV100 unavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "EV100 不可用"
+          }
+        }
+      }
+    },
+    "Export height in pixels": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导出高度（像素）"
+          }
+        }
+      }
+    },
+    "Export Image": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导出图像"
+          }
+        }
+      }
+    },
+    "Export Selected…": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导出所选图像…"
+          }
+        }
+      }
+    },
+    "Export width in pixels": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导出宽度（像素）"
+          }
+        }
+      }
+    },
+    "Export your photo": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导出照片"
+          }
+        }
+      }
+    },
+    "Export…": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导出…"
+          }
+        }
+      }
+    },
+    "Exported %lld of %lld images.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已导出 %lld/%lld 张图像。"
+          }
+        }
+      }
+    },
+    "Exposure": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "曝光"
+          }
+        }
+      }
+    },
+    "File filter": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件筛选"
+          }
+        }
+      }
+    },
+    "Files": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件"
+          }
+        }
+      }
+    },
+    "Film Grain": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "胶片颗粒"
+          }
+        }
+      }
+    },
+    "Film grain adapted from cinegrain2 by mr-berndt.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "胶片颗粒改编自 mr-berndt 的 cinegrain2。"
+          }
+        }
+      }
+    },
+    "Find the skin tones": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "找到肤色范围"
+          }
+        }
+      }
+    },
+    "Format": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "格式"
+          }
+        }
+      }
+    },
+    "Full photo with transformed crop area": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完整照片及变换后的裁剪区域"
+          }
+        }
+      }
+    },
+    "Gain map": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "增益图"
+          }
+        }
+      }
+    },
+    "GNU General Public License v3.0 (GPL-3.0-only)": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GNU 通用公共许可证第 3 版（GPL-3.0-only）"
+          }
+        }
+      }
+    },
+    "GNU GPL v3 — full license": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GNU GPL v3 — 完整许可证"
+          }
+        }
+      }
+    },
+    "Grain distribution": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "颗粒分布"
+          }
+        }
+      }
+    },
+    "Grain distribution from shadows to highlights": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "颗粒从阴影到高光的分布"
+          }
+        }
+      }
+    },
+    "Grain size": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "颗粒大小"
+          }
+        }
+      }
+    },
+    "Grain strength": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "颗粒强度"
+          }
+        }
+      }
+    },
+    "Green": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "绿色"
+          }
+        }
+      }
+    },
+    "Guided Tutorial…": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "操作教程…"
+          }
+        }
+      }
+    },
+    "Half the exported width and height; one quarter as many gain-map pixels.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "宽高为导出图像的一半，增益图像素数为四分之一。"
+          }
+        }
+      }
+    },
+    "Half-size gain map": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "半尺寸增益图"
+          }
+        }
+      }
+    },
+    "HDF": {
+      "shouldTranslate": false
+    },
+    "HDF radius": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HDF 半径"
+          }
+        }
+      }
+    },
+    "HDR": {
+      "shouldTranslate": false
+    },
+    "HDR cannot be darker than SDR. The curves cross.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HDR 不能比 SDR 更暗。两条曲线发生了交叉。"
+          }
+        }
+      }
+    },
+    "HDR encoding": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HDR 编码"
+          }
+        }
+      }
+    },
+    "HDR Gain": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HDR 增益"
+          }
+        }
+      }
+    },
+    "HDR gain map": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HDR 增益图"
+          }
+        }
+      }
+    },
+    "HDR Gain multiplies the entire HDR curve. 1× keeps the automatically calculated rendition, 2× doubles its linear brightness, and 0 turns HDR off. Tone, Contrast, and white point update the hidden HDR Target without changing this multiplier.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HDR 增益乘以整条 HDR 曲线。1× 保留自动计算的效果，2× 使线性亮度加倍，0 关闭 HDR。影调、对比度和白场会更新隐藏的 HDR 目标值，而不改变此倍数。"
+          }
+        }
+      }
+    },
+    "HDR is off. Raise HDR Gain above Off, then use the Preview toggle to compare HDR and SDR.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HDR 已关闭。将 HDR 增益调至开启状态，再使用预览按钮对比 HDR 与 SDR。"
+          }
+        }
+      }
+    },
+    "HDR Off": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HDR 已关闭"
+          }
+        }
+      }
+    },
+    "HDR Output %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HDR 输出 %@"
+          }
+        }
+      }
+    },
+    "HDR Rolloff": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HDR 高光柔化"
+          }
+        }
+      }
+    },
+    "Height": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "高度"
+          }
+        }
+      }
+    },
+    "Hidden": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已隐藏"
+          }
+        }
+      }
+    },
+    "Hide File Browser": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "隐藏文件浏览器"
+          }
+        }
+      }
+    },
+    "Hide file browser (F)": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "隐藏文件浏览器（F）"
+          }
+        }
+      }
+    },
+    "High luminance": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "高亮度"
+          }
+        }
+      }
+    },
+    "High saturation": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "高饱和度"
+          }
+        }
+      }
+    },
+    "Highlight amount": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "高光强度"
+          }
+        }
+      }
+    },
+    "Highlight hue": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "高光色相"
+          }
+        }
+      }
+    },
+    "Highlight Recovery": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "高光恢复"
+          }
+        }
+      }
+    },
+    "Highlights": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "高光"
+          }
+        }
+      }
+    },
+    "Histogram unavailable: %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "直方图不可用：%@"
+          }
+        }
+      }
+    },
+    "HLS": {
+      "shouldTranslate": false
+    },
+    "Hold to preview without this panel’s effects. Release to restore them.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按住以预览关闭此面板效果后的图像，松开即可恢复。"
+          }
+        }
+      }
+    },
+    "Hue": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "色相"
+          }
+        }
+      }
+    },
+    "Ignore": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "忽略"
+          }
+        }
+      }
+    },
+    "Image files directly in this folder": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此文件夹中的图像文件"
+          }
+        }
+      }
+    },
+    "In the Tone panel, drag Tone until the grey overlay highlights the neutral skin tones you want to emphasize. The overlay appears while you drag. Choose Continue when the range looks right.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在影调面板中拖动影调滑块，直到灰色叠加层覆盖你想突出表现的自然肤色范围。叠加层仅在拖动时显示。范围合适后，点击“继续”。"
+          }
+        }
+      }
+    },
+    "K": {
+      "shouldTranslate": false
+    },
+    "Keyboard Shortcuts": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "键盘快捷键"
+          }
+        }
+      }
+    },
+    "Lens Correction": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "镜头校正"
+          }
+        }
+      }
+    },
+    "Licenses": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "许可证"
+          }
+        }
+      }
+    },
+    "Lightness": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "明度"
+          }
+        }
+      }
+    },
+    "Linear RGB": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "线性 RGB"
+          }
+        }
+      }
+    },
+    "Linear size": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尺寸比例"
+          }
+        }
+      }
+    },
+    "Loading image…": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在载入图像…"
+          }
+        }
+      }
+    },
+    "Local Edge Contrast": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "局部边缘对比度"
+          }
+        }
+      }
+    },
+    "Low luminance": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "低亮度"
+          }
+        }
+      }
+    },
+    "Low saturation": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "低饱和度"
+          }
+        }
+      }
+    },
+    "Lowers HDR white below the calculated target while preserving the starting tangent. Zero keeps a straight continuation; 100% ends flat. HDR Gain multiplies the result and can be increased if the curves cross.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在保留起始切线方向的同时，将 HDR 白色降至计算目标值以下。零为直线延伸，100% 时末端变平。HDR 增益会乘以整个结果；若曲线交叉，可增加增益。"
+          }
+        }
+      }
+    },
+    "Luminance → Saturation": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "亮度 → 饱和度"
+          }
+        }
+      }
+    },
+    "Luminance Noise Reduction": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "亮度降噪"
+          }
+        }
+      }
+    },
+    "LZW compression. HDR preserves the full rendition by scaling it down by HDR Gain to fit a standard SDR file.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用 LZW 压缩。HDR 版本按 HDR 输出亮度缩小数值范围，以标准 SDR 文件保留完整画面。"
+          }
+        }
+      }
+    },
+    "Magenta": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "品红"
+          }
+        }
+      }
+    },
+    "Manual": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手动"
+          }
+        }
+      }
+    },
+    "Median: %lld": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "中位数：%lld"
+          }
+        }
+      }
+    },
+    "Metal histogram processing is unavailable on this device.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此设备无法使用 Metal 处理直方图。"
+          }
+        }
+      }
+    },
+    "Midtone hue": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "中间调色相"
+          }
+        }
+      }
+    },
+    "Midtone hue bend": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "中间调色相偏移"
+          }
+        }
+      }
+    },
+    "Midtone peak": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "中间调峰值"
+          }
+        }
+      }
+    },
+    "Midtones": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "中间调"
+          }
+        }
+      }
+    },
+    "Moiré Reduction": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "摩尔纹抑制"
+          }
+        }
+      }
+    },
+    "Monochrome gain map": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "单通道增益图"
+          }
+        }
+      }
+    },
+    "No HDR pixel can be darker than its SDR counterpart in a gain map based file. PQ and other direct HDR formats are not affected. You may add a small amount of HDR Gain to fix this issue.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用增益图的文件中，HDR 像素不能比对应的 SDR 像素更暗。PQ 等直接 HDR 格式不受影响。可略微增加 HDR 增益来解决此问题。"
+          }
+        }
+      }
+    },
+    "No images": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有图像"
+          }
+        }
+      }
+    },
+    "No RAW images": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有 RAW 图像"
+          }
+        }
+      }
+    },
+    "No room for HDR continuation. Move Tone or the SDR white point below 1.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有空间延伸 HDR 曲线。请将影调或 SDR 白场移至 1 以下。"
+          }
+        }
+      }
+    },
+    "Off": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关闭"
+          }
+        }
+      }
+    },
+    "OK": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "好"
+          }
+        }
+      }
+    },
+    "Open a photo with skin tones from the file browser to begin. The guide will wait while the image loads.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从文件浏览器打开一张含有肤色的照片以开始。教程会等待图像载入完成。"
+          }
+        }
+      }
+    },
+    "Open a RAW image to adjust decoder settings.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开 RAW 图像以调整解码设置。"
+          }
+        }
+      }
+    },
+    "Open an Image": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开图像"
+          }
+        }
+      }
+    },
+    "Open Image…": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开图像…"
+          }
+        }
+      }
+    },
+    "Open RAW, SDR, or HDR images to develop in linear RGB.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开 RAW、SDR 或 HDR 图像，在线性 RGB 空间中显影。"
+          }
+        }
+      }
+    },
+    "Panel": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "面板"
+          }
+        }
+      }
+    },
+    "Panels": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "面板"
+          }
+        }
+      }
+    },
+    "Paste": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "粘贴"
+          }
+        }
+      }
+    },
+    "Paste development settings…": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "粘贴显影设置…"
+          }
+        }
+      }
+    },
+    "Paste Edit to %lld Files…": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将编辑粘贴到 %lld 个文件…"
+          }
+        }
+      }
+    },
+    "Paste Edit…": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "粘贴编辑…"
+          }
+        }
+      }
+    },
+    "Paste Settings": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "粘贴设置"
+          }
+        }
+      }
+    },
+    "Pinch to zoom the chroma radius. Click to reset to 2×.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "双指捏合以缩放色度半径。点击可重置为 2×。"
+          }
+        }
+      }
+    },
+    "Pinch to zoom. Swipe with two fingers to pan. Double-click to fit.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "双指捏合可缩放，双指滑动可平移，双击可适合窗口。"
+          }
+        }
+      }
+    },
+    "Preparing concurrent exports…": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在准备并行导出…"
+          }
+        }
+      }
+    },
+    "Preparing export settings…": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在准备导出设置…"
+          }
+        }
+      }
+    },
+    "Preparing Image…": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在准备图像…"
+          }
+        }
+      }
+    },
+    "Preparing…": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在准备…"
+          }
+        }
+      }
+    },
+    "Preview: HDR": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "预览：HDR"
+          }
+        }
+      }
+    },
+    "Preview: SDR": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "预览：SDR"
+          }
+        }
+      }
+    },
+    "px": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "像素"
+          }
+        }
+      }
+    },
+    "Quality": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "质量"
+          }
+        }
+      }
+    },
+    "R %@  G %@  B %@": {
+      "shouldTranslate": false
+    },
+    "Radius": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "半径"
+          }
+        }
+      }
+    },
+    "RAW": {
+      "shouldTranslate": false
+    },
+    "Read GNU GPL v3": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "阅读 GNU GPL v3"
+          }
+        }
+      }
+    },
+    "Recently visited folder, %lld of %lld": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最近访问的文件夹，第 %lld 项，共 %lld 项"
+          }
+        }
+      }
+    },
+    "Red": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "红色"
+          }
+        }
+      }
+    },
+    "Refresh": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刷新"
+          }
+        }
+      }
+    },
+    "Remove saved settings and discard pending edits for %lld file(s)? Original images are kept. If Trash is unavailable, settings sidecars are permanently deleted.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除 %lld 个文件的已保存设置并放弃待保存的编辑？原始图像将保留。如果废纸篓不可用，设置附属文件将被永久删除。"
+          }
+        }
+      }
+    },
+    "Reset": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重置"
+          }
+        }
+      }
+    },
+    "Reset Color": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重置色彩"
+          }
+        }
+      }
+    },
+    "Reset Effects": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重置效果"
+          }
+        }
+      }
+    },
+    "Reset HLS": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重置 HLS"
+          }
+        }
+      }
+    },
+    "Reset Perspective": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重置透视"
+          }
+        }
+      }
+    },
+    "Reset RAW": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重置 RAW"
+          }
+        }
+      }
+    },
+    "Reset Rotation": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重置旋转"
+          }
+        }
+      }
+    },
+    "Reset Tone": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重置影调"
+          }
+        }
+      }
+    },
+    "Reset Transform": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重置变换"
+          }
+        }
+      }
+    },
+    "Reset WB": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重置白平衡"
+          }
+        }
+      }
+    },
+    "RGB gain map": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "RGB 增益图"
+          }
+        }
+      }
+    },
+    "Sample White Balance": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "白平衡取样"
+          }
+        }
+      }
+    },
+    "Saturation": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "饱和度"
+          }
+        }
+      }
+    },
+    "Saturation → Saturation": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "饱和度 → 饱和度"
+          }
+        }
+      }
+    },
+    "Save": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存"
+          }
+        }
+      }
+    },
+    "Save All": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全部保存"
+          }
+        }
+      }
+    },
+    "Save All and Continue": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全部保存并继续"
+          }
+        }
+      }
+    },
+    "Save an SDR JPEG with an ISO HDR gain map for compatible viewers.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存带有 ISO HDR 增益图的 SDR JPEG，供兼容的查看器显示。"
+          }
+        }
+      }
+    },
+    "Save development settings": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存显影设置"
+          }
+        }
+      }
+    },
+    "Save development settings beside the original image in an XMP sidecar": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将显影设置保存到原图旁的 XMP 附属文件"
+          }
+        }
+      }
+    },
+    "Save Edits": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存编辑"
+          }
+        }
+      }
+    },
+    "Save edits for %lld file(s) before closing?": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关闭前保存 %lld 个文件的编辑？"
+          }
+        }
+      }
+    },
+    "Save your settings": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存设置"
+          }
+        }
+      }
+    },
+    "Save…": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存…"
+          }
+        }
+      }
+    },
+    "Saved development settings": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已保存的显影设置"
+          }
+        }
+      }
+    },
+    "Saving Edits…": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在保存编辑…"
+          }
+        }
+      }
+    },
+    "SDR": {
+      "shouldTranslate": false
+    },
+    "SDR · %@ · Lab · D50": {
+      "shouldTranslate": false
+    },
+    "SDR luma on a 0–255 scale, excluding bins below 3 and above 252. Each remaining pixel counts once.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SDR 亮度采用 0–255 标度，不计入低于 3 或高于 252 的区间。其余每个像素计数一次。"
+          }
+        }
+      }
+    },
+    "SDR P90–P10: —   Median: —": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SDR P90–P10：—   中位数：—"
+          }
+        }
+      }
+    },
+    "SDR P90–P10: %lld": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SDR P90–P10：%lld"
+          }
+        }
+      }
+    },
+    "SDR RGB": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SDR RGB"
+          }
+        }
+      }
+    },
+    "Select %@, the folder containing %@.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请选择 %@，即包含 %@ 的文件夹。"
+          }
+        }
+      }
+    },
+    "Select All": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全选"
+          }
+        }
+      }
+    },
+    "Select the image’s containing folder.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请选择图像所在的文件夹。"
+          }
+        }
+      }
+    },
+    "Sensitivity": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "感光度"
+          }
+        }
+      }
+    },
+    "Set the contrast": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "设置对比度"
+          }
+        }
+      }
+    },
+    "Settings section": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "设置类别"
+          }
+        }
+      }
+    },
+    "Settings…": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "设置…"
+          }
+        }
+      }
+    },
+    "Shadow amount": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "阴影强度"
+          }
+        }
+      }
+    },
+    "Shadow Bias": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "阴影偏置"
+          }
+        }
+      }
+    },
+    "Shadow hue": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "阴影色相"
+          }
+        }
+      }
+    },
+    "Shadows": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "阴影"
+          }
+        }
+      }
+    },
+    "Sharpness": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "锐度"
+          }
+        }
+      }
+    },
+    "Shortcuts": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "快捷键"
+          }
+        }
+      }
+    },
+    "Show File Browser": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示文件浏览器"
+          }
+        }
+      }
+    },
+    "Show file browser (F)": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示文件浏览器（F）"
+          }
+        }
+      }
+    },
+    "Show in Finder": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在“访达”中显示"
+          }
+        }
+      }
+    },
+    "Shown": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已显示"
+          }
+        }
+      }
+    },
+    "Size": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "大小"
+          }
+        }
+      }
+    },
+    "Size and estimate use the first selected image. The same size percentage applies to each image. Images use saved settings when available, otherwise automatic adjustments.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尺寸和估算大小以第一张所选图像为准。所有图像使用相同的尺寸比例。有已保存设置时使用该设置，否则使用自动调整。"
+          }
+        }
+      }
+    },
+    "Source code": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "源代码"
+          }
+        }
+      }
+    },
+    "Split Tone": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分离色调"
+          }
+        }
+      }
+    },
+    "Step completed": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "步骤已完成"
+          }
+        }
+      }
+    },
+    "Strength": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "强度"
+          }
+        }
+      }
+    },
+    "Temperature": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "色温"
+          }
+        }
+      }
+    },
+    "The development sidecar is not a valid Dark Melon XMP document.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显影附属文件不是有效的 Dark Melon XMP 文档。"
+          }
+        }
+      }
+    },
+    "The encoder could not create an ISO HDR gain map for this SDR/HDR pair.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "编码器无法为此 SDR/HDR 图像对创建 ISO HDR 增益图。"
+          }
+        }
+      }
+    },
+    "The image encoder could not save this image.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "图像编码器无法保存此图像。"
+          }
+        }
+      }
+    },
+    "The saved development settings contain invalid values.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已保存的显影设置包含无效数值。"
+          }
+        }
+      }
+    },
+    "There are unsaved edits for %lld file(s). Save them or discard them before continuing.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "有 %lld 个文件的编辑尚未保存。请保存或放弃这些编辑后再继续。"
+          }
+        }
+      }
+    },
+    "This development recipe uses an unsupported version or is too large.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此显影设置的版本不受支持，或数据过大。"
+          }
+        }
+      }
+    },
+    "This image format is not supported by Core Image.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Core Image 不支持此图像格式。"
+          }
+        }
+      }
+    },
+    "This lets you set multipliers to saturation for different levels of input saturation. A traditional “vibrance” slider is equivalent to moving the midpoint in this graph. And a traditional “Saturation” slider is equivalent to moving the right end point of this graph.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此图可为不同输入饱和度设置饱和度倍数。传统的“自然饱和度”滑块相当于移动图中间的控制点，而传统的“饱和度”滑块相当于移动最右端的控制点。"
+          }
+        }
+      }
+    },
+    "Tint": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "色调"
+          }
+        }
+      }
+    },
+    "Toggle file browser": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示或隐藏文件浏览器"
+          }
+        }
+      }
+    },
+    "Toggle HDR or SDR display of the developed image": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "切换显影图像的 HDR 或 SDR 显示"
+          }
+        }
+      }
+    },
+    "Toggle HDR preview": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "切换 HDR 预览"
+          }
+        }
+      }
+    },
+    "Toggle the linear source histogram and the developed SDR preview histogram. Black and white points can only be adjusted in Linear RGB.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "切换线性源图像直方图与显影后的 SDR 预览直方图。黑场和白场只能在线性 RGB 模式下调整。"
+          }
+        }
+      }
+    },
+    "Toggle white balance picker": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "切换白平衡取样工具"
+          }
+        }
+      }
+    },
+    "Tone": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "影调"
+          }
+        }
+      }
+    },
+    "Tone adjustment is ineffective at low contrast.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "低对比度时，影调调整效果不明显。"
+          }
+        }
+      }
+    },
+    "Tone indicates the range of luminance that is of the most interest, usually set to skin tones, or 50% grey. Its luminance is generally protected when adjusting Contrast.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "影调表示最关注的亮度范围，通常选在肤色或 50% 灰附近。调整对比度时，该范围的亮度通常会得到保留。"
+          }
+        }
+      }
+    },
+    "Tools": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工具"
+          }
+        }
+      }
+    },
+    "Transform": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "变换"
+          }
+        }
+      }
+    },
+    "Tutorial complete": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "教程完成"
+          }
+        }
+      }
+    },
+    "Two tone curves. SDR reaches one at the white point; HDR reaches its maximum at input one.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "两条影调曲线。SDR 在白场处达到 1；HDR 在输入为 1 时达到最大值。"
+          }
+        }
+      }
+    },
+    "Unable to allocate GPU resources for the histogram.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法为直方图分配 GPU 资源。"
+          }
+        }
+      }
+    },
+    "Unable to create the Film Grain processing kernels.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法创建胶片颗粒处理内核。"
+          }
+        }
+      }
+    },
+    "Unable to render the GPU vectorscope.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法绘制 GPU 矢量示波器。"
+          }
+        }
+      }
+    },
+    "Unavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不可用"
+          }
+        }
+      }
+    },
+    "Unsaved edits": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未保存的编辑"
+          }
+        }
+      }
+    },
+    "Unsaved edits (%lld)": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未保存的编辑（%lld）"
+          }
+        }
+      }
+    },
+    "Up": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上一级"
+          }
+        }
+      }
+    },
+    "Use Preview: SDR in the top bar (or H) to view HDR, then toggle back to SDR. Compare the highlight detail and overall appearance.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用顶部的“预览：SDR”按钮（或 H 键）查看 HDR，然后切回 SDR，对比高光细节和整体效果。"
+          }
+        }
+      }
+    },
+    "Vectorscope": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "矢量示波器"
+          }
+        }
+      }
+    },
+    "Version": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "版本"
+          }
+        }
+      }
+    },
+    "W": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "白"
+          }
+        }
+      }
+    },
+    "Warm": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暖"
+          }
+        }
+      }
+    },
+    "Warmer": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "偏暖"
+          }
+        }
+      }
+    },
+    "WB %@ K · Tint %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "白平衡 %@ K · 色调 %@"
+          }
+        }
+      }
+    },
+    "WB: %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "白平衡：%@"
+          }
+        }
+      }
+    },
+    "White Balance": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "白平衡"
+          }
+        }
+      }
+    },
+    "White balance limits reached. The remaining adjustment has been retained in RGB gains.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已达到白平衡限制。剩余的调整已保留在 RGB 增益中。"
+          }
+        }
+      }
+    },
+    "White Balance Picker": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "白平衡取样工具"
+          }
+        }
+      }
+    },
+    "White balance vectorscope": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "白平衡矢量示波器"
+          }
+        }
+      }
+    },
+    "White point": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "白场"
+          }
+        }
+      }
+    },
+    "Width": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "宽度"
+          }
+        }
+      }
+    },
+    "Yellow": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "黄色"
+          }
+        }
+      }
+    },
+    "Your settings and exported image are saved. You can repeat this guide from Help → Guided Tutorial.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "设置和导出的图像已保存。可通过“帮助 → 操作教程”再次查看本教程。"
+          }
+        }
+      }
+    },
+    "Zero is linear. Negative values reduce contrast around the tone position.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "零为线性。负值会降低影调位置附近的对比度。"
+          }
+        }
+      }
+    },
+    "Halation": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "光晕"
+          }
+        }
+      }
+    },
+    "Halation radius": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "光晕半径"
+          }
+        }
+      }
+    },
+    "Enable HDR Gain to use Halation.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "开启 HDR 增益以使用光晕效果。"
+          }
+        }
+      }
+    },
+    "Unable to create the Halation processing kernels.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法创建光晕处理内核。"
+          }
+        }
+      }
+    },
+    "Transmission": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "透射率"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

@@ -6,6 +6,10 @@ struct ContentView: View {
     #if os(macOS)
     @State private var previewViewport = PreviewViewport()
     #endif
+    @State private var cropPolygon: [CGPoint] = [CGPoint(x: 0, y: 0), CGPoint(x: 1, y: 0), CGPoint(x: 1, y: 1), CGPoint(x: 0, y: 1)]
+    @State private var cropTransform = CropTransform()
+    @State private var cropping = false
+    @State private var cropRatioPosition = 5.0
     @State private var pendingEdits = PendingEdits()
     @State private var pendingControlsWidth: CGFloat = 120
     @State private var baselineRecipe: DevelopmentRecipe?
@@ -78,7 +82,47 @@ struct ContentView: View {
     }
 
     private var currentRecipe: DevelopmentRecipe {
-        DevelopmentRecipe(colorSpace: colorSpace, mapping: mapping, rawSettings: mapping.rawWhiteBalance == nil ? nil : rawSettings)
+        var savedMapping = mapping
+        if cropping, let transform = draftTransform { savedMapping.transform = transform }
+        return DevelopmentRecipe(colorSpace: colorSpace, mapping: savedMapping, rawSettings: mapping.rawWhiteBalance == nil ? nil : rawSettings)
+    }
+
+    private var draftTransform: TransformSettings? {
+        let result = TransformSettings(points: cropPolygon, ratioPosition: cropRatioPosition,
+                                       rotation: cropTransform.rotation, horizontal: cropTransform.horizontal, vertical: cropTransform.vertical)
+        return result.isValid ? result : nil
+    }
+
+    private func toggleTransform() {
+        if cropping {
+            mapping.transform = draftTransform
+            cropping = false
+        } else {
+            if let saved = mapping.transform {
+                cropRatioPosition = saved.ratioPosition
+                cropTransform = CropTransform(rotation: saved.rotation, horizontal: saved.horizontal, vertical: saved.vertical)
+                cropPolygon = saved.points
+            }
+            cropping = true
+        }
+    }
+
+    private func resetTransform() {
+        mapping.transform = nil
+        cropTransform = CropTransform()
+        cropPolygon = [CGPoint(x: 0, y: 0), CGPoint(x: 1, y: 0), CGPoint(x: 1, y: 1), CGPoint(x: 0, y: 1)]
+        cropping = false
+        cropRatioPosition = 5
+        #if os(macOS)
+        previewViewport.zoom = 1
+        previewViewport.offset = .zero
+        #endif
+    }
+
+    private func originalPreviewPoint(_ point: CGPoint) -> CGPoint {
+        guard !cropping, let transform = mapping.transform else { return point }
+        let source = transform.sourcePoint(CGPoint(x: point.x, y: 1 - point.y))
+        return CGPoint(x: source.x, y: 1 - source.y)
     }
 
     private var previewMapping: ToneMapping {
@@ -89,7 +133,7 @@ struct ContentView: View {
             result.blackAndWhite = BlackAndWhiteSettings()
             result.blackAndWhite.isEnabled = mapping.blackAndWhite.isEnabled
         }
-        if comparingEffects { result.clarity = 0; result.hdf = 0; result.grain.strength = 0 }
+        if comparingEffects { result.clarity = 0; result.hdf = 0; result.grain.strength = 0; result.halation.inputCurve = 0 }
         return result
     }
 
@@ -108,11 +152,18 @@ struct ContentView: View {
                     Color.black
                     if let previewImages {
                         #if os(macOS)
-                        HDRImagePreview(image: ((adjustingTone || adjustingWhitePoint) ? toneLocatorImage : nil) ?? (hdrPreview ? previewImages.hdr : previewImages.sdr),
+                        HDRImagePreview(image: ((adjustingTone || adjustingWhitePoint) ? toneLocatorImage : nil) ?? (cropping ? (hdrPreview ? previewImages.fullHDR : previewImages.fullSDR) : (hdrPreview ? previewImages.hdr : previewImages.sdr)),
                                         hdr: hdrPreview, sourceID: development?.id ?? previewRevision,
                                         viewport: previewViewport,
+                                        cropRatio: cropping ? CropGeometry.ratio(at: cropRatioPosition) : nil,
+                                        cropTransform: $cropTransform,
+                                        savedTransform: mapping.transform,
+                                        cropChanged: { cropPolygon = $0 },
                                         sampleTool: pickingWhiteBalance ? .whiteBalance : nil,
                                         hover: { hoveredPreviewPixel = $0 }) { center, radius in
+                            let sampleCenter = originalPreviewPoint(center)
+                            let sampleEdge = originalPreviewPoint(CGPoint(x: center.x + radius, y: center.y))
+                            let sourceRadius = hypot(sampleEdge.x - sampleCenter.x, sampleEdge.y - sampleCenter.y)
                             let sampledMapping = mapping
                             pickingWhiteBalance = false
                             guard let development else { return }
@@ -120,19 +171,24 @@ struct ContentView: View {
                             let worker = developer
                             Task {
                                 do {
-                                    let balance = try await worker.sampleWhiteBalance(development.preview, center: center, radius: radius)
+                                    let balance = try await worker.sampleWhiteBalance(development.preview, center: sampleCenter, radius: sourceRadius, mapping: sampledMapping)
                                     guard self.development?.id == sourceID, !loading, mapping == sampledMapping else { return }
                                     mapping.whiteBalance = balance
                                 } catch { errorMessage = error.localizedDescription }
                             }
                         }
-                            .padding(16)
+                            .padding(cropping ? 0 : 16)
                         #else
-                        Image(decorative: ((adjustingTone || adjustingWhitePoint) ? toneLocatorImage : nil) ?? (hdrPreview ? previewImages.hdr : previewImages.sdr), scale: 1)
+                        if cropping {
+                            MobileCropPreview(image: hdrPreview ? previewImages.fullHDR : previewImages.fullSDR,
+                                              hdr: hdrPreview, ratio: CropGeometry.ratio(at: cropRatioPosition), transform: $cropTransform, savedTransform: mapping.transform, cropChanged: { cropPolygon = $0 })
+                        } else {
+                        Image(decorative: ((adjustingTone || adjustingWhitePoint) ? toneLocatorImage : nil) ?? (cropping ? (hdrPreview ? previewImages.fullHDR : previewImages.fullSDR) : (hdrPreview ? previewImages.hdr : previewImages.sdr)), scale: 1)
                             .allowedDynamicRange(hdrPreview ? .high : .standard)
                             .resizable()
                             .scaledToFit()
                             .padding(16)
+                        }
                         #endif
                     } else if !loading && development == nil {
                         ContentUnavailableView {
@@ -151,7 +207,7 @@ struct ContentView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .overlay(alignment: .bottomLeading) {
-                    if !pendingEdits.entries.isEmpty {
+                    if !cropping && !pendingEdits.entries.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Unsaved edits (\(pendingEdits.entries.count))").font(.caption.bold())
                                 .lineLimit(1).frame(width: pendingControlsWidth, alignment: .leading)
@@ -184,7 +240,7 @@ struct ContentView: View {
                     }
                 }
                 .overlay(alignment: .bottomTrailing) {
-                    HStack(spacing: 8) {
+                    if !cropping { HStack(spacing: 8) {
                         Button("Copy", systemImage: "doc.on.doc") {
                             do { if let sourceURL { try SettingsClipboard.copy(currentRecipe, reference: development?.whitePoint, source: sourceURL) } }
                             catch { errorMessage = error.localizedDescription }
@@ -206,6 +262,7 @@ struct ContentView: View {
                     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
                     .padding(12)
                     .disabled(development == nil || loading)
+                    }
                 }
                 .overlay(alignment: .topTrailing) {
                     if let development {
@@ -214,6 +271,7 @@ struct ContentView: View {
                 }
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
+                if cropping { CropRatioControls(position: $cropRatioPosition) }
                 if tutorial.active {
                     EditingTutorialGuide(tutorial: tutorial, imageReady: development != nil && !loading,
                                          hdrEnabled: mapping.hdrEnabled, advance: advanceTutorial,
@@ -227,7 +285,16 @@ struct ContentView: View {
                             histogramView
                             Divider()
                         }
-                        if panel == .raw {
+                        if panel == .transform {
+                            TransformControls(cropping: cropping, image: previewImages?.fullSDR,
+                                polygon: cropping ? cropPolygon : mapping.transform?.points ?? cropPolygon,
+                                resolution: (cropping ? draftTransform : mapping.transform)?.resolution(width: development?.width ?? 1, height: development?.height ?? 1)
+                                    ?? CGSize(width: development?.width ?? 1, height: development?.height ?? 1),
+                                toggle: toggleTransform,
+                                resetPerspective: { if !cropping { toggleTransform() }; cropTransform.horizontal = 0; cropTransform.vertical = 0 },
+                                resetRotation: { if !cropping { toggleTransform() }; cropTransform.rotation = 0 },
+                                resetAll: resetTransform)
+                        } else if panel == .raw {
                             RAWControls(settings: $rawSettings, isRAW: development?.isRAW == true, commit: {
                                 if let sourceURL { load(sourceURL, resetEdits: false) }
                             }, reset: {
@@ -241,7 +308,7 @@ struct ContentView: View {
                         } else if panel == .hls {
                             HLSControls(adjustments: $mapping.hls, comparing: $comparingHLS, blackAndWhite: $mapping.blackAndWhite)
                         } else if panel == .effects {
-                            EffectsControls(clarity: $mapping.clarity, radius: $mapping.clarityRadius, hdf: $mapping.hdf, hdfRadius: $mapping.hdfRadius, grain: $mapping.grain, comparing: $comparingEffects)
+                            EffectsControls(clarity: $mapping.clarity, radius: $mapping.clarityRadius, hdf: $mapping.hdf, hdfRadius: $mapping.hdfRadius, grain: $mapping.grain, halation: $mapping.halation, hdrEnabled: mapping.hdrEnabled, comparing: $comparingEffects)
                         } else {
                             tonePanel
                         }
@@ -267,6 +334,7 @@ struct ContentView: View {
                 pickingWhiteBalance = false
             }
             .onChange(of: panel) { _, _ in
+                if panel != .transform, cropping { mapping.transform = draftTransform; cropping = false }
                 pickingWhiteBalance = false
                 adjustingTone = false
                 adjustingWhitePoint = false
@@ -296,7 +364,7 @@ struct ContentView: View {
                 guard adjustingTone || adjustingWhitePoint, let development, let previewImages else { return }
                 do {
                     let image = try await developer.toneLocator(development.preview,
-                        preview: hdrPreview ? previewImages.hdr : previewImages.sdr,
+                        preview: hdrPreview ? previewImages.fullHDR : previewImages.fullSDR,
                         mapping: previewMapping, hdr: hdrPreview, clipping: adjustingWhitePoint)
                     try Task.checkCancellation()
                     toneLocatorImage = image
@@ -412,10 +480,10 @@ struct ContentView: View {
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Picker("Panel", selection: $panel) {
-                        ForEach(EditorPanel.allCases) { panel in Text(panel.rawValue).tag(panel) }
+                        ForEach(EditorPanel.allCases) { panel in Text(LocalizedStringKey(panel.rawValue)).tag(panel) }
                     }
                     .pickerStyle(.segmented)
-                    .frame(width: 350)
+                    .frame(width: 420)
                 }
             }
             .sheet(isPresented: $showingPasteSettings, onDismiss: { browserPaste = nil; pasteEditURLs = [] }) {
@@ -435,7 +503,7 @@ struct ContentView: View {
                 } else if let development {
                     HEIFExportOptions(settings: $exportSettings, width: development.width,
                                       height: development.height, hdrEnabled: mapping.hdrEnabled,
-                                      sourceURL: development.url, mapping: mapping, colorSpace: colorSpace,
+                                      sourceURL: development.url, mapping: currentRecipe.mapping, colorSpace: colorSpace,
                                       rawSettings: rawSettings, save: { prepareExport() })
                 }
             }
@@ -494,6 +562,7 @@ struct ContentView: View {
         if resetEdits { SidecarFolderAccess.shared.requestIfNeeded(for: url) }
         #endif
         if resetEdits { rememberCurrentEdits() }
+        if resetEdits { cropping = false; cropRatioPosition = 5; cropTransform = CropTransform(); cropPolygon = [CGPoint(x: 0, y: 0), CGPoint(x: 1, y: 0), CGPoint(x: 1, y: 1), CGPoint(x: 0, y: 1)] }
         sourceURL = url
         pendingAutoWhite = nil
         pendingAutoContrast = nil
@@ -510,7 +579,7 @@ struct ContentView: View {
                 let draft = resetEdits ? pendingEdits.entry(for: url) : nil
                 if resetEdits {
                     do { restored = try await RecipeStore.shared.load(for: url) }
-                    catch { errorMessage = "Could not restore saved edits: \(error.localizedDescription)" }
+                    catch { errorMessage = String(localized: "Could not restore saved edits: \(error.localizedDescription)") }
                     if let draft {
                         colorSpace = draft.recipe.colorSpace
                         mapping = draft.recipe.mapping
@@ -551,7 +620,10 @@ struct ContentView: View {
                     }
                     hdrPreview = mapping.hdrEnabled
                 }
-                if resetEdits { baselineRecipe = draft?.baseline ?? currentRecipe }
+                if resetEdits {
+                    cropPolygon = mapping.transform?.points ?? cropPolygon
+                    baselineRecipe = draft?.baseline ?? currentRecipe
+                }
                 recipeSourceURL = url
                 development = loaded
                 if initializeEdits, loaded.isRAW { pendingAutoContrast = AutoWhiteRequest(sourceID: loaded.id, mapping: mapping) }
@@ -645,11 +717,11 @@ struct ContentView: View {
         rememberCurrentEdits()
         guard !pendingEdits.entries.isEmpty else { return true }
         let alert = NSAlert()
-        alert.messageText = "Unsaved edits"
-        alert.informativeText = "Save edits for \(pendingEdits.entries.count) file(s) before closing?"
-        alert.addButton(withTitle: "Save All")
-        alert.addButton(withTitle: "Cancel")
-        alert.addButton(withTitle: "Discard Edits")
+        alert.messageText = String(localized: "Unsaved edits")
+        alert.informativeText = String(localized: "Save edits for \(pendingEdits.entries.count) file(s) before closing?")
+        alert.addButton(withTitle: String(localized: "Save All"))
+        alert.addButton(withTitle: String(localized: "Cancel"))
+        alert.addButton(withTitle: String(localized: "Discard Edits"))
         switch alert.runModal() {
         case .alertFirstButtonReturn:
             do { try savePendingEdits(); return true }
@@ -679,7 +751,7 @@ struct ContentView: View {
             }
             pendingEdits.remove(sourceURL)
             tutorial.record(.save)
-        } catch { errorMessage = "Could not save edits: \(error.localizedDescription) If folder access is denied, open the containing folder in the file browser and try again." }
+        } catch { errorMessage = String(localized: "Could not save edits: \(error.localizedDescription) If folder access is denied, open the containing folder in the file browser and try again.") }
     }
 
     private var histogramView: some View {
@@ -689,7 +761,7 @@ struct ContentView: View {
                         revision: previewRevision, colorSpace: colorSpace,
                         resettingTone: resettingTone, resetTone: resetTone,
                         showingSDR: $displayMode.sdrHistogram,
-                        hoverPosition: hoveredPreviewPixel,
+                        hoverPosition: displayMode.sdrHistogram ? hoveredPreviewPixel : hoveredPreviewPixel.map(originalPreviewPoint),
                         onWhitePointEditingChanged: { editing in
                             adjustingWhitePoint = editing
                             toneLocatorImage = nil
@@ -758,7 +830,7 @@ struct ContentView: View {
         do {
             let baked = try RAWWhiteBalance.baked(currentRecipe, source: development.url)
             if baked.mapping.whiteBalance != WhiteBalance() {
-                errorMessage = "White balance limits reached. The remaining adjustment has been retained in RGB gains."
+                errorMessage = String(localized: "White balance limits reached. The remaining adjustment has been retained in RGB gains.")
             }
             guard baked.mapping != mapping else { return }
             mapping = baked.mapping
@@ -940,7 +1012,7 @@ struct ContentView: View {
     private func prepareExport(_ target: BrowserFileDevelopment? = nil) {
         guard let development = target?.development ?? development else { return }
         let settings = exportSettings
-        let snapshot = target?.recipe.mapping ?? mapping
+        let snapshot = target?.recipe.mapping ?? currentRecipe.mapping
         let worker = target?.worker ?? exportWorker
         exportedSourceURL = development.url
         exporting = true

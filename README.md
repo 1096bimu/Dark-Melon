@@ -32,6 +32,7 @@ An original 2736 × 1824 JPEG export with an embedded ISO 21496-1 HDR gain map. 
 - **Copy and paste settings**, with separate choices for Tone, White Balance, Color, HLS, Effects, and RAW controls.
 - **Folder-based file browser** with thumbnails, RAW/All filtering, Command/Shift selection, and outlines identifying images with saved edits.
 - **White balance**, including averaged circular sampling, RGB gains, and RAW temperature/tint controls. Convert to WB transfers RGB adjustments into the RAW decoder where possible, preserving residual gains when its limits are reached.
+- **Nondestructive crop, rotation, and perspective correction**, with a full-photo crop overview, conservative output-resolution estimate, and matching SDR/HDR export geometry.
 - **Split toning**, saturation-versus-saturation and luminance-versus-saturation controls.
 - **HSL color adjustments and black-and-white conversion** with an adjustable color-sensitivity curve, designed for physically plausible tonal relationships and smooth near-white transitions.
 - **Clarity** for local contrast, using a large-radius high-pass layer blended with Soft Light. Similar in purpose to Lightroom's Clarity, but a different implementation; negative strength softens contrast.
@@ -44,7 +45,6 @@ An original 2736 × 1824 JPEG export with an embedded ISO 21496-1 HDR gain map. 
 
 Dark Melon is a focused image developer, not a full replacement for a commercial photo editor or library manager.
 
-- No crop, rotation, perspective correction, or other geometric transforms.
 - No catalog or database; images stay in ordinary folders with optional sidecars.
 - No ratings, flags, reject/keep workflow, or other culling tools.
 - No file-management operations such as deleting, moving, or renaming source images.

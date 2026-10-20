@@ -82,7 +82,7 @@ struct BatchExportView: View {
     private func prepareOptions() {
         sources = browser.batchFiles.filter { selection.contains($0.url) }.map(\.url)
         guard let first = sources.first else { return }
-        busy = true; completed = 0; failures = []; status = "Preparing export settings…"
+        busy = true; completed = 0; failures = []; status = String(localized: "Preparing export settings…")
         job = Task {
             defer { busy = false }
             do {
@@ -90,7 +90,7 @@ struct BatchExportView: View {
                 try Task.checkCancellation()
                 sampleRecipe = prepared.recipe; sample = prepared.development
                 status = ""; showingOptions = true
-            } catch is CancellationError { status = "Cancelled." }
+            } catch is CancellationError { status = String(localized: "Cancelled.") }
             catch { status = error.localizedDescription }
         }
     }
@@ -98,7 +98,7 @@ struct BatchExportView: View {
     private func export(to destination: URL) {
         let snapshot = settings
         let files = sources
-        busy = true; completed = 0; failures = []; status = "Preparing concurrent exports…"
+        busy = true; completed = 0; failures = []; status = String(localized: "Preparing concurrent exports…")
         sample = nil; sampleRecipe = nil
         job = Task {
             let access = destination.startAccessingSecurityScopedResource()
@@ -108,9 +108,11 @@ struct BatchExportView: View {
                     completed += 1
                     if let error = result.error { failures.append("\(result.source.lastPathComponent): \(error)") }
                 }
-                status = "Completed \(completed) of \(files.count) · \(active) running"
+                status = String(localized: "Completed \(completed) of \(files.count) · \(active) running")
             }
-            status = "\(Task.isCancelled ? "Cancelled. " : "")Exported \(completed - failures.count) of \(files.count) images.\(failures.isEmpty ? "" : " \(failures.count) failed.")"
+            status = String(localized: "Exported \(completed - failures.count) of \(files.count) images.")
+            if Task.isCancelled { status = String(localized: "Cancelled.") + " " + status }
+            if !failures.isEmpty { status += " " + String(localized: "\(failures.count) failed.") }
         }
     }
 }

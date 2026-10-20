@@ -142,7 +142,7 @@ struct VectorscopeView: View {
                             arrow.addLine(to: CGPoint(x: tip.x - dx * 7 + dy * 4, y: tip.y - dy * 7 - dx * 4))
                             context.stroke(arrow, with: .color(.black.opacity(0.8)), lineWidth: 4)
                             context.stroke(arrow, with: .color(color), lineWidth: 1.5)
-                            context.draw(Text(label).font(.caption2).foregroundStyle(color),
+                            context.draw(Text(LocalizedStringKey(label)).font(.caption2).foregroundStyle(color),
                                          at: CGPoint(x: center.x + dx * radius * 0.65, y: center.y + dy * radius * 0.65))
                         }
                         if let marker = hoverMarker {

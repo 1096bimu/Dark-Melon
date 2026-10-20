@@ -25,8 +25,8 @@ nonisolated struct CameraMetadata: Sendable {
         iso = (exif[kCGImagePropertyExifISOSpeedRatings] as? [NSNumber])?.first.map { $0.doubleValue }.flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
         focalLength = number(kCGImagePropertyExifFocalLength)
         switch (exif[kCGImagePropertyExifWhiteBalance] as? NSNumber)?.intValue {
-        case 0: whiteBalanceMode = "Auto"
-        case 1: whiteBalanceMode = "Manual"
+        case 0: whiteBalanceMode = String(localized: "Auto")
+        case 1: whiteBalanceMode = String(localized: "Manual")
         default: whiteBalanceMode = nil
         }
     }

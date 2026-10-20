@@ -99,6 +99,6 @@ actor RecipeStore {
 
     private enum StoreError: LocalizedError {
         case invalidXMP
-        var errorDescription: String? { "The development sidecar is not a valid Dark Melon XMP document." }
+        var errorDescription: String? { String(localized: "The development sidecar is not a valid Dark Melon XMP document.") }
     }
 }

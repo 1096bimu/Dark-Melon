@@ -2,11 +2,11 @@ import CoreImage
 import Foundation
 
 nonisolated struct FilmGrainSettings: Codable, Equatable, Sendable {
-    var size = 0.37
+    var size = 0.5
     var strength = 0.0
-    var distribution = 1.0
+    var distribution = 0.0
 
-    /// Peak-normalized beta envelope: decreasing at zero, centered at one.
+    /// Peak-normalized envelope over source-linear luminance: shadow peak at zero, midtone peak at one.
     func weight(at tone: Double) -> Double {
         let x = min(1, max(0, tone)), peak = distribution.clamped(to: 0...1) * 0.5
         if peak == 0 { return pow(1 - x, 4) }
@@ -22,7 +22,7 @@ nonisolated struct FilmGrainSettings: Codable, Equatable, Sendable {
 nonisolated final class FilmGrain {
     private enum GrainError: LocalizedError {
         case kernel
-        var errorDescription: String? { "Unable to create the Film Grain processing kernels." }
+        var errorDescription: String? { String(localized: "Unable to create the Film Grain processing kernels.") }
     }
     private let noise: CIKernel
     private let downsample: CIKernel
@@ -70,7 +70,7 @@ nonisolated final class FilmGrain {
         }
         return float4(sum/total,1);
     }
-    [[stitchable]] float4 filmApply(sampler picture, sampler reference, sampler narrow, sampler wide,
+    [[stitchable]] float4 filmApply(sampler picture, sampler source, sampler narrow, sampler wide,
                                     float4 parameters, float3 weights, float ceiling, destination dest) {
         float2 p=dest.coord();
         float4 color=unpremultiply(picture.sample(picture.transform(p)));
@@ -78,10 +78,9 @@ nonisolated final class FilmGrain {
         float3 w=(wide.sample(wide.transform(p)).rgb-0.5)*4.0;
         float3 unit=(n-0.95*w)*parameters.x;
         float grain=dot(unit,float3(0.2126,0.7152,0.0722));
-        float3 ref=unpremultiply(reference.sample(reference.transform(p))).rgb;
-        float y=clamp(dot(ref,weights),0.0,1.0);
-        // Classify SDR tones without encoding or otherwise changing the image RGB.
-        float t=y/max(0.000001,y+(0.18/0.82)*(1-y));
+        // Use decoded source-linear luminance, independent of SDR/HDR development.
+        float3 input=unpremultiply(source.sample(source.transform(p))).rgb;
+        float t=clamp(dot(input,weights),0.0,1.0);
         float peak=parameters.w*0.5;
         float envelope=0.0;
         if (peak<=0.000001) envelope=pow(1-t,4.0);
@@ -108,7 +107,7 @@ nonisolated final class FilmGrain {
         self.noise = noise; self.downsample = downsample; self.blur = blur; self.finish = finish
     }
 
-    func apply(to image: CIImage, reference: CIImage, settings: FilmGrainSettings,
+    func apply(to image: CIImage, source: CIImage, settings: FilmGrainSettings,
                weights: SIMD3<Double>, ceiling: Double) throws -> CIImage {
         guard settings.strength > 0 else { return image }
         let extent = image.extent.integral
@@ -159,7 +158,7 @@ nonisolated final class FilmGrain {
         let normalization=1/sqrt(max(variance/3,1e-8))
         let amplitude=0.405*0.210*Self.resolutionAmplitude(size: size, shortSide: shortSide)
         guard let result = finish.apply(extent: extent, roiCallback: { _, rect in rect }, arguments: [
-            softened, reference, narrow, wide,
+            softened, source, narrow, wide,
             CIVector(x: normalization,y: settings.strength.clamped(to: 0...5),z: amplitude,w: settings.distribution.clamped(to: 0...1)),
             CIVector(x: weights.x,y: weights.y,z: weights.z), ceiling
         ]) else { throw GrainError.kernel }

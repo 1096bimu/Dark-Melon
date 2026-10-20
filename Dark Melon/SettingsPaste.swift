@@ -39,6 +39,7 @@ nonisolated struct SettingsPasteSelection {
             result.hdf = source.hdf
             result.hdfRadius = source.hdfRadius
             result.grain = source.grain
+            result.halation = source.halation
         }
         return result
     }
@@ -86,7 +87,7 @@ nonisolated struct CopiedSettings {
     }
     private enum ClipboardError: LocalizedError {
         case empty
-        var errorDescription: String? { "Copy development settings from an image first." }
+        var errorDescription: String? { String(localized: "Copy development settings from an image first.") }
     }
 }
 

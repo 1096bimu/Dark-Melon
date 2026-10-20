@@ -36,16 +36,16 @@ import AppKit
             return true
         }
         let alert = NSAlert()
-        alert.messageText = "Allow access to this image’s folder?"
-        alert.informativeText = "Dark Melon needs access to \(folder.lastPathComponent) to read and save the image’s edit sidecar. Select that folder once to remember access for future sessions. Opening only the image does not grant access to its sidecar."
-        alert.addButton(withTitle: "Allow Access to Containing Folder…")
-        alert.addButton(withTitle: "Continue Without Access")
+        alert.messageText = String(localized: "Allow access to this image’s folder?")
+        alert.informativeText = String(localized: "Dark Melon needs access to \(folder.lastPathComponent) to read and save the image’s edit sidecar. Select that folder once to remember access for future sessions. Opening only the image does not grant access to its sidecar.")
+        alert.addButton(withTitle: String(localized: "Allow Access to Containing Folder…"))
+        alert.addButton(withTitle: String(localized: "Continue Without Access"))
         guard alert.runModal() == .alertFirstButtonReturn else { return false }
 
         let panel = NSOpenPanel()
-        panel.title = "Allow Sidecar Folder Access"
-        panel.message = "Select \(folder.lastPathComponent), the folder containing \(image.lastPathComponent)."
-        panel.prompt = "Allow Access"
+        panel.title = String(localized: "Allow Sidecar Folder Access")
+        panel.message = String(localized: "Select \(folder.lastPathComponent), the folder containing \(image.lastPathComponent).")
+        panel.prompt = String(localized: "Allow Access")
         panel.directoryURL = folder
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
@@ -54,8 +54,8 @@ import AppKit
         guard panel.runModal() == .OK, let selected = panel.url else { return false }
         guard selected.resolvingSymlinksInPath().standardizedFileURL == folder.resolvingSymlinksInPath() else {
             let error = NSAlert()
-            error.messageText = "Select the image’s containing folder."
-            error.informativeText = "Access to a different folder does not allow reading or saving this image’s sidecar."
+            error.messageText = String(localized: "Select the image’s containing folder.")
+            error.informativeText = String(localized: "Access to a different folder does not allow reading or saving this image’s sidecar.")
             error.runModal()
             return false
         }

@@ -110,7 +110,7 @@ struct RAWControls: View {
                 ForEach(RAWAdjustment.allCases) { control in
                     VStack(alignment: .leading, spacing: 6) {
                         HStack {
-                            Text(control.rawValue)
+                            Text(LocalizedStringKey(control.rawValue))
                             if control == .shadowBias { ControlInfo(.shadowBias) }
                             Spacer()
                             Text(settings.values[control] ?? 0, format: .number.precision(.fractionLength(2)))
@@ -122,7 +122,7 @@ struct RAWControls: View {
                         }), in: control.minimum...control.maximum, onEditingChanged: { editing in
                             if !editing { commit() }
                         })
-                        .accessibilityLabel(control.rawValue)
+                        .accessibilityLabel(LocalizedStringKey(control.rawValue))
                     }
                     .disabled(!settings.supported.contains(control))
                 }
