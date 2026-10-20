@@ -23,11 +23,11 @@ An original 2736 × 1824 JPEG export with an embedded ISO 21496-1 HDR gain map. 
 ## Features
 
 - **RAW, SDR, and HDR image development**, with paired SDR/HDR previews and JPEG, HEIF, and TIFF export.
-- **Batch export on macOS**, using each image's saved settings, concurrent processing with a memory budget, and automatic filename-conflict handling.
+- **Batch export on macOS**, using saved settings or automatic development for unedited files, concurrent processing with a memory budget, and automatic filename-conflict handling.
 - **Portable XMP sidecar settings**, leaving original images untouched. Unsaved recipes stay in a pending-edits list when switching images. Save commits them to sidecars; folder changes and normal close/quit ask before discarding pending work.
-- **Copy and paste settings**, with separate choices for Tone, White Balance, Color, HLS, and Effects.
-- **Folder-based file browser** with thumbnails and outlines identifying images with saved edits.
-- **White balance**, including averaged circular sampling and RAW-aware white-balance copying.
+- **Copy and paste settings**, with separate choices for Tone, White Balance, Color, HLS, Effects, and RAW controls.
+- **Folder-based file browser** with thumbnails, RAW/All filtering, Command/Shift selection, and outlines identifying images with saved edits.
+- **White balance**, including averaged circular sampling, RGB gains, and RAW temperature/tint controls. Convert to WB transfers RGB adjustments into the RAW decoder where possible, preserving residual gains when its limits are reached.
 - **Split toning**, saturation-versus-saturation and luminance-versus-saturation controls.
 - **HSL color adjustments and black-and-white conversion** with an adjustable color-sensitivity curve, designed for physically plausible tonal relationships and smooth near-white transitions.
 - **Clarity** for local contrast, using a large-radius high-pass layer blended with Soft Light. Similar in purpose to Lightroom's Clarity, but a different implementation; negative strength softens contrast.
@@ -61,29 +61,40 @@ Instead of asking you to balance separate Exposure, Shadows, Highlights, Whites,
 | White point | Chooses which input level reaches SDR white. |
 | Tone | Moves the region where the curve allocates contrast, relative to the black and SDR white points. |
 | Contrast | Controls how concentrated that allocation is; negative values provide a complementary curve shape for reducing contrast. |
-| HDR Contrast | Offsets the HDR curve's contrast relative to SDR. |
-| HDR Gain | Sets the HDR output ceiling relative to SDR white, or disables HDR. |
+| HDR Gain | Multiplies the entire HDR rendition, or disables HDR. |
+| HDR Rolloff | Gradually flattens the HDR highlight extension, lowering its endpoint. |
 
-The curves are constructed by integrating a nonnegative slope profile and normalizing its total area. Positive Contrast uses a beta-shaped profile; negative Contrast uses its broad, nonnegative complement. This creates a fixed **contrast budget**: allocating more slope to one tonal region necessarily leaves less elsewhere. The controls reshape a single continuous, monotonic mapping instead of stacking independently adjusted tonal regions. Within each RGB channel, a brighter input cannot become a darker output through this tone curve, although clipping can make different inputs equal.
+The SDR curve is constructed by integrating a nonnegative slope profile and normalizing its total area. Positive Contrast uses a beta-shaped profile; negative Contrast uses its broad, nonnegative complement. This creates a fixed **contrast budget**: allocating more slope to one tonal region necessarily leaves less elsewhere. The controls reshape a single continuous, monotonic mapping instead of stacking independently adjusted tonal regions. Within each RGB channel, a brighter input cannot become a darker output through this tone curve, although clipping can make different inputs equal.
 
 This is a useful constraint for natural photographic rendering. It makes the tradeoff between shadow, midtone, and highlight separation explicit and reduces the number of interacting controls needed to find a balanced result.
 
 ### SDR and HDR share an input reference
 
-Both renditions start from the same linear RGB image and black point. Their endpoints differ:
+Both renditions start from the same linear RGB image and black point. The SDR curve maps the interval between black and white into output 0–1, clipping above the selected white point. **The HDR extension grows out of that SDR curve at Tone**, using its brightness and local slope as the starting reference.
 
-- **SDR:** maps the interval from the black point to the selected white point into output 0–1, clipping above that white point.
-- **HDR:** maps the interval from the black point to input 1.0 into output 0–HDR Gain, independently of the SDR white endpoint.
+With HDR Rolloff at zero and HDR Gain at 1.00, the HDR curve follows SDR up to Tone, then continues along its tangent toward input 1.0. There is no independent HDR Contrast control to balance: changing Tone, Contrast, or the white point updates the hidden **HDR Target** from that tangent. The target is limited to 1–20, so the tangent relationship is exact before that limit intervenes. An automatically calculated target below 2 turns HDR off.
 
-Tone refers to the same input position in both curves, rather than moving to a different part of the photograph when HDR is selected. HDR Contrast allows the extended rendition to redistribute contrast while retaining that shared reference. The preview switches between these two developed images.
+HDR Gain is a separate multiplier, not the endpoint: the default 1.01× gives a small lift to the whole HDR rendition; the slider runs from Off to 1.01–5×, and the value field also accepts 1.00. **HDR Output** on the graph shows the resulting endpoint after gain and rolloff.
 
-For example, an SDR white point can make a room look properly exposed while bright window detail reaches white. The HDR curve can retain separation in those brighter source values and display it above SDR white. This uses detail already in the source; it cannot recover detail clipped during capture or beyond the implemented HDR input endpoint.
+Rolloff bends the highlight extension downward smoothly. At zero it is straight; at maximum it finishes with zero slope. It retains the starting slope of the unrolled extension while reducing its final brightness. Before the Gain multiplier, the extension is:
+
+```text
+t = input position selected by Tone
+u = (input - t) / (1 - t)
+HDR(input) = SDR(t) + (HDR Target - SDR(t)) × (u - Rolloff × u² / 2)
+```
+
+This applies above Tone; below Tone the base curve follows SDR. If Tone reaches input 1.0, there is no remaining interval to extend. Gain then multiplies the complete HDR curve.
+
+For example, the SDR white point can expose a room naturally while bright window detail reaches white. The HDR continuation retains separation in brighter source values and displays it above SDR white, using detail already present in the source. It cannot recover detail clipped during capture or beyond the implemented input endpoint.
+
+**Auto Tones** helps place the selected shade: when you release Tone, it adjusts the white point toward an SDR level of 120–140/255 using the smallest necessary change. A grey preview overlay identifies the affected input range while dragging. Start with skin tones or another shade you want to prioritize, adjust Contrast, and compare the SDR and HDR previews. Fresh SDR imports start with HDR off and neutral contrast.
 
 ### Reading the two curves
 
-<img src="docs/images/tone-histogram.png" alt="Dark Melon histogram and tone controls: cyan SDR curve reaches output one at the white point near input 0.81; orange HDR curve continues to input one and output gain 4.34." width="640">
+<img src="docs/images/tone-histogram.png" alt="Updated Dark Melon tone controls: cyan SDR curve levels off at the white point near 0.725; orange HDR extension reaches output 2.44 with Gain 1.01 and Rolloff zero." width="640">
 
-*Captured from the running app. The cyan SDR curve reaches output 1.0 at the W marker (about input 0.81) and stays flat beyond it. The orange HDR curve continues to input 1.0, reaching an output ceiling of 4.34. Both start at the same black point.*
+*Tone is 0.205 of the black-to-white interval and Contrast is 21%. The cyan SDR curve reaches output 1.0 at W (about input 0.725); the orange HDR extension continues to input 1.0. HDR Gain is only 1.01×, while the resulting HDR Output is 2.44—the multiplier and final brightness are different quantities.*
 
 The horizontal axis is linear source RGB intensity. The colored histogram fills show pixel counts on a **logarithmic** vertical scale; the overlaid curves use a separate **linear output** scale, reduced to fit HDR headroom. The dashed “1.0 · SDR white” line marks reference white on that curve scale. A curve crossing a histogram trace has no special meaning—the two heights represent different quantities.
 
@@ -93,7 +104,7 @@ An SDR-base gain-map file contains a conventional SDR image plus information for
 
 Dark Melon develops both images first, then derives the gain map from their relationship. In simplified form, the stored quantity is `log2((HDR + epsilon) / (SDR + epsilon))`, calculated per RGB channel or from luminance for a monochrome map. The small offset handles values near black. The map therefore describes where the HDR rendition differs from the SDR base, rather than applying one global brightness multiplier. Compatible viewers can adapt that enhancement to available display headroom. See Apple's [overview of adaptive HDR and gain maps](https://developer.apple.com/videos/play/wwdc2024/10177/).
 
-The intended result is a convincing SDR photograph with an HDR extension that adds selective highlight detail and brightness. The mathematical structure supports that goal, but does not enforce it: aggressive settings can also brighten midtones substantially. The app warns when the HDR tone curve falls below the SDR curve; it does not automatically prevent crossings.
+The intended result is a convincing SDR photograph with an HDR extension that adds selective highlight detail and brightness. The mathematical structure supports that goal, but does not enforce it: aggressive settings can also brighten midtones substantially. The app warns when the HDR tone curve falls below the SDR curve; it does not automatically prevent crossings. Rolloff can cause such a crossing; a small increase in HDR Gain can resolve it. Direct PQ HEIF export is also available without a gain map.
 
 ### Why this approach instead of a traditional multi-slider workflow?
 

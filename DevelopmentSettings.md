@@ -16,8 +16,7 @@ Untouched automatic import adjustments do not count as user edits. SDR imports
 without a saved recipe start with HDR Gain off.
 
 The queue is memory-only: force quit, crashes, and OS process termination cannot
-be intercepted to show a confirmation. RAW decoder controls remain excluded from
-persistent recipes as described below.
+be intercepted to show a confirmation.
 
 Move/copy the sidecar with the source; rename both matching prefixes together.
 No absolute source path is stored. Including the original extension avoids
@@ -30,10 +29,12 @@ The XMP property `darkmelon:Recipe`, namespace
 - `version`: schema/processing recipe version, currently 1
 - `colorSpace`: sRGB, Display P3, or Rec.2020
 - `mapping`: ToneMapping's stored values (tone, white balance, monochrome,
-  color, HLS and effects)
+  color, HLS and effects), including RGB gains and RAW temperature/tint
+- `rawSettings`: optional RAW decoder adjustments, including exposure, shadow bias,
+  noise reduction and supported corrections
 
-RAW decoder controls, preview mode, zoom, compare state, export options, and
-histogram UI are excluded. The recipe applies to the original source, not to
+Preview mode, zoom, compare state, export options, and histogram UI are excluded.
+Older recipes without RAW settings use decoder defaults. The recipe applies to the original source, not to
 an already rendered export. Other applications can carry/read the XMP, but
 cannot reproduce Dark Melon's processing without implementing these controls.
 
@@ -45,8 +46,8 @@ defaults. Failure to read a recipe doesn't prevent opening the image.
 
 Sandbox access to the containing directory is needed to create/read sidecars.
 The folder browser grants that access. Opening an individual file alone may not
-grant access to its siblings; if Save Edits reports permission denied, open its
-folder in the browser. Read-only locations cannot save recipes.
+grant access to its siblings; the app offers a containing-folder access prompt
+and remembers granted access. You can also open its folder in the browser. Read-only locations cannot save recipes.
 
 Tests: work/DevelopmentRecipeCheck.swift and work/RecipeStoreCheck.swift in the
 Codex task workspace cover round trips, validation, missing fields, metadata
