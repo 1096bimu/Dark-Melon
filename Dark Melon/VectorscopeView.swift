@@ -5,12 +5,15 @@ struct VectorscopeView: View {
     let hoverSource: CGImage?
     let hoverPosition: CGPoint?
     let hoverRevision: UUID
-    let temperatureSamples: [TemperatureLocus.Sample]
     let revision: UUID
     let colorSpace: ProcessingColorSpace
-    let whitePoint: RAWWhitePoint?
     @Binding var mapping: ToneMapping
     @Binding var pickingWhiteBalance: Bool
+    var resetRAWBalance: (() -> Void)? = nil
+    var convertWhiteBalance: (() -> Void)? = nil
+    @FocusState private var focusedWBField: Int?
+    @State private var editedWBField = false
+    var commitRAWBalance: () -> Void = {}
     private var balance: WhiteBalance {
         get { mapping.whiteBalance }
         nonmutating set { mapping.whiteBalance = newValue }
@@ -30,6 +33,26 @@ struct VectorscopeView: View {
     @State private var errorMessage: String?
     @State private var lastTranslation = CGSize.zero
 
+    private static let gamutColors: [Color] = [.cyan, .pink, .orange]
+    private static let warmDirection: CGPoint = {
+        let warm = ScopeProjection.lab(TemperatureLocus.referenceRGB(4500, space: .sRGB), space: .sRGB)
+        let cool = ScopeProjection.lab(TemperatureLocus.referenceRGB(7500, space: .sRGB), space: .sRGB)
+        let x = warm.y - cool.y, y = -(warm.z - cool.z)
+        let length = hypot(x, y)
+        return CGPoint(x: x / length, y: y / length)
+    }()
+
+    private var gainValues: some View {
+        Text("R \(balance.red, format: .number.precision(.fractionLength(3)))  G \(balance.green, format: .number.precision(.fractionLength(3)))  B \(balance.blue, format: .number.precision(.fractionLength(3)))")
+            .monospacedDigit()
+    }
+
+    private func commitWBField() {
+        guard editedWBField else { return }
+        editedWBField = false
+        commitRAWBalance()
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
@@ -44,10 +67,12 @@ struct VectorscopeView: View {
                 .labelStyle(.iconOnly)
                 .disabled(mapping.blackAndWhite.isEnabled)
                 .tint(pickingWhiteBalance ? .accentColor : .primary)
-                .help("Click a center in the preview, drag a circle, then click again to set white balance.")
+                .help("Click a center in the preview, drag a circle, then click again to set white balance. Shortcut: W.")
                 #endif
-                Button("Reset WB") { balance = WhiteBalance() }
-                    .disabled(balance == WhiteBalance() || mapping.blackAndWhite.isEnabled)
+                Button("Reset WB") {
+                    if let resetRAWBalance { resetRAWBalance() } else { balance = WhiteBalance() }
+                }
+                    .disabled((resetRAWBalance == nil && balance == WhiteBalance()) || mapping.blackAndWhite.isEnabled)
             }
             if pickingWhiteBalance {
                 Text("Click center, drag radius, click again to apply. Click the eyedropper to cancel.")
@@ -76,25 +101,6 @@ struct VectorscopeView: View {
                         context.draw(Text("\(128.0 / magnification, format: .number.precision(.fractionLength(0)))")
                             .font(.caption2).foregroundStyle(.secondary),
                             at: CGPoint(x: center.x, y: center.y + radius - 8))
-                        var axes = Path()
-                        axes.move(to: CGPoint(x: center.x - radius, y: center.y))
-                        axes.addLine(to: CGPoint(x: center.x + radius, y: center.y))
-                        axes.move(to: CGPoint(x: center.x, y: center.y - radius))
-                        axes.addLine(to: CGPoint(x: center.x, y: center.y + radius))
-                        context.stroke(axes, with: .color(.white.opacity(0.25)), style: StrokeStyle(lineWidth: 0.5, dash: [3, 3]))
-                        context.draw(Text("+a").font(.caption2).foregroundStyle(.secondary), at: CGPoint(x: center.x + radius - 14, y: center.y - 10))
-                        context.draw(Text("+b").font(.caption2).foregroundStyle(.secondary), at: CGPoint(x: center.x + 14, y: center.y - radius + 10))
-                        context.draw(Text("−a").font(.caption2).foregroundStyle(.green),
-                                     at: CGPoint(x: center.x - radius + 14, y: center.y - 10))
-                        context.draw(Text("−b").font(.caption2).foregroundStyle(.blue),
-                                     at: CGPoint(x: center.x + 14, y: center.y + radius - 10))
-                        // b = -a in Lab; screen Y runs down.
-                        let diagonal = radius / sqrt(2.0)
-                        var boundaryLine = Path()
-                        boundaryLine.move(to: CGPoint(x: center.x - diagonal, y: center.y - diagonal))
-                        boundaryLine.addLine(to: CGPoint(x: center.x + diagonal, y: center.y + diagonal))
-                        context.stroke(boundaryLine, with: .color(.orange.opacity(0.8)),
-                                       style: StrokeStyle(lineWidth: 1, dash: [5, 3]))
                         var clipped = context
                         clipped.clip(to: Path(ellipseIn: CGRect(x: center.x - radius, y: center.y - radius,
                                                                width: diameter, height: diameter)))
@@ -106,7 +112,7 @@ struct VectorscopeView: View {
                                 if i == 0 { path.move(to: point) } else { path.addLine(to: point) }
                             }
                             path.closeSubpath()
-                            clipped.stroke(path, with: .color(index == 0 ? .cyan : .pink), lineWidth: 1)
+                            clipped.stroke(path, with: .color(Self.gamutColors[index]), lineWidth: 1)
                         }
                         let names = ["R", "Y", "G", "C", "B", "M"]
                         let colors: [Color] = [.red, .yellow, .green, .cyan, .blue, .pink]
@@ -123,38 +129,21 @@ struct VectorscopeView: View {
                             context.draw(Text(names[index]).font(.caption2.bold()).foregroundStyle(colors[index]),
                                 at: CGPoint(x: center.x + dx * (radius + 12), y: center.y + dy * (radius + 12)))
                         }
-                        let samples = temperatureSamples
-                        func position(_ sample: TemperatureLocus.Sample) -> CGPoint {
-                            CGPoint(x: center.x + sample.point.x * radius * magnification,
-                                    y: center.y + sample.point.y * radius * magnification)
-                        }
-                        var locus = Path()
-                        for (index, sample) in samples.enumerated() {
-                            if index == 0 { locus.move(to: position(sample)) }
-                            else { locus.addLine(to: position(sample)) }
-                        }
-                        clipped.stroke(locus, with: .color(.black.opacity(0.8)), lineWidth: 3)
-                        clipped.stroke(locus, with: .color(.yellow.opacity(0.85)),
-                                       style: StrokeStyle(lineWidth: 1, dash: [3, 2]))
-                        let markers: [(sample: TemperatureLocus.Sample, label: String)] = whitePoint != nil
-                            ? samples.filter { TemperatureLocus.marks.contains($0.kelvin) }.map { ($0, "\($0.kelvin)K") }
-                            : [samples.first.map { ($0, "Warm") }, samples.last.map { ($0, "Cool") }].compactMap { $0 }
-                        for (index, marker) in markers.enumerated() {
-                            let point = position(marker.sample)
-                            guard hypot(point.x - center.x, point.y - center.y) <= radius else { continue }
-                            let left = whitePoint != nil ? index < 3 : index == 0
-                            let row = whitePoint != nil ? index % 3 - 1 : (left ? -1 : 1)
-                            let label = CGPoint(x: center.x + (left ? -0.68 : 0.68) * radius,
-                                                y: center.y + CGFloat(row) * 27)
-                            var leader = Path()
-                            leader.move(to: point)
-                            leader.addLine(to: CGPoint(x: label.x + (left ? 21 : -21), y: label.y))
-                            context.stroke(leader, with: .color(.yellow.opacity(0.4)), lineWidth: 0.5)
-                            context.fill(Path(ellipseIn: CGRect(x: point.x - 2, y: point.y - 2,
-                                                                width: 4, height: 4)), with: .color(.yellow))
-                            let text = Text(marker.label).font(.caption2)
-                            context.draw(text.foregroundStyle(.black), at: CGPoint(x: label.x + 1, y: label.y + 1))
-                            context.draw(text.foregroundStyle(.yellow), at: label)
+                        // General warmth direction in Lab, independent of scene exposure and WB.
+                        let direction = Self.warmDirection
+                        for (sign, label, color) in [(1.0, "Warmer", Color.orange), (-1.0, "Colder", Color.cyan)] {
+                            let dx = direction.x * sign, dy = direction.y * sign
+                            let start = CGPoint(x: center.x + dx * radius * 0.18, y: center.y + dy * radius * 0.18)
+                            let tip = CGPoint(x: center.x + dx * radius * 0.48, y: center.y + dy * radius * 0.48)
+                            var arrow = Path()
+                            arrow.move(to: start); arrow.addLine(to: tip)
+                            arrow.move(to: CGPoint(x: tip.x - dx * 7 - dy * 4, y: tip.y - dy * 7 + dx * 4))
+                            arrow.addLine(to: tip)
+                            arrow.addLine(to: CGPoint(x: tip.x - dx * 7 + dy * 4, y: tip.y - dy * 7 - dx * 4))
+                            context.stroke(arrow, with: .color(.black.opacity(0.8)), lineWidth: 4)
+                            context.stroke(arrow, with: .color(color), lineWidth: 1.5)
+                            context.draw(Text(label).font(.caption2).foregroundStyle(color),
+                                         at: CGPoint(x: center.x + dx * radius * 0.65, y: center.y + dy * radius * 0.65))
                         }
                         if let marker = hoverMarker {
                             let x = marker.x * magnification, y = marker.y * magnification
@@ -197,26 +186,69 @@ struct VectorscopeView: View {
             if !boundaries.isEmpty {
                 HStack {
                     ForEach(Array(boundaries.enumerated()), id: \.offset) { index, boundary in
-                        Text(boundary.name).foregroundStyle(index == 0 ? .cyan : .pink)
+                        Text(boundary.name).foregroundStyle(Self.gamutColors[index])
                     }
-                    Text("projected limits ≈").foregroundStyle(.secondary)
                 }
                 .help("Approximate outer gamut projections across all lightness levels. Outside indicates out of gamut; inside does not guarantee membership because this scope omits lightness.")
             }
-            Text("Dashed diagonal: a + b = 0 · warm side ↗")
-                .foregroundStyle(.orange)
-                .help("Tone sampling moves an input color on the green/blue side to this boundary. This is a color constraint, not skin detection.")
-            Text(whitePoint != nil ? "Kelvin guide · RAW white-balance reference" : "Warm–cool guide · midpoint of black–white range")
-                .foregroundStyle(.yellow.opacity(0.85))
-                .help("Reference pixels start at linear luminance halfway between the black and white points and follow the image’s white balance and SDR tone curve. Warm and Cool indicate relative reference directions. For RAW, Kelvin labels use a chromatic-adaptation approximation based on the decoder’s recorded white point, including tint. Other images show relative directions only.")
-            Text(errorMessage ?? "Drag to adjust white balance · Brighter dots = more pixels")
-                .foregroundStyle(.secondary)
-            Text("R \(balance.red, format: .number.precision(.fractionLength(3)))  G \(balance.green, format: .number.precision(.fractionLength(3)))  B \(balance.blue, format: .number.precision(.fractionLength(3)))")
-                .monospacedDigit()
-                .foregroundStyle(.secondary)
+            if let errorMessage { Text(errorMessage).foregroundStyle(.secondary) }
+            if mapping.rawWhiteBalance != nil {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("White Balance").fontWeight(.medium)
+                        Spacer()
+                        VStack(alignment: .trailing, spacing: 6) {
+                            gainValues
+                            if let convertWhiteBalance {
+                                Button("Convert to WB", action: convertWhiteBalance)
+                                    .disabled(balance == WhiteBalance())
+                            }
+                        }
+                    }
+                    HStack {
+                        Text("Temperature"); Spacer()
+                        TextField("Temperature", value: Binding(get: { Double(mapping.rawWhiteBalance?.temperature ?? 6500) }, set: {
+                            guard $0.isFinite else { return }
+                            mapping.rawWhiteBalance?.temperature = Float(min(10000, max(2000, $0)))
+                            editedWBField = true
+                        }), format: .number.precision(.fractionLength(0)))
+                            .labelsHidden().textFieldStyle(.roundedBorder).frame(width: 80)
+                            .focused($focusedWBField, equals: 0)
+                            .onSubmit { commitWBField() }
+                        Text("K")
+                    }
+                    Slider(value: Binding(get: { Double(mapping.rawWhiteBalance?.temperature ?? 6500) }, set: {
+                        mapping.rawWhiteBalance?.temperature = Float($0)
+                    }), in: 2000...10000, onEditingChanged: { editing in
+                        if !editing { commitRAWBalance() }
+                    })
+                    HStack {
+                        Text("Tint"); Spacer()
+                        TextField("Tint", value: Binding(get: { Double(mapping.rawWhiteBalance?.tint ?? 0) }, set: {
+                            guard $0.isFinite else { return }
+                            mapping.rawWhiteBalance?.tint = Float(min(50, max(-50, $0)))
+                            editedWBField = true
+                        }), format: .number.precision(.fractionLength(2)))
+                            .labelsHidden().textFieldStyle(.roundedBorder).frame(width: 80)
+                            .focused($focusedWBField, equals: 1)
+                            .onSubmit { commitWBField() }
+                    }
+                    Slider(value: Binding(get: { Double(mapping.rawWhiteBalance?.tint ?? 0) }, set: {
+                        mapping.rawWhiteBalance?.tint = Float($0)
+                    }), in: -50...50, onEditingChanged: { editing in
+                        if !editing { commitRAWBalance() }
+                    })
+                }
+                .disabled(mapping.blackAndWhite.isEnabled)
+            } else {
+                gainValues
+            }
         }
         .font(.caption)
         .padding(12)
+        .onChange(of: focusedWBField) { old, _ in
+            if old != nil { commitWBField() }
+        }
         .task(id: ScopeHoverRequest(position: hoverPosition, revision: hoverRevision, space: colorSpace)) {
             guard let hoverPosition, let hoverSource else {
                 hoveredPoint = nil
@@ -237,7 +269,7 @@ struct VectorscopeView: View {
             guard !Task.isCancelled else { return }
             boundaries = result
         }
-        .task(id: ScopeRequest(revision: revision, mapping: mapping, zoom: magnification)) {
+        .task(id: ScopeRequest(revision: source == nil ? nil : revision, mapping: mapping, zoom: magnification, space: colorSpace)) {
             guard let source else { scope = nil; return }
             do {
                 if worker == nil { worker = try GPUVectorscope() }
@@ -252,9 +284,10 @@ struct VectorscopeView: View {
 }
 
 private struct ScopeRequest: Equatable {
-    let revision: UUID
+    let revision: UUID?
     let mapping: ToneMapping
     let zoom: Double
+    let space: ProcessingColorSpace
 }
 
 

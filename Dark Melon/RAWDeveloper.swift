@@ -47,7 +47,6 @@ nonisolated struct HistogramData: Sendable {
 nonisolated struct PreviewImages: @unchecked Sendable {
     let sdr: CGImage
     let hdr: CGImage
-    let temperatureSamples: [TemperatureLocus.Sample]
 }
 
 actor RAWDeveloper {
@@ -55,9 +54,11 @@ actor RAWDeveloper {
     private var linearSpace: CGColorSpace { colorSpace.linear }
 
     private let rawSettings: RAWSettings?
+    private let rawWhiteBalance: RAWWhiteBalance?
 
-    init(colorSpace: ProcessingColorSpace = .sRGB, rawSettings: RAWSettings? = nil) {
+    init(colorSpace: ProcessingColorSpace = .sRGB, rawSettings: RAWSettings? = nil, rawWhiteBalance: RAWWhiteBalance? = nil) {
         self.rawSettings = rawSettings
+        self.rawWhiteBalance = rawWhiteBalance
         self.colorSpace = colorSpace
     }
     private lazy var context = CIContext(options: [
@@ -114,23 +115,11 @@ actor RAWDeveloper {
         }
         """)
 
-    func previews(_ source: CGImage, mapping: ToneMapping, whitePoint: RAWWhitePoint? = nil) throws -> PreviewImages {
+    func previews(_ source: CGImage, mapping: ToneMapping) throws -> PreviewImages {
         let sdr = try preview(source, mapping: mapping, hdr: false)
         let hdr = mapping.hdrEnabled ? try preview(source, mapping: mapping, hdr: true) : sdr
-        let reference = TemperatureLocus.referenceImage(for: colorSpace, black: mapping.black, white: mapping.white, whitePoint: whitePoint)
-        var referenceMapping = mapping
-        referenceMapping.clarity = 0 // The synthetic color swatches have no spatial detail.
-        referenceMapping.hdf = 0
-        referenceMapping.grain.strength = 0
-        let mappedReference = try mappedImage(reference, mapping: referenceMapping, hdr: false)
-        var pixels = [UInt8](repeating: 0, count: TemperatureLocus.temperatures.count * 4)
-        pixels.withUnsafeMutableBytes {
-            context.render(mappedReference, toBitmap: $0.baseAddress!, rowBytes: TemperatureLocus.temperatures.count * 4,
-                           bounds: reference.extent, format: .RGBA8, colorSpace: colorSpace.encoded)
-        }
         try Task.checkCancellation()
-        return PreviewImages(sdr: sdr, hdr: hdr,
-                             temperatureSamples: TemperatureLocus.samples(encodedPixels: pixels, space: colorSpace))
+        return PreviewImages(sdr: sdr, hdr: hdr)
     }
 
     func preview(_ source: CGImage, mapping: ToneMapping, hdr: Bool = true) throws -> CGImage {
@@ -179,6 +168,36 @@ actor RAWDeveloper {
         return sum / weight
     }
 
+    /// Same defaults used by Reset Tone and file-browser exports without saved edits.
+    func automaticMapping(for development: RAWDevelopment, bins: Int,
+                          histogram: HistogramData? = nil) async throws -> ToneMapping {
+        var automatic = ToneMapping()
+        guard development.isRAW else {
+            automatic.concentration = 0
+            automatic.hdrConcentrationOffset = 0
+            if development.sourceHeadroom <= 1 { automatic.hdrMax = 1 }
+            return automatic
+        }
+        let sourceHistogram: HistogramData
+        if let histogram { sourceHistogram = histogram }
+        else {
+            sourceHistogram = try await buildHistogram(development.url, sourceID: development.id, bins: bins)
+        }
+        if let white = sourceHistogram.overlapWhitePoint {
+            automatic.white = min(1, max(automatic.black + ToneMapping.minimumRange, white))
+        }
+        let image = try preview(development.preview, mapping: automatic, hdr: false)
+        let gpu = try GPUHistogram(colorSpace: colorSpace, encoded: true)
+        let result = try await gpu.calculate(image: CIImage(cgImage: image), sourceID: UUID(), bins: 256)
+        try Task.checkCancellation()
+        if let statistics = SDRStatistics(counts: result.sdrLuma),
+           let contrast = AutoContrast.suggestion(median: statistics.median, mapping: automatic, space: colorSpace) {
+            automatic.setContrastPreservingHDR(contrast)
+        }
+        automatic.setAutomaticHDRGain()
+        return automatic
+    }
+
     func sampleWhiteBalance(_ source: CGImage, center: CGPoint, radius: CGFloat) throws -> WhiteBalance {
         let mean = try sampleMean(source, center: center, radius: radius)
         guard min(mean.x, mean.y, mean.z) > 1e-6 else { throw DevelopmentError.decode }
@@ -186,17 +205,6 @@ actor RAWDeveloper {
         let weights = colorSpace.luminance
         let normalization = inverse.x * weights.x + inverse.y * weights.y + inverse.z * weights.z
         return WhiteBalance(red: inverse.x / normalization, green: inverse.y / normalization, blue: inverse.z / normalization)
-    }
-
-    func sampleTone(_ source: CGImage, center: CGPoint, radius: CGFloat,
-                    mapping: ToneMapping) throws -> (tone: Double, balance: WhiteBalance) {
-        let mean = try sampleMean(source, center: center, radius: radius)
-        let balance = ScopeProjection.correctedBalance(sample: mean, balance: mapping.whiteBalance, space: colorSpace)
-        let rgb = mean * SIMD3(balance.red, balance.green, balance.blue)
-        let w = colorSpace.luminance
-        let luminance = rgb.x*w.x + rgb.y*w.y + rgb.z*w.z
-        let tone = min(1, max(0, (luminance - mapping.black) / max(ToneMapping.minimumRange, mapping.white-mapping.black)))
-        return (tone, balance)
     }
 
     /// Shared input domain for tone mapping and the temporary Tone locator.
@@ -390,7 +398,7 @@ actor RAWDeveloper {
         return ProcessingColorSpace.covering(image.colorSpace)
     }
 
-    private func sourceImage(_ url: URL) throws -> (image: CIImage, headroom: Double, whitePoint: RAWWhitePoint?, isRAW: Bool, rawDefaults: RAWSettings?) {
+    private func sourceImage(_ url: URL, whiteBalance: RAWWhiteBalance? = nil) throws -> (image: CIImage, headroom: Double, whitePoint: RAWWhitePoint?, isRAW: Bool, rawDefaults: RAWSettings?) {
         let image: CIImage
         var rawDefaults: RAWSettings?
         var headroom = 1.0
@@ -401,12 +409,15 @@ actor RAWDeveloper {
         let isRAW = type?.conforms(to: .rawImage) == true
         if isRAW {
             guard let raw = CIRAWFilter(imageURL: url) else { throw DevelopmentError.unsupported }
-            whitePoint = RAWWhitePoint(chromaticity: raw.neutralChromaticity,
-                                       temperature: Double(raw.neutralTemperature), tint: Double(raw.neutralTint))
+            raw.baselineExposure = 0
+            raw.shadowBias = 2
+            if raw.isLuminanceNoiseReductionSupported { raw.luminanceNoiseReductionAmount = 0 }
+            raw.exposure = 0
             rawDefaults = RAWSettings(raw)
             rawSettings?.apply(to: raw)
-            raw.baselineExposure = 0
-            raw.exposure = 0
+            (whiteBalance ?? rawWhiteBalance)?.apply(to: raw)
+            whitePoint = RAWWhitePoint(chromaticity: raw.neutralChromaticity,
+                                       temperature: Double(raw.neutralTemperature), tint: Double(raw.neutralTint))
             raw.boostAmount = 0
             raw.localToneMapAmount = 0
             raw.isGamutMappingEnabled = false
@@ -438,7 +449,7 @@ actor RAWDeveloper {
     func exportHEIF(_ url: URL, mapping: ToneMapping, settings: HEIFSettings) throws -> Data {
         let accessed = url.startAccessingSecurityScopedResource()
         defer { if accessed { url.stopAccessingSecurityScopedResource() } }
-        let source = try sourceImage(url).image
+        let source = try sourceImage(url, whiteBalance: mapping.rawWhiteBalance).image
         return try exportImage(source, mapping: mapping, settings: settings)
     }
 
@@ -463,7 +474,7 @@ actor RAWDeveloper {
         if sizeSource?.url != url {
             let accessed = url.startAccessingSecurityScopedResource()
             defer { if accessed { url.stopAccessingSecurityScopedResource() } }
-            let source = try sourceImage(url).image
+            let source = try sourceImage(url, whiteBalance: mapping.rawWhiteBalance).image
             guard let rendered = context.createCGImage(source, from: source.extent, format: .RGBAf,
                                                        colorSpace: linearSpace) else { throw HEIFExportError.encoding }
             try Task.checkCancellation()
@@ -494,6 +505,13 @@ actor RAWDeveloper {
                 ])
             }
             return try encodeStandardImage(image, settings: settings)
+        }
+        if settings.format == .heif && mapping.hdrEnabled && settings.heifHDRMode == .direct {
+            let hdr = resized(try mappedImage(source, mapping: mapping, hdr: true))
+                .settingContentHeadroom(Float(mapping.hdrMax))
+            try Task.checkCancellation()
+            return try context.heif10Representation(of: hdr, colorSpace: colorSpace.pq,
+                options: [CIImageRepresentationOption(rawValue: kCGImageDestinationLossyCompressionQuality as String): settings.quality])
         }
         let sdr = resized(try mappedImage(source, mapping: mapping, hdr: false))
         guard mapping.hdrEnabled else { return try encodeSDR(sdr, settings: settings) }

@@ -135,12 +135,12 @@ struct ColorControls: View {
             }
             VerticalCurveEditor(title: "Saturation → Saturation", range: 0...2,
                                 start: $settings.saturationStart, end: $settings.saturationEnd,
-                                coefficient: $settings.saturationCurve, multiplier: true)
+                                coefficient: $settings.saturationCurve, multiplier: true, info: .saturation)
                 .disabled(monochrome)
             VerticalCurveEditor(title: "Luminance → Saturation", range: 0...2,
                                 start: $settings.luminanceSaturationStart, end: $settings.luminanceSaturationEnd,
                                 coefficient: $settings.luminanceSaturationCurve, multiplier: true,
-                                lowLabel: "Low luminance", highLabel: "High luminance")
+                                lowLabel: "Low luminance", highLabel: "High luminance", info: .luminanceSaturation)
                 .disabled(monochrome)
             Divider()
             HStack {
@@ -176,6 +176,7 @@ private struct VerticalCurveEditor: View {
     let multiplier: Bool
     var lowLabel = "Low saturation"
     var highLabel = "High saturation"
+    var info: ControlInfo.Topic? = nil
     private let inset: CGFloat = 14
 
     private var limits: ClosedRange<Double> {
@@ -190,6 +191,7 @@ private struct VerticalCurveEditor: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text(title).fontWeight(.medium)
+                if let info { ControlInfo(info) }
                 Spacer()
                 Text(multiplier
                      ? String(format: "%.2f× · %.2f× · %.2f×", start, value(0.5), end)

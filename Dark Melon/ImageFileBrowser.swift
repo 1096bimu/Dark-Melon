@@ -17,6 +17,10 @@ final class ImageBrowserModel {
     var root: URL?
     var directory: URL?
     var entries: [BrowserEntry] = []
+    var batchFiles: [BrowserEntry] {
+        let files = entries.filter { !$0.isFolder }
+        return files.filter(\.hasSavedSettings) + files.filter { !$0.hasSavedSettings }
+    }
     var folderCounts: [URL: Int] = [:]
     private(set) var recentFolders: [URL: [URL]] = [:]
     var error: String?
@@ -90,9 +94,9 @@ final class ImageBrowserModel {
             }
         }
     }
-    func markSettingsSaved(for url: URL) {
+    func refreshSavedSettingsFlag(for url: URL) {
         guard let index = entries.firstIndex(where: { $0.url.standardizedFileURL == url.standardizedFileURL }) else { return }
-        entries[index].hasSavedSettings = true
+        entries[index].hasSavedSettings = FileManager.default.fileExists(atPath: RecipeStore.sidecarURL(for: url).path)
     }
     nonisolated private static func imageCount(in folder: URL) -> Int {
         do {
@@ -118,6 +122,8 @@ struct ImageFileBrowser: View {
     var model: ImageBrowserModel
     var selection: Binding<Set<URL>>? = nil
     var changeDirectory: ((URL, Bool) -> Void)? = nil
+    var fileAction: ((BrowserFileAction, URL) -> Void)? = nil
+    var hasPendingEdit: ((URL) -> Bool)? = nil
     @State private var choosingFolder = false
 
     private func navigate(_ url: URL, choose: Bool = false) {
@@ -132,7 +138,7 @@ struct ImageFileBrowser: View {
         // layout happened while the directory was still empty.
         let entries = model.entries
         let folders = selection == nil ? entries.filter(\.isFolder) : []
-        let files = entries.filter { !$0.isFolder && (selection == nil || $0.hasSavedSettings) }
+        let files = selection == nil ? entries.filter { !$0.isFolder } : model.batchFiles
         let folderCounts = model.folderCounts
         let listingRevision = model.listingRevision
         let returnFolder = model.returnFolder
@@ -222,6 +228,20 @@ struct ImageFileBrowser: View {
                                     .buttonStyle(.plain)
                                     .help(entry.url.lastPathComponent + (entry.hasSavedSettings ? " · Saved development settings" : ""))
                                     .accessibilityValue(entry.hasSavedSettings ? "Saved development settings" : "")
+                                    .contextMenu {
+                                        if let fileAction {
+                                            Button("Delete Edit", role: .destructive) { fileAction(.deleteEdit, entry.url) }
+                                                .disabled(!entry.hasSavedSettings && !(hasPendingEdit?(entry.url) ?? false))
+                                            #if os(macOS)
+                                            Button("Show in Finder") { fileAction(.showInFinder, entry.url) }
+                                            #endif
+                                            Divider()
+                                            Button("Copy Edit") { fileAction(.copyEdit, entry.url) }
+                                            Button("Paste Edit…") { fileAction(.pasteEdit, entry.url) }
+                                            Divider()
+                                            Button("Export…") { fileAction(.export, entry.url) }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -256,9 +276,9 @@ struct ImageFileBrowser: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.bar)
-        .onReceive(NotificationCenter.default.publisher(for: .developmentSettingsSaved)
+        .onReceive(NotificationCenter.default.publisher(for: .developmentSettingsChanged)
             .receive(on: DispatchQueue.main)) { notification in
-            if let url = notification.object as? URL { model.markSettingsSaved(for: url) }
+            if let url = notification.object as? URL { model.refreshSavedSettingsFlag(for: url) }
         }
         .fileImporter(isPresented: $choosingFolder, allowedContentTypes: [.folder]) { result in
             switch result {

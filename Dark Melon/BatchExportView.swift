@@ -26,7 +26,7 @@ struct BatchExportView: View {
                 ImageFileBrowser(selectedURL: nil, open: { _ in }, model: browser, selection: $selection)
                     .disabled(busy)
                 HStack {
-                    Button("Select All") { selection = Set(browser.entries.filter { !$0.isFolder && $0.hasSavedSettings }.map(\.url)) }
+                    Button("Select All") { selection = Set(browser.batchFiles.map(\.url)) }
                     Button("Deselect All") { selection.removeAll() }
                     Spacer()
                     Text("\(selection.count) selected").foregroundStyle(.secondary)
@@ -63,10 +63,10 @@ struct BatchExportView: View {
             if let sample, let sampleRecipe {
                 HEIFExportOptions(settings: $settings, width: sample.width, height: sample.height,
                                   hdrEnabled: true, sourceURL: sample.url, mapping: sampleRecipe.mapping,
-                                  colorSpace: sampleRecipe.colorSpace, rawSettings: RAWSettings(),
+                                  colorSpace: sampleRecipe.colorSpace, rawSettings: sampleRecipe.rawSettings ?? sample.rawDefaults ?? RAWSettings(),
                                   save: { destinationAfterOptions = true })
                     .safeAreaInset(edge: .bottom) {
-                        Text("Size and estimate use the first selected image. The same size percentage applies to each image; HDR follows its saved settings.")
+                        Text("Size and estimate use the first selected image. The same size percentage applies to each image. Images use saved settings when available, otherwise automatic adjustments.")
                             .font(.caption).foregroundStyle(.secondary).padding()
                     }
             }
@@ -80,20 +80,15 @@ struct BatchExportView: View {
     }
 
     private func prepareOptions() {
-        sources = browser.entries.filter { selection.contains($0.url) && $0.hasSavedSettings }.map(\.url)
+        sources = browser.batchFiles.filter { selection.contains($0.url) }.map(\.url)
         guard let first = sources.first else { return }
         busy = true; completed = 0; failures = []; status = "Preparing export settings…"
         job = Task {
             defer { busy = false }
             do {
-                guard let recipe = try await RecipeStore.shared.load(for: first) else {
-                    status = "The first image no longer has saved settings. Refresh the browser and try again."
-                    return
-                }
-                let worker = RAWDeveloper(colorSpace: recipe.colorSpace)
-                let image = try await worker.develop(first)
+                let prepared = try await BrowserFileDevelopment.load(first, bins: 512)
                 try Task.checkCancellation()
-                sampleRecipe = recipe; sample = image
+                sampleRecipe = prepared.recipe; sample = prepared.development
                 status = ""; showingOptions = true
             } catch is CancellationError { status = "Cancelled." }
             catch { status = error.localizedDescription }

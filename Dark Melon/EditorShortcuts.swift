@@ -14,6 +14,11 @@ enum EditorPanel: String, CaseIterable, Identifiable {
     }
 }
 
+enum EditorPickerTool { case whiteBalance }
+
+private struct EditorPickerFocus: FocusedValueKey {
+    typealias Value = (EditorPickerTool) -> Void
+}
 private struct EditorPanelFocus: FocusedValueKey {
     typealias Value = Binding<EditorPanel>
 }
@@ -24,6 +29,10 @@ private struct BatchExportFocus: FocusedValueKey {
     typealias Value = () -> Void
 }
 extension FocusedValues {
+    var toggleEditorPicker: ((EditorPickerTool) -> Void)? {
+        get { self[EditorPickerFocus.self] }
+        set { self[EditorPickerFocus.self] = newValue }
+    }
     var startTutorial: (() -> Void)? {
         get { self[TutorialFocus.self] }
         set { self[TutorialFocus.self] = newValue }
@@ -40,6 +49,7 @@ extension FocusedValues {
 
 #if os(macOS)
 struct EditorCommands: Commands {
+    @FocusedValue(\.toggleEditorPicker) private var togglePicker
     @FocusedBinding(\.editorPanel) private var panel
     @FocusedValue(\.batchExport) private var batchExport
     @FocusedValue(\.startTutorial) private var startTutorial
@@ -52,6 +62,11 @@ struct EditorCommands: Commands {
         CommandGroup(replacing: .help) {
             Button("Guided Tutorial…") { startTutorial?() }
                 .disabled(startTutorial == nil)
+        }
+        CommandMenu("Tools") {
+            Button("White Balance Picker") { togglePicker?(.whiteBalance) }
+                .keyboardShortcut("w", modifiers: [])
+                .disabled(togglePicker == nil)
         }
         CommandMenu("Panels") {
             ForEach(EditorPanel.allCases) { item in
@@ -77,6 +92,8 @@ struct EditorSettingsView: View {
                 shortcut("Save development settings", "⌘S")
                 shortcut("Export…", "⇧⌘E")
                 shortcut("Toggle HDR preview", "H")
+                shortcut("Toggle file browser", "F")
+                shortcut("Toggle white balance picker", "W")
             }
             Section("Panels") {
                 ForEach(EditorPanel.allCases) { panel in
@@ -85,7 +102,7 @@ struct EditorSettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 420, height: 500)
+        .frame(width: 420, height: 600)
     }
     private func shortcut(_ title: String, _ keys: String) -> some View {
         LabeledContent(title) { Text(keys).monospaced().foregroundStyle(.secondary) }

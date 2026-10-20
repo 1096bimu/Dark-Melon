@@ -20,6 +20,14 @@ nonisolated enum ProcessingColorSpace: String, Codable, CaseIterable, Identifiab
         case .rec2020: CGColorSpace(name: CGColorSpace.itur_2020)!
         }
     }
+    /// PQ carries extended brightness while retaining the selected primaries.
+    var pq: CGColorSpace {
+        switch self {
+        case .sRGB: CGColorSpace(name: CGColorSpace.itur_709_PQ)!
+        case .displayP3: CGColorSpace(name: CGColorSpace.displayP3_PQ)!
+        case .rec2020: CGColorSpace(name: CGColorSpace.itur_2100_PQ)!
+        }
+    }
     /// Choose by the embedded profile's gamut, not by colors present in this photo.
     static func covering(_ source: CGColorSpace?) -> Self {
         guard let source else { return .sRGB }

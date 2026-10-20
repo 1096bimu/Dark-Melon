@@ -2,18 +2,25 @@
 import SwiftUI
 import QuartzCore
 
-enum PreviewSampleTool { case whiteBalance, tone }
+enum PreviewSampleTool { case whiteBalance }
+
+/// Owned by the editor so loading placeholders cannot discard the viewport.
+final class PreviewViewport {
+    var zoom: CGFloat = 1
+    var offset = CGPoint.zero
+}
 
 /// Keeps HDR presentation on the image layer while zooming and panning.
 struct HDRImagePreview: NSViewRepresentable {
     let image: CGImage
     let hdr: Bool
     let sourceID: UUID
+    let viewport: PreviewViewport
     let sampleTool: PreviewSampleTool?
     let hover: (CGPoint?) -> Void
     let sample: (CGPoint, CGFloat) -> Void
 
-    func makeNSView(context: Context) -> ImageDisplay { ImageDisplay() }
+    func makeNSView(context: Context) -> ImageDisplay { ImageDisplay(viewport: viewport) }
 
     func updateNSView(_ view: ImageDisplay, context: Context) {
         view.hover = hover
@@ -90,10 +97,14 @@ struct HDRImagePreview: NSViewRepresentable {
         }
         private var sourceID: UUID?
         private var imageSize = CGSize.zero
-        private var zoom: CGFloat = 1
-        private var offset = CGPoint.zero
+        private let viewport: PreviewViewport
+        private var zoom: CGFloat
+        private var offset: CGPoint
 
-        init() {
+        init(viewport: PreviewViewport) {
+            self.viewport = viewport
+            zoom = viewport.zoom
+            offset = viewport.offset
             super.init(frame: .zero)
             let container = CALayer()
             container.masksToBounds = true
@@ -114,8 +125,8 @@ struct HDRImagePreview: NSViewRepresentable {
         func display(_ image: CGImage, hdr: Bool, sourceID: UUID) {
             if self.sourceID != sourceID {
                 self.sourceID = sourceID
-                zoom = 1
-                offset = .zero
+                zoom = viewport.zoom
+                offset = viewport.offset
                 sampleCenter = nil
                 circle.path = nil
             }
@@ -134,8 +145,18 @@ struct HDRImagePreview: NSViewRepresentable {
             positionImage()
         }
 
+        override func viewDidChangeBackingProperties() {
+            super.viewDidChangeBackingProperties()
+            positionImage()
+        }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            positionImage()
+        }
+
         private func positionImage() {
-            guard imageSize.width > 0, imageSize.height > 0 else { return }
+            guard imageSize.width > 0, imageSize.height > 0, bounds.width > 0, bounds.height > 0 else { return }
             let fit = min(bounds.width / imageSize.width, bounds.height / imageSize.height)
             let size = CGSize(width: imageSize.width * fit * zoom, height: imageSize.height * fit * zoom)
             let limitX = max(0, (size.width - bounds.width) / 2)
@@ -144,11 +165,22 @@ struct HDRImagePreview: NSViewRepresentable {
             offset.y = min(limitY, max(-limitY, offset.y))
             CATransaction.begin()
             CATransaction.setDisableActions(true)
+            // 1:1 means one preview image pixel per physical display pixel.
+            let backingSize = convertToBacking(CGRect(origin: .zero, size: size)).size
+            let pixelScale = min(backingSize.width / imageSize.width, backingSize.height / imageSize.height)
+            let filter: CALayerContentsFilter = pixelScale >= 1 ? .nearest : .linear
+            imageLayer.magnificationFilter = filter
+            imageLayer.minificationFilter = filter
             imageLayer.frame = CGRect(x: bounds.midX - size.width / 2 + offset.x,
                                       y: bounds.midY - size.height / 2 + offset.y,
                                       width: size.width, height: size.height)
             CATransaction.commit()
             scheduleHoverUpdate()
+        }
+
+        private func rememberViewport() {
+            viewport.zoom = zoom
+            viewport.offset = offset
         }
 
         private func changeZoom(_ factor: CGFloat, event: NSEvent) {
@@ -160,6 +192,7 @@ struct HDRImagePreview: NSViewRepresentable {
             offset.x = (offset.x - (point.x - bounds.midX)) * ratio + point.x - bounds.midX
             offset.y = (offset.y - (point.y - bounds.midY)) * ratio + point.y - bounds.midY
             positionImage()
+            rememberViewport()
         }
 
         override func magnify(with event: NSEvent) { changeZoom(1 + event.magnification, event: event) }
@@ -169,6 +202,7 @@ struct HDRImagePreview: NSViewRepresentable {
             offset.x += event.scrollingDeltaX
             offset.y -= event.scrollingDeltaY
             positionImage()
+            rememberViewport()
         }
         override func mouseDown(with event: NSEvent) {
             if picking {
@@ -189,6 +223,7 @@ struct HDRImagePreview: NSViewRepresentable {
                 zoom = 1
                 offset = .zero
                 positionImage()
+                rememberViewport()
             }
         }
         override func mouseDragged(with event: NSEvent) {

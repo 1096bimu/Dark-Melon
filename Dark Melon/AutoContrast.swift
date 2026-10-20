@@ -18,9 +18,9 @@ nonisolated enum AutoContrast {
         let power = pow(257, mapping.concentration)
         let logRemainingInput = log1p(-current) / power
         let nextPower = log1p(-desired) / logRemainingInput
-        if nextPower >= 1 { return min(1, log(nextPower) / log(257)) }
-        // Tone-zero negative Contrast uses the normalized integral of
-        // 1 - q(1-x)^2. Solve for q instead of extending the positive formula.
+        if nextPower >= 1 { return min(mapping.concentration, log(nextPower) / log(257)) }
+        // Negative contrast uses the normalized integral of 1 - q(1-x)^2.
+        // Solve that branch directly instead of extending the positive formula.
         let x = -expm1(logRemainingInput)
         let integral = x - x*x + x*x*x/3
         let denominator = integral - desired/3

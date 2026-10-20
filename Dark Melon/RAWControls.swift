@@ -1,7 +1,9 @@
 import SwiftUI
 import CoreImage
 
-nonisolated enum RAWAdjustment: String, CaseIterable, Identifiable, Sendable {
+nonisolated enum RAWAdjustment: String, CaseIterable, Identifiable, Codable, Sendable {
+    case exposure = "Exposure"
+    case shadowBias = "Shadow Bias"
     case luminance = "Luminance Noise Reduction"
     case color = "Color Noise Reduction"
     case sharpness = "Sharpness"
@@ -9,9 +11,16 @@ nonisolated enum RAWAdjustment: String, CaseIterable, Identifiable, Sendable {
     case contrast = "Local Edge Contrast"
     case moire = "Moiré Reduction"
     var id: Self { self }
-    var maximum: Float { self == .detail ? 3 : 1 }
+    var minimum: Float {
+        switch self { case .exposure: -5; default: 0 }
+    }
+    var maximum: Float {
+        switch self { case .exposure, .shadowBias: 5; case .detail: 3; default: 1 }
+    }
     var amount: ReferenceWritableKeyPath<CIRAWFilter, Float> {
         switch self {
+        case .exposure: \.exposure
+        case .shadowBias: \.shadowBias
         case .luminance: \.luminanceNoiseReductionAmount
         case .color: \.colorNoiseReductionAmount
         case .sharpness: \.sharpnessAmount
@@ -22,6 +31,7 @@ nonisolated enum RAWAdjustment: String, CaseIterable, Identifiable, Sendable {
     }
     func supported(by raw: CIRAWFilter) -> Bool {
         switch self {
+        case .exposure, .shadowBias: true
         case .luminance: raw.isLuminanceNoiseReductionSupported
         case .color: raw.isColorNoiseReductionSupported
         case .sharpness: raw.isSharpnessSupported
@@ -32,13 +42,28 @@ nonisolated enum RAWAdjustment: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
-nonisolated struct RAWSettings: Equatable, Sendable {
+nonisolated struct RAWSettings: Codable, Equatable, Sendable {
     var values: [RAWAdjustment: Float] = [:]
     var supported: Set<RAWAdjustment> = []
     var lensCorrection = false
     var supportsLensCorrection = false
     var highlightRecovery = true
     var supportsHighlightRecovery = false
+
+    private enum CodingKeys: String, CodingKey { case values, lensCorrection, highlightRecovery }
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.values == rhs.values && lhs.lensCorrection == rhs.lensCorrection && lhs.highlightRecovery == rhs.highlightRecovery
+    }
+
+    /// Capabilities always belong to the destination decoder, not the saved recipe.
+    func resolved(using defaults: Self) -> Self {
+        var result = defaults
+        result.values.merge(values) { _, saved in saved }
+        result.lensCorrection = lensCorrection
+        result.highlightRecovery = highlightRecovery
+        return result
+    }
 
     init() {}
     init(_ raw: CIRAWFilter) {
@@ -86,13 +111,15 @@ struct RAWControls: View {
                     VStack(alignment: .leading, spacing: 6) {
                         HStack {
                             Text(control.rawValue)
+                            if control == .shadowBias { ControlInfo(.shadowBias) }
                             Spacer()
                             Text(settings.values[control] ?? 0, format: .number.precision(.fractionLength(2)))
                                 .foregroundStyle(.secondary).monospacedDigit()
+                            if control == .exposure { Text("EV").foregroundStyle(.secondary) }
                         }
                         Slider(value: Binding(get: { settings.values[control] ?? 0 }, set: {
                             settings.values[control] = $0
-                        }), in: 0...control.maximum, onEditingChanged: { editing in
+                        }), in: control.minimum...control.maximum, onEditingChanged: { editing in
                             if !editing { commit() }
                         })
                         .accessibilityLabel(control.rawValue)

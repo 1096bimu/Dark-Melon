@@ -13,8 +13,15 @@ nonisolated enum ExportFormat: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+nonisolated enum HEIFHDRMode: String, Codable, CaseIterable, Identifiable {
+    case gainMap = "Gain map"
+    case direct = "Direct HDR"
+    var id: Self { self }
+}
+
 nonisolated struct HEIFSettings: Codable, Equatable, Sendable {
     var format = ExportFormat.heif
+    var heifHDRMode = HEIFHDRMode.gainMap
     var jpegHDR = false
     var tiffHDR = false
     var tiff16Bit = true
@@ -25,11 +32,12 @@ nonisolated struct HEIFSettings: Codable, Equatable, Sendable {
 
     init() {}
     private enum CodingKeys: String, CodingKey {
-        case format, jpegHDR, tiffHDR, tiff16Bit, scale, quality, rgbGainMap, halfSizeGainMap
+        case format, heifHDRMode, jpegHDR, tiffHDR, tiff16Bit, scale, quality, rgbGainMap, halfSizeGainMap
     }
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         format = try values.decodeIfPresent(ExportFormat.self, forKey: .format) ?? .heif
+        heifHDRMode = try values.decodeIfPresent(HEIFHDRMode.self, forKey: .heifHDRMode) ?? .gainMap
         jpegHDR = try values.decodeIfPresent(Bool.self, forKey: .jpegHDR) ?? false
         tiffHDR = try values.decodeIfPresent(Bool.self, forKey: .tiffHDR) ?? false
         tiff16Bit = try values.decodeIfPresent(Bool.self, forKey: .tiff16Bit) ?? true
@@ -232,16 +240,26 @@ struct HEIFExportOptions: View {
                 Text("LZW compression. HDR preserves the full rendition by scaling it down by HDR Gain to fit a standard SDR file.")
                     .font(.caption).foregroundStyle(.secondary)
             }
-            if format == .jpeg {
+            if hdrEnabled && format == .heif {
+                Picker("HDR encoding", selection: $settings.heifHDRMode) {
+                    ForEach(HEIFHDRMode.allCases) { mode in
+                        Text(mode.rawValue).tag(mode)
+                    }
+                }.pickerStyle(.segmented)
+                if settings.heifHDRMode == .direct {
+                    Text("10-bit PQ HDR without a gain map. SDR appearance is determined by the viewer.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            if hdrEnabled && format == .jpeg {
                 Toggle("HDR gain map", isOn: $settings.jpegHDR)
-                    .disabled(!hdrEnabled)
                     .help("Save an SDR JPEG with an ISO HDR gain map for compatible viewers.")
             }
-            if format == .heif || (format == .jpeg && settings.jpegHDR) {
-                Toggle("RGB gain map", isOn: $settings.rgbGainMap).disabled(!hdrEnabled)
+            if hdrEnabled && ((format == .heif && settings.heifHDRMode == .gainMap) || (format == .jpeg && settings.jpegHDR)) {
+                Toggle("RGB gain map", isOn: $settings.rgbGainMap)
                 Text(settings.rgbGainMap ? "Color gain map" : "Monochrome gain map")
                     .foregroundStyle(.secondary)
-                Toggle("Half-size gain map", isOn: $settings.halfSizeGainMap).disabled(!hdrEnabled)
+                Toggle("Half-size gain map", isOn: $settings.halfSizeGainMap)
                 Text("Half the exported width and height; one quarter as many gain-map pixels.")
                     .font(.caption).foregroundStyle(.secondary)
             }

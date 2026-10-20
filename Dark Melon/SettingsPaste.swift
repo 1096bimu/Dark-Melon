@@ -11,7 +11,8 @@ nonisolated struct SettingsPasteSelection {
     var color = true
     var hls = true
     var effects = true
-    var isEmpty: Bool { !tone && !whiteBalance && !color && !hls && !effects }
+    var raw = true
+    var isEmpty: Bool { !tone && !whiteBalance && !color && !hls && !effects && !raw }
 
     func applying(_ source: ToneMapping, to destination: ToneMapping) -> ToneMapping {
         var result = destination
@@ -23,7 +24,12 @@ nonisolated struct SettingsPasteSelection {
             result.hdrMax = source.hdrMax
             result.hdrConcentrationOffset = source.hdrConcentrationOffset
         }
-        if whiteBalance { result.whiteBalance = source.whiteBalance }
+        if whiteBalance {
+            result.whiteBalance = source.whiteBalance
+            if let rawBalance = source.rawWhiteBalance, destination.rawWhiteBalance != nil {
+                result.rawWhiteBalance = rawBalance
+            }
+        }
         if color { result.color = source.color }
         if hls { result.hls = source.hls; result.blackAndWhite = source.blackAndWhite }
         if effects {
@@ -37,41 +43,29 @@ nonisolated struct SettingsPasteSelection {
     }
 }
 
-/// Extra clipboard metadata leaves sidecar recipes and legacy clipboard data compatible.
+/// Clipboard recipes preserve RGB gains and optional RAW decoder white balance.
 nonisolated struct CopiedSettings {
     let mapping: ToneMapping
-    let whiteBalanceTarget: WhiteBalanceTarget?
+    var rawSettings: RAWSettings? = nil
 
     func applying(_ selection: SettingsPasteSelection, to destination: ToneMapping,
                   reference: RAWWhitePoint?, space: ProcessingColorSpace) -> ToneMapping {
-        var result = selection.applying(mapping, to: destination)
-        if selection.whiteBalance, let reference,
-           let gains = whiteBalanceTarget?.gains(reference: reference.chromaticity, space: space) {
-            result.whiteBalance = gains
-        }
-        return result
+        selection.applying(mapping, to: destination)
     }
 
     static func encode(_ recipe: DevelopmentRecipe, reference: RAWWhitePoint?) throws -> Data {
-        var document = try JSONSerialization.jsonObject(with: recipe.encoded()) as! [String: Any]
-        if let reference, let target = WhiteBalanceTarget(gains: recipe.mapping.whiteBalance,
-                reference: reference.chromaticity, space: recipe.colorSpace) {
-            document["whiteBalanceTarget"] = try JSONSerialization.jsonObject(with: JSONEncoder().encode(target))
-        }
-        return try JSONSerialization.data(withJSONObject: document, options: [.sortedKeys])
+        try recipe.encoded()
     }
 
     static func decode(_ data: Data) throws -> Self {
         let recipe = try DevelopmentRecipe.decode(data)
-        struct Metadata: Decodable { var whiteBalanceTarget: WhiteBalanceTarget? }
-        let target = (try? JSONDecoder().decode(Metadata.self, from: data))?.whiteBalanceTarget
-        return Self(mapping: recipe.mapping, whiteBalanceTarget: target)
+        return Self(mapping: recipe.mapping, rawSettings: recipe.rawSettings)
     }
 }
 
 @MainActor enum SettingsClipboard {
     private static let type = "com.darkmelon.development-settings"
-    static func copy(_ recipe: DevelopmentRecipe, reference: RAWWhitePoint?) throws {
+    static func copy(_ recipe: DevelopmentRecipe, reference: RAWWhitePoint?, source: URL) throws {
         let data = try CopiedSettings.encode(recipe, reference: reference)
         #if os(macOS)
         NSPasteboard.general.clearContents()
@@ -103,8 +97,9 @@ struct SettingsPasteOptions: View {
     @AppStorage("pasteSettings.color") private var color = true
     @AppStorage("pasteSettings.hls") private var hls = true
     @AppStorage("pasteSettings.effects") private var effects = true
+    @AppStorage("pasteSettings.raw") private var raw = true
     private var selection: SettingsPasteSelection {
-        SettingsPasteSelection(tone: tone, whiteBalance: whiteBalance, color: color, hls: hls, effects: effects)
+        SettingsPasteSelection(tone: tone, whiteBalance: whiteBalance, color: color, hls: hls, effects: effects, raw: raw)
     }
 
     var body: some View {
@@ -115,6 +110,7 @@ struct SettingsPasteOptions: View {
                 Toggle("Color", isOn: $color)
                 Toggle("HLS", isOn: $hls)
                 Toggle("Effects", isOn: $effects)
+                Toggle("RAW", isOn: $raw)
             }
             .formStyle(.grouped)
             .navigationTitle("Paste Settings")
@@ -129,7 +125,7 @@ struct SettingsPasteOptions: View {
             }
         }
         #if os(macOS)
-        .frame(width: 340, height: 320)
+        .frame(width: 340, height: 360)
         #endif
     }
 }

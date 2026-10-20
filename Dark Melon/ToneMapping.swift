@@ -2,6 +2,7 @@ import Foundation
 
 nonisolated struct ToneMapping: Codable, Equatable, Sendable {
     var whiteBalance = WhiteBalance()
+    var rawWhiteBalance: RAWWhiteBalance?
     var blackAndWhite = BlackAndWhiteSettings()
     var color = ColorAdjustments()
     var hls = [HLSAdjustment](repeating: HLSAdjustment(), count: 6)
@@ -58,18 +59,42 @@ nonisolated struct ToneMapping: Codable, Equatable, Sendable {
     }
 
     var hdrFallsBelowSDR: Bool {
-        guard hdrEnabled else { return false }
-        let sdr = curve(hdr: false), hdr = curve(hdr: true)
-        // Both curves are piecewise linear. Check their combined knot positions
-        // so a narrow crossing cannot slip between uniformly spaced samples.
-        for curve in [sdr, hdr] {
-            for index in curve.values.indices {
-                let input = curve.black + (curve.white - curve.black)
-                    * Double(index) / Double(curve.values.count - 1)
-                if hdr.value(at: input) + 0.000001 < sdr.value(at: input) { return true }
+        hdrEnabled && curve(hdr: true).fallsBelow(curve(hdr: false))
+    }
+
+    /// Search both directions because changing beta concentration does not move
+    /// the entire curve in one direction. Preserve gain and SDR controls.
+    mutating func fitHDRContrastAboveSDR() {
+        guard hdrEnabled else { return }
+        let sdr = curve(hdr: false)
+        guard curve(hdr: true).fallsBelow(sdr) else { return }
+        let original = hdrConcentration
+        var candidate = self
+        func safe(_ concentration: Double) -> Bool {
+            candidate.hdrConcentrationOffset = concentration - self.concentration
+            return !candidate.curve(hdr: true).fallsBelow(sdr)
+        }
+        var closest: Double?
+        // Find the first safe bracket on each side, then refine its boundary.
+        for direction in [-1.0, 1.0] {
+            var failing = original
+            for step in 1...512 {
+                let value = min(1, max(-1, original + direction * Double(step) / 256))
+                if value == failing { break }
+                if let closest, abs(value-original) - 1.0/256 > abs(closest-original) { break }
+                if safe(value) {
+                    var passing = value
+                    for _ in 0..<24 {
+                        let middle = (failing + passing) / 2
+                        if safe(middle) { passing = middle } else { failing = middle }
+                    }
+                    if closest == nil || abs(passing-original) < abs(closest!-original) { closest = passing }
+                    break
+                }
+                failing = value
             }
         }
-        return false
+        if let closest { hdrConcentrationOffset = closest - concentration }
     }
 
     func curve(hdr: Bool) -> ToneCurve {
@@ -116,6 +141,18 @@ nonisolated struct ToneCurve {
     let values: [Double]
     let black: Double
     let white: Double
+
+    /// Combined knots suffice: the difference is linear between adjacent knots.
+    func fallsBelow(_ other: ToneCurve) -> Bool {
+        for curve in [self, other] {
+            for index in curve.values.indices {
+                let input = curve.black + (curve.white - curve.black)
+                    * Double(index) / Double(curve.values.count - 1)
+                if value(at: input) + 0.000001 < other.value(at: input) { return true }
+            }
+        }
+        return false
+    }
 
     func value(at input: Double) -> Double {
         let normalized = (input - black) / max(ToneMapping.minimumRange, white - black)

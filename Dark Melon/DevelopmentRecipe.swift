@@ -1,11 +1,12 @@
 import Foundation
 
 /// A portable, versioned recipe for the original source, not a rendered export.
-/// RAW decoder settings and transient UI/compare state intentionally stay out.
+/// Includes decoder adjustments; transient UI state stays out.
 nonisolated struct DevelopmentRecipe: Codable, Equatable, Sendable {
     var version = 1
     var colorSpace: ProcessingColorSpace
     var mapping: ToneMapping
+    var rawSettings: RAWSettings? = nil
 
     func encoded() throws -> Data {
         let encoder = JSONEncoder()
@@ -37,8 +38,16 @@ nonisolated struct DevelopmentRecipe: Codable, Equatable, Sendable {
     }
 
     private func validate() throws {
+        if let rawSettings {
+            for (control, value) in rawSettings.values {
+                guard value.isFinite, (control.minimum...control.maximum).contains(value) else { throw RecipeError.invalid }
+            }
+        }
         let m = mapping
         func within(_ value: Double, _ range: ClosedRange<Double>) -> Bool { value.isFinite && range.contains(value) }
+        if let wb = m.rawWhiteBalance {
+            guard within(Double(wb.temperature), 2000...50000), within(Double(wb.tint), -150...150) else { throw RecipeError.invalid }
+        }
         guard m.hls.count == 6,
               within(m.black, 0...1), within(m.white, 0...1), m.white - m.black >= ToneMapping.minimumRange * 0.999,
               within(m.tonePosition, 0...1), within(m.concentration, -1...1),

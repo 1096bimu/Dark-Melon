@@ -56,11 +56,11 @@ struct HistogramPoints: View {
 
 struct SlopeEditor: View {
     @Binding var mapping: ToneMapping
-    var pickingTone = false
-    var onPickTone: () -> Void = {}
+    @Binding var autoTones: Bool
     var onToneChanged: () -> Void = {}
     var onContrastChanged: () -> Void = {}
     var onContrastAdjustment: () -> Void = {}
+    var onHDRContrastAdjustment: () -> Void = {}
     var onToneEditingChanged: (Bool) -> Void = { _ in }
     @State private var showLowContrastTip = false
 
@@ -69,17 +69,15 @@ struct SlopeEditor: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
                     Text("Tone")
+                    ControlInfo(.tone)
                     Text(mapping.tonePosition, format: .number.precision(.fractionLength(3)))
                     Spacer()
-                    #if os(macOS)
-                    Button(pickingTone ? "Cancel Tone Sample" : "Sample Tone", systemImage: "eyedropper") {
-                        onPickTone()
-                    }
-                    .labelStyle(.iconOnly)
-                    .tint(pickingTone ? .accentColor : .primary)
-                    .disabled(mapping.blackAndWhite.isEnabled)
-                    .help("Sample a circle to set Tone and move green/blue input casts to the Lab diagonal.")
-                    #endif
+                    Toggle("Auto Tones", isOn: $autoTones)
+                        #if os(macOS)
+                        .toggleStyle(.checkbox)
+                        #endif
+                        .help("Adjust white point and HDR when you release the Tone slider.")
+                    ControlInfo(.autoTones)
                 }
                 HStack {
                     Image(systemName: "swirl.circle.righthalf.filled")
@@ -97,10 +95,6 @@ struct SlopeEditor: View {
                 }
                         .labelsHidden()
                 }
-                if pickingTone {
-                    Text("Click center, drag radius, click again to set Tone and white balance.")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
                 if showLowContrastTip {
                     Label("Tone adjustment is ineffective at low contrast.", systemImage: "info.circle")
                         .font(.caption)
@@ -111,6 +105,7 @@ struct SlopeEditor: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
                     Text("Contrast")
+                    ControlInfo(.contrast)
                     Text(mapping.concentration, format: .percent.precision(.fractionLength(0)))
                 }
                 HStack {
@@ -132,13 +127,20 @@ struct SlopeEditor: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
                     Text("HDR Contrast")
+                    ControlInfo(.hdrContrast)
                     Text(mapping.hdrConcentrationOffset,
                          format: .percent.precision(.fractionLength(0)).sign(strategy: .always()))
                 }
                 HStack {
                     Image(systemName: "circle.lefthalf.filled.righthalf.striped.horizontal")
                         .frame(width: 22).accessibilityHidden(true)
-                    Slider(value: $mapping.hdrConcentrationOffset, in: -2...2) { Text("HDR Contrast") }
+                    Slider(value: Binding(get: { mapping.hdrConcentrationOffset }, set: {
+                        mapping.hdrConcentrationOffset = $0
+                        onHDRContrastAdjustment()
+                    }), in: -2...2) { Text("HDR Contrast") }
+                        onEditingChanged: { editing in
+                            if editing { onHDRContrastAdjustment() }
+                        }
                         .labelsHidden()
                         .disabled(!mapping.hdrEnabled)
                 }
@@ -153,6 +155,7 @@ struct SlopeEditor: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
                     Text("HDR Gain")
+                    ControlInfo(.hdrGain)
                     if !mapping.hdrEnabled { Text("Off").foregroundStyle(.secondary) }
                     else { TextField("HDR Gain", value: $mapping.hdrMax,
                               format: .number.precision(.fractionLength(2)))

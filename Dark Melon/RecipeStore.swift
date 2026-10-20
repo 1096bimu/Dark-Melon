@@ -2,7 +2,7 @@ import Foundation
 import ImageIO
 
 extension Notification.Name {
-    nonisolated static let developmentSettingsSaved = Notification.Name("DarkMelon.developmentSettingsSaved")
+    nonisolated static let developmentSettingsChanged = Notification.Name("DarkMelon.developmentSettingsChanged")
 }
 
 /// Own sidecar avoids collisions with Lightroom's basename.xmp and with files
@@ -37,7 +37,8 @@ actor RecipeStore {
     }
 
     /// Lifecycle flushes must finish before the process/window releases file access.
-    nonisolated func saveSynchronously(_ recipe: DevelopmentRecipe, for source: URL) throws {
+    @discardableResult
+    nonisolated func saveSynchronously(_ recipe: DevelopmentRecipe, for source: URL) throws -> DevelopmentRecipe {
         Self.writeLock.lock()
         defer { Self.writeLock.unlock() }
         let accessed = source.startAccessingSecurityScopedResource()
@@ -58,7 +59,34 @@ actor RecipeStore {
               let packet = CGImageMetadataCreateXMPData(metadata, nil) else { throw StoreError.invalidXMP }
         // Atomic replacement writes only the few-kilobyte sidecar, never the image.
         try (packet as Data).write(to: url, options: .atomic)
-        NotificationCenter.default.post(name: .developmentSettingsSaved, object: source)
+        NotificationCenter.default.post(name: .developmentSettingsChanged, object: source)
+        return recipe
+    }
+
+    func delete(for source: URL) throws {
+        Self.writeLock.lock()
+        defer { Self.writeLock.unlock() }
+        let accessed = source.startAccessingSecurityScopedResource()
+        defer { if accessed { source.stopAccessingSecurityScopedResource() } }
+        let url = Self.sidecarURL(for: source)
+        if FileManager.default.fileExists(atPath: url.path) {
+            #if os(macOS)
+            do {
+                try FileManager.default.trashItem(at: url, resultingItemURL: nil)
+            } catch {
+                // Network volumes may allow deletion but provide no Trash.
+                // Deleting edits was already confirmed; only remove our sidecar.
+                if FileManager.default.fileExists(atPath: url.path) {
+                    try FileManager.default.removeItem(at: url)
+                } else {
+                    throw error
+                }
+            }
+            #else
+            try FileManager.default.removeItem(at: url)
+            #endif
+        }
+        NotificationCenter.default.post(name: .developmentSettingsChanged, object: source)
     }
 
     nonisolated private func boundedData(from url: URL) throws -> Data {

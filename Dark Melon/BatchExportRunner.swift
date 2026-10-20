@@ -58,11 +58,16 @@ nonisolated enum BatchExportRunner {
                     group.addTask {
                         do {
                             try Task.checkCancellation()
-                            guard let recipe = try await RecipeStore.shared.load(for: source) else {
-                                return Result(source: source, cost: cost, error: "Saved settings are missing.", cancelled: false)
+                            if let recipe = try await RecipeStore.shared.load(for: source) {
+                                // Saved edits need no preview or automatic-analysis pass.
+                                let worker = RAWDeveloper(colorSpace: recipe.colorSpace, rawSettings: recipe.rawSettings)
+                                try await worker.exportBatch(source, mapping: recipe.mapping, settings: settings, destination: destination)
+                            } else {
+                                let prepared = try await BrowserFileDevelopment.load(source, bins: 512)
+                                try Task.checkCancellation()
+                                try await prepared.worker.exportBatch(source, mapping: prepared.recipe.mapping,
+                                                                      settings: settings, destination: destination)
                             }
-                            let worker = RAWDeveloper(colorSpace: recipe.colorSpace)
-                            try await worker.exportBatch(source, mapping: recipe.mapping, settings: settings, destination: destination)
                             return Result(source: source, cost: cost, error: nil, cancelled: false)
                         } catch is CancellationError {
                             return Result(source: source, cost: cost, error: nil, cancelled: true)

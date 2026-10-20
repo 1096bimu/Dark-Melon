@@ -23,7 +23,7 @@ final class ScopeDisplay: MTKView, MTKViewDelegate {
     init() {
         super.init(frame: .zero, device: MTLCreateSystemDefaultDevice())
         isPaused = true
-        enableSetNeedsDisplay = false
+        enableSetNeedsDisplay = true
         preferredFramesPerSecond = 60
         colorPixelFormat = .bgra8Unorm
         clearColor = MTLClearColorMake(0, 0, 0, 1)
@@ -51,8 +51,32 @@ final class ScopeDisplay: MTKView, MTKViewDelegate {
         }
     }
     required init(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-    func display(_ frame: ScopeTexture) { image = frame.texture; draw() }
-    func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) { draw() }
+    func display(_ frame: ScopeTexture) {
+        image = frame.texture
+        requestDisplay()
+    }
+
+    private func requestDisplay() {
+        #if os(macOS)
+        needsDisplay = true
+        #else
+        setNeedsDisplay()
+        #endif
+    }
+
+    #if os(macOS)
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        requestDisplay()
+    }
+    #else
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        requestDisplay()
+    }
+    #endif
+
+    func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) { requestDisplay() }
     func draw(in view: MTKView) {
         guard let image, let pipeline, let drawable = currentDrawable,
               let pass = currentRenderPassDescriptor, let command = queue?.makeCommandBuffer(),

@@ -3,14 +3,23 @@ import CoreImage
 import UniformTypeIdentifiers
 
 struct ContentView: View {
+    #if os(macOS)
+    @State private var previewViewport = PreviewViewport()
+    #endif
     @State private var pendingEdits = PendingEdits()
     @State private var pendingControlsWidth: CGFloat = 120
     @State private var baselineRecipe: DevelopmentRecipe?
     @State private var pendingTransition: (() -> Void)?
     @State private var confirmingDiscard = false
     @State private var showingPasteSettings = false
+    @State private var browserPaste: BrowserFileDevelopment?
+    @State private var browserExport: BrowserFileDevelopment?
+    @State private var fileActionBusy = false
+    @State private var deleteEditURL: URL?
+    @State private var exportedSourceURL: URL?
     @State private var resettingTone = false
     @State private var browserModel = ImageBrowserModel()
+    @State private var showingFileBrowser = true
     #if os(macOS)
     @State private var showingBatchExport = false
     #endif
@@ -45,7 +54,8 @@ struct ContentView: View {
     @State private var pickingWhiteBalance = false
     @AppStorage("guidedTutorialPresented") private var tutorialPresented = false
     @State private var tutorial = EditingTutorial()
-    @State private var pickingTone = false
+    @State private var pendingPicker: EditorPickerTool?
+    @AppStorage("autoTones") private var autoTones = false
     @State private var hoveredPreviewPixel: CGPoint?
     @State private var displayMode = PreviewHistogramMode.hdrLinear
     private var hdrPreview: Bool {
@@ -66,7 +76,7 @@ struct ContentView: View {
     }
 
     private var currentRecipe: DevelopmentRecipe {
-        DevelopmentRecipe(colorSpace: colorSpace, mapping: mapping)
+        DevelopmentRecipe(colorSpace: colorSpace, mapping: mapping, rawSettings: mapping.rawWhiteBalance == nil ? nil : rawSettings)
     }
 
     private var previewMapping: ToneMapping {
@@ -84,9 +94,13 @@ struct ContentView: View {
     var body: some View {
         NavigationStack {
             EditorColumns {
-                ImageFileBrowser(selectedURL: sourceURL, open: { load($0, resetEdits: true) }, model: browserModel, changeDirectory: changeDirectory)
-                    .frame(minWidth: 180, idealWidth: 220, maxWidth: 320)
-                    .disabled(loading)
+                if showingFileBrowser {
+                    ImageFileBrowser(selectedURL: sourceURL, open: { load($0, resetEdits: true) }, model: browserModel, changeDirectory: changeDirectory,
+                                     fileAction: performFileAction, hasPendingEdit: hasPendingEdit)
+                        .frame(minWidth: 180, idealWidth: 220, maxWidth: 320)
+                        .disabled(loading || fileActionBusy)
+                        .overlay { if fileActionBusy { ProgressView("Preparing…").padding().background(.regularMaterial) } }
+                }
             VStack(spacing: 0) {
                 ZStack {
                     Color.black
@@ -94,28 +108,19 @@ struct ContentView: View {
                         #if os(macOS)
                         HDRImagePreview(image: (adjustingTone ? toneLocatorImage : nil) ?? (hdrPreview ? previewImages.hdr : previewImages.sdr),
                                         hdr: hdrPreview, sourceID: development?.id ?? previewRevision,
-                                        sampleTool: pickingTone ? .tone : pickingWhiteBalance ? .whiteBalance : nil,
+                                        viewport: previewViewport,
+                                        sampleTool: pickingWhiteBalance ? .whiteBalance : nil,
                                         hover: { hoveredPreviewPixel = $0 }) { center, radius in
-                            let toneSample = pickingTone
                             let sampledMapping = mapping
-                            pickingTone = false
                             pickingWhiteBalance = false
                             guard let development else { return }
                             let sourceID = development.id
                             let worker = developer
                             Task {
                                 do {
-                                    if toneSample {
-                                        let result = try await worker.sampleTone(development.preview, center: center, radius: radius,
-                                                                                mapping: sampledMapping)
-                                        guard self.development?.id == sourceID, !loading, mapping == sampledMapping else { return }
-                                        mapping.whiteBalance = result.balance
-                                        mapping.tonePosition = result.tone
-                                    } else {
-                                        let balance = try await worker.sampleWhiteBalance(development.preview, center: center, radius: radius)
-                                        guard self.development?.id == sourceID, !loading, mapping == sampledMapping else { return }
-                                        mapping.whiteBalance = balance
-                                    }
+                                    let balance = try await worker.sampleWhiteBalance(development.preview, center: center, radius: radius)
+                                    guard self.development?.id == sourceID, !loading, mapping == sampledMapping else { return }
+                                    mapping.whiteBalance = balance
                                 } catch { errorMessage = error.localizedDescription }
                             }
                         }
@@ -179,7 +184,7 @@ struct ContentView: View {
                 .overlay(alignment: .bottomTrailing) {
                     HStack(spacing: 8) {
                         Button("Copy", systemImage: "doc.on.doc") {
-                            do { try SettingsClipboard.copy(currentRecipe, reference: development?.whitePoint) }
+                            do { if let sourceURL { try SettingsClipboard.copy(currentRecipe, reference: development?.whitePoint, source: sourceURL) } }
                             catch { errorMessage = error.localizedDescription }
                         }
                         .keyboardShortcut("c", modifiers: .command)
@@ -187,6 +192,7 @@ struct ContentView: View {
                         Button("Paste", systemImage: "doc.on.clipboard") {
                             do {
                                 pastedSettings = try SettingsClipboard.read()
+                                browserPaste = nil
                                 showingPasteSettings = true
                             } catch { errorMessage = error.localizedDescription }
                         }
@@ -214,7 +220,11 @@ struct ContentView: View {
             }
             .frame(minWidth: 320)
                 ScrollView {
-                    Group {
+                    VStack(spacing: 0) {
+                        if panel == .tone || panel == .raw {
+                            histogramView
+                            Divider()
+                        }
                         if panel == .raw {
                             RAWControls(settings: $rawSettings, isRAW: development?.isRAW == true, commit: {
                                 if let sourceURL { load(sourceURL, resetEdits: false) }
@@ -231,33 +241,7 @@ struct ContentView: View {
                         } else if panel == .effects {
                             EffectsControls(clarity: $mapping.clarity, radius: $mapping.clarityRadius, hdf: $mapping.hdf, hdfRadius: $mapping.hdfRadius, grain: $mapping.grain, comparing: $comparingEffects)
                         } else {
-                            VStack(spacing: 0) {
-                                LinearHistogram(development: development, histogram: histogram,
-                                                histogramError: histogramError, binCount: $histogramBins,
-                                                mapping: $mapping, sdrSource: previewImages?.sdr,
-                                                revision: previewRevision, colorSpace: colorSpace,
-                                                resettingTone: resettingTone, resetTone: resetTone,
-                                                showingSDR: $displayMode.sdrHistogram,
-                                                hoverPosition: hoveredPreviewPixel)
-                                Divider()
-                                SlopeEditor(mapping: $mapping, pickingTone: pickingTone, onPickTone: {
-                                    pickingTone.toggle()
-                                    pickingWhiteBalance = false
-                                }, onToneChanged: { tutorial.record(.tone) },
-                                   onContrastChanged: { tutorial.record(.contrast) },
-                                   onContrastAdjustment: { hdrPreview = false }) { editing in
-                                    adjustingTone = editing
-                                    if !editing { toneLocatorImage = nil }
-                                }
-                                Divider()
-                                VectorscopeView(source: development?.preview,
-                                                hoverSource: previewImages?.sdr, hoverPosition: hoveredPreviewPixel,
-                                                hoverRevision: previewRevision,
-                                                temperatureSamples: previewImages?.temperatureSamples ?? [], revision: development?.id ?? previewRevision,
-                                                colorSpace: colorSpace, whitePoint: development?.whitePoint, mapping: Binding(
-                                            get: { previewMapping },
-                                            set: { mapping.whiteBalance = $0.whiteBalance }), pickingWhiteBalance: $pickingWhiteBalance)
-                            }
+                            tonePanel
                         }
                     }
                     .disabled(loading || development == nil)
@@ -276,23 +260,21 @@ struct ContentView: View {
             .onChange(of: exportSettings) { _, settings in settings.remember() }
             .onChange(of: mapping.blackAndWhite.isEnabled) { _, _ in
                 pickingWhiteBalance = false
-                pickingTone = false
-            }
-            .onChange(of: pickingWhiteBalance) { _, active in
-                if active { pickingTone = false }
             }
             .onChange(of: panel) { _, _ in
                 pickingWhiteBalance = false
-                pickingTone = false
                 adjustingTone = false
                 toneLocatorImage = nil
                 comparingColor = false
                 comparingEffects = false
                 comparingHLS = false
+                let requested = pendingPicker
+                pendingPicker = nil
+                if panel == .tone, let requested { togglePicker(requested) }
             }
             .onChange(of: development?.id) { _, _ in
+                pendingPicker = nil
                 pickingWhiteBalance = false
-                pickingTone = false
                 adjustingTone = false
                 toneLocatorImage = nil
                 comparingColor = false
@@ -301,10 +283,6 @@ struct ContentView: View {
             }
             .onChange(of: mapping.white) { _, _ in
                 if !loading { hdrPreview = false }
-            }
-            .onChange(of: mapping.hdrConcentration) { old, new in
-                // Compensation during SDR Contrast edits must not switch the preview to HDR.
-                if !loading, abs(new - old) > 1e-10 { hdrPreview = mapping.hdrEnabled }
             }
             .onChange(of: mapping.hdrMax) { _, _ in
                 if !loading { hdrPreview = mapping.hdrEnabled }
@@ -326,7 +304,7 @@ struct ContentView: View {
                 guard let development, !loading else { return }
                 do {
                     let renderedMapping = previewMapping
-                    let images = try await developer.previews(development.preview, mapping: renderedMapping, whitePoint: development.whitePoint)
+                    let images = try await developer.previews(development.preview, mapping: renderedMapping)
                     try Task.checkCancellation()
                     previewImages = images
                     previewRevision = UUID()
@@ -380,6 +358,7 @@ struct ContentView: View {
             .navigationTitle(filename)
             .focusedSceneValue(\.editorPanel, $panel)
             .focusedSceneValue(\.startTutorial, { startTutorial() })
+            .focusedSceneValue(\.toggleEditorPicker, pickerShortcutAction)
             #if os(macOS)
             .focusedSceneValue(\.batchExport, browserModel.directory == nil ? nil : { showingBatchExport = true })
             .sheet(isPresented: $showingBatchExport) {
@@ -387,6 +366,11 @@ struct ContentView: View {
             }
             #endif
             .toolbar {
+                #if os(macOS)
+                ToolbarItem(placement: .navigation) { fileBrowserToggle }
+                #else
+                ToolbarItem(placement: .topBarLeading) { fileBrowserToggle }
+                #endif
                 ToolbarItem(placement: .principal) {
                     HStack(spacing: 12) {
                         Button(exporting ? "Preparing Image…" : "Export…", systemImage: "square.and.arrow.up") {
@@ -430,31 +414,31 @@ struct ContentView: View {
                     .frame(width: 350)
                 }
             }
-            .sheet(isPresented: $showingPasteSettings) {
-                SettingsPasteOptions { selection in
-                    guard let pastedSettings, development != nil, !loading else { return }
-                    pendingAutoWhite = nil
-                    pendingAutoContrast = nil
-                    comparingColor = false
-                    comparingHLS = false
-                    comparingEffects = false
-                    pickingWhiteBalance = false
-                    pickingTone = false
-                    mapping = pastedSettings.applying(selection, to: mapping, reference: development?.whitePoint, space: colorSpace)
-                }
+            .sheet(isPresented: $showingPasteSettings, onDismiss: { browserPaste = nil }) {
+                SettingsPasteOptions { selection in applyPastedSettings(selection, target: browserPaste) }
             }
-            .sheet(isPresented: $showingExportOptions) {
-                if let development {
+            .sheet(isPresented: $showingExportOptions, onDismiss: { browserExport = nil }) {
+                if let target = browserExport {
+                    HEIFExportOptions(settings: $exportSettings, width: target.development.width,
+                                      height: target.development.height, hdrEnabled: target.recipe.mapping.hdrEnabled,
+                                      sourceURL: target.development.url, mapping: target.recipe.mapping,
+                                      colorSpace: target.recipe.colorSpace,
+                                      rawSettings: target.recipe.rawSettings ?? target.development.rawDefaults ?? RAWSettings(),
+                                      save: { prepareExport(target) })
+                } else if let development {
                     HEIFExportOptions(settings: $exportSettings, width: development.width,
                                       height: development.height, hdrEnabled: mapping.hdrEnabled,
                                       sourceURL: development.url, mapping: mapping, colorSpace: colorSpace,
-                                      rawSettings: rawSettings, save: prepareExport)
+                                      rawSettings: rawSettings, save: { prepareExport() })
                 }
             }
             .fileExporter(isPresented: $showingSave, document: exportDocument,
                           contentType: exportContentType, defaultFilename: exportName) { result in
                 switch result {
-                case .success: tutorial.record(.export)
+                case .success:
+                    if exportedSourceURL?.standardizedFileURL == recipeSourceURL?.standardizedFileURL {
+                        tutorial.record(.export)
+                    }
                 case .failure(let error): errorMessage = error.localizedDescription
                 }
                 exportDocument = nil
@@ -471,6 +455,14 @@ struct ContentView: View {
             )) {
                 Button("OK", role: .cancel) { errorMessage = nil }
             } message: { Text(errorMessage ?? "") }
+        }
+        .alert("Delete Edit?", isPresented: Binding(
+            get: { deleteEditURL != nil }, set: { if !$0 { deleteEditURL = nil } }
+        ), presenting: deleteEditURL) { url in
+            Button("Delete Edit", role: .destructive) { deleteEdit(for: url) }
+            Button("Cancel", role: .cancel) {}
+        } message: { url in
+            Text("Remove saved settings and discard pending edits for \(url.lastPathComponent)? The original image is kept. If Trash is unavailable, the settings sidecar is permanently deleted.")
         }
         .preferredColorScheme(.dark)
         .alert("Unsaved edits", isPresented: $confirmingDiscard) {
@@ -522,15 +514,33 @@ struct ContentView: View {
                     }
                 }
                 let initializeEdits = resetEdits && restored == nil && draft == nil
-                let options: RAWSettings? = resetEdits ? nil : rawSettings
-                developer = RAWDeveloper(colorSpace: colorSpace, rawSettings: options)
-                histogramWorker = RAWDeveloper(colorSpace: colorSpace, rawSettings: options)
-                exportWorker = RAWDeveloper(colorSpace: colorSpace, rawSettings: options)
+                let options: RAWSettings? = resetEdits ? (draft?.recipe ?? restored)?.rawSettings : rawSettings
+                developer = RAWDeveloper(colorSpace: colorSpace, rawSettings: options, rawWhiteBalance: mapping.rawWhiteBalance)
+                histogramWorker = RAWDeveloper(colorSpace: colorSpace, rawSettings: options, rawWhiteBalance: mapping.rawWhiteBalance)
+                exportWorker = RAWDeveloper(colorSpace: colorSpace, rawSettings: options, rawWhiteBalance: mapping.rawWhiteBalance)
                 let loaded = try await developer.develop(url)
-                if resetEdits { rawSettings = loaded.rawDefaults ?? RAWSettings() }
+                if resetEdits {
+                    let defaults = loaded.rawDefaults ?? RAWSettings()
+                    rawSettings = options?.resolved(using: defaults) ?? defaults
+                    if var saved = savedRecipe, loaded.isRAW {
+                        saved.rawSettings = rawSettings
+                        savedRecipe = saved
+                    }
+                }
+                if loaded.isRAW, mapping.rawWhiteBalance == nil, let reference = loaded.whitePoint {
+                    mapping.rawWhiteBalance = RAWWhiteBalance(reference)
+                    if var saved = savedRecipe {
+                        saved.mapping.rawWhiteBalance = mapping.rawWhiteBalance
+                        savedRecipe = saved
+                    }
+                }
                 if resetEdits {
                     if initializeEdits, loaded.isRAW { mapping.setAutomaticHDRGain() }
-                    if initializeEdits, !loaded.isRAW, loaded.sourceHeadroom <= 1 { mapping.hdrMax = 1 }
+                    if initializeEdits, !loaded.isRAW {
+                        mapping.concentration = 0
+                        mapping.hdrConcentrationOffset = 0
+                        if loaded.sourceHeadroom <= 1 { mapping.hdrMax = 1 }
+                    }
                     hdrPreview = mapping.hdrEnabled
                 }
                 if resetEdits { baselineRecipe = draft?.baseline ?? currentRecipe }
@@ -550,39 +560,15 @@ struct ContentView: View {
         pendingAutoWhite = nil
         pendingAutoContrast = nil
         let original = mapping
-        let space = colorSpace
         let worker = developer
-        let histogramWorker = histogramWorker
         let existingHistogram = histogram
         let bins = histogramBins
         resettingTone = true
         Task {
             defer { resettingTone = false }
             do {
-                // Analyze a fresh recipe so preserved color/effect edits cannot bias the default.
-                var automatic = ToneMapping()
-                if !development.isRAW, development.sourceHeadroom <= 1 { automatic.hdrMax = 1 }
-                if development.isRAW {
-                    let sourceHistogram: HistogramData
-                    if let existingHistogram { sourceHistogram = existingHistogram }
-                    else {
-                        sourceHistogram = try await histogramWorker.buildHistogram(development.url,
-                            sourceID: development.id, bins: bins)
-                    }
-                    if let white = sourceHistogram.overlapWhitePoint {
-                        automatic.white = min(1, max(automatic.black + ToneMapping.minimumRange, white))
-                    }
-                    let images = try await worker.previews(development.preview, mapping: automatic,
-                                                         whitePoint: development.whitePoint)
-                    let histogramGPU = try GPUHistogram(colorSpace: space, encoded: true)
-                    let result = try await histogramGPU.calculate(image: CIImage(cgImage: images.sdr),
-                                                                 sourceID: UUID(), bins: 256)
-                    if let statistics = SDRStatistics(counts: result.sdrLuma),
-                       let contrast = AutoContrast.suggestion(median: statistics.median, mapping: automatic, space: space) {
-                        automatic.setContrastPreservingHDR(contrast)
-                    }
-                    automatic.setAutomaticHDRGain()
-                }
+                let automatic = try await worker.automaticMapping(for: development, bins: bins,
+                                                                  histogram: existingHistogram)
                 guard self.development?.id == development.id, mapping == original else { return }
                 mapping = SettingsPasteSelection(tone: true, whiteBalance: false, color: false,
                                                  hls: false, effects: false).applying(automatic, to: mapping)
@@ -598,11 +584,15 @@ struct ContentView: View {
     private func savePendingEdits() throws {
         rememberCurrentEdits()
         for entry in pendingEdits.entries {
-            try RecipeStore.shared.saveSynchronously(entry.recipe, for: entry.url)
+            let saved = try RecipeStore.shared.saveSynchronously(entry.recipe, for: entry.url)
             pendingEdits.remove(entry.url)
             if entry.url == recipeSourceURL?.standardizedFileURL {
-                savedRecipe = entry.recipe
-                baselineRecipe = entry.recipe
+                savedRecipe = saved
+                baselineRecipe = saved
+                if mapping != saved.mapping {
+                    mapping = saved.mapping
+                    load(entry.url, resetEdits: false)
+                }
                 tutorial.record(.save)
             }
         }
@@ -664,17 +654,119 @@ struct ContentView: View {
         savingRecipe = true
         defer { savingRecipe = false }
         do {
-            try RecipeStore.shared.saveSynchronously(recipe, for: sourceURL)
-            savedRecipe = recipe
-            baselineRecipe = recipe
+            let saved = try RecipeStore.shared.saveSynchronously(recipe, for: sourceURL)
+            savedRecipe = saved
+            baselineRecipe = saved
+            if mapping != saved.mapping {
+                mapping = saved.mapping
+                load(sourceURL, resetEdits: false)
+            }
             pendingEdits.remove(sourceURL)
             tutorial.record(.save)
         } catch { errorMessage = "Could not save edits: \(error.localizedDescription) If folder access is denied, open the containing folder in the file browser and try again." }
     }
 
+    private var histogramView: some View {
+        LinearHistogram(development: development, histogram: histogram,
+                        histogramError: histogramError, binCount: $histogramBins,
+                        mapping: $mapping, sdrSource: previewImages?.sdr,
+                        revision: previewRevision, colorSpace: colorSpace,
+                        resettingTone: resettingTone, resetTone: resetTone,
+                        showingSDR: $displayMode.sdrHistogram,
+                        hoverPosition: hoveredPreviewPixel)
+    }
+
+    private var tonePanel: some View {
+    VStack(spacing: 0) {
+        SlopeEditor(mapping: $mapping, autoTones: $autoTones,
+           onToneChanged: { tutorial.record(.tone) },
+           onContrastChanged: { tutorial.record(.contrast) },
+           onContrastAdjustment: { hdrPreview = false },
+           onHDRContrastAdjustment: { hdrPreview = mapping.hdrEnabled }) { editing in
+            adjustingTone = editing
+            if !editing {
+                toneLocatorImage = nil
+                if autoTones, development != nil, !loading {
+                    pendingAutoWhite = nil
+                    pendingAutoContrast = nil
+                    mapping = ToneSampleWhitePoint.automaticTones(mapping: mapping, space: colorSpace)
+                }
+            }
+        }
+        Divider()
+        VectorscopeView(source: development?.preview,
+                        hoverSource: previewImages?.sdr, hoverPosition: hoveredPreviewPixel,
+                        hoverRevision: previewRevision,
+                        revision: development?.id ?? previewRevision,
+                        colorSpace: colorSpace, mapping: Binding(
+                    get: { previewMapping },
+                    set: { mapping.whiteBalance = $0.whiteBalance; mapping.rawWhiteBalance = $0.rawWhiteBalance }), pickingWhiteBalance: $pickingWhiteBalance,
+                        resetRAWBalance: resetRAWWhiteBalanceAction,
+                        convertWhiteBalance: convertWhiteBalanceAction, commitRAWBalance: commitRAWWhiteBalance)
+    }
+    }
+
+    private var resetRAWWhiteBalanceAction: (() -> Void)? {
+        guard development?.isRAW == true else { return nil }
+        return {
+            guard let sourceURL else { return }
+            do {
+                mapping.rawWhiteBalance = try RAWWhiteBalance.asShot(sourceURL)
+                mapping.whiteBalance = WhiteBalance()
+                commitRAWWhiteBalance()
+            } catch { errorMessage = error.localizedDescription }
+        }
+    }
+
+    private func commitRAWWhiteBalance() {
+        guard let sourceURL, !loading else { return }
+        load(sourceURL, resetEdits: false)
+    }
+
+    private var convertWhiteBalanceAction: (() -> Void)? {
+        guard development?.isRAW == true else { return nil }
+        return { bakeWhiteBalanceIntoRAW() }
+    }
+
+    private func bakeWhiteBalanceIntoRAW() {
+        guard let development, development.isRAW, !loading else { return }
+        do {
+            let baked = try RAWWhiteBalance.baked(currentRecipe, source: development.url)
+            guard baked.mapping != mapping else { return }
+            mapping = baked.mapping
+            load(development.url, resetEdits: false)
+        } catch { errorMessage = error.localizedDescription }
+    }
+
+    private var pickerShortcutAction: ((EditorPickerTool) -> Void)? {
+        guard development != nil, !loading, !mapping.blackAndWhite.isEnabled else { return nil }
+        return { togglePicker($0) }
+    }
+
+    private func togglePicker(_ tool: EditorPickerTool) {
+        guard development != nil, !loading, !mapping.blackAndWhite.isEnabled else { return }
+        if panel != .tone {
+            pendingPicker = tool
+            panel = .tone
+            return
+        }
+        pickingWhiteBalance.toggle()
+    }
+
+    private var fileBrowserToggle: some View {
+        Button(showingFileBrowser ? "Hide File Browser" : "Show File Browser", systemImage: "sidebar.left") {
+            showingFileBrowser.toggle()
+        }
+        .labelStyle(.iconOnly)
+        .keyboardShortcut("f", modifiers: [])
+        .help(showingFileBrowser ? "Hide file browser (F)" : "Show file browser (F)")
+        .accessibilityValue(showingFileBrowser ? "Shown" : "Hidden")
+    }
+
     private func startTutorial() {
         tutorialPresented = true
         tutorial.start()
+        showingFileBrowser = true
         panel = .tone
         hdrPreview = false
     }
@@ -687,17 +779,113 @@ struct ContentView: View {
         if tutorial.step == .tone || tutorial.step == .contrast { panel = .tone }
     }
 
-    private func prepareExport() {
-        guard let development else { return }
+    private func hasPendingEdit(_ url: URL) -> Bool {
+        if url.standardizedFileURL == recipeSourceURL?.standardizedFileURL {
+            return baselineRecipe != nil && currentRecipe != baselineRecipe
+        }
+        return pendingEdits.entry(for: url) != nil
+    }
+
+    private func performFileAction(_ action: BrowserFileAction, _ url: URL) {
+        guard !fileActionBusy else { return }
+        if action == .deleteEdit { deleteEditURL = url; return }
+        if action == .showInFinder {
+            #if os(macOS)
+            NSWorkspace.shared.activateFileViewerSelecting([url])
+            #endif
+            return
+        }
+        fileActionBusy = true
+        Task {
+            defer { fileActionBusy = false }
+            do {
+                let copied = action == .pasteEdit ? try SettingsClipboard.read() : nil
+                let target: BrowserFileDevelopment
+                if action != .export, let development,
+                   development.url.standardizedFileURL == url.standardizedFileURL {
+                    target = BrowserFileDevelopment(development: development, recipe: currentRecipe, worker: developer, savedRecipe: savedRecipe)
+                } else {
+                    // Export deliberately uses disk settings or automatic defaults.
+                    let draft = action == .export ? nil : pendingEdits.entry(for: url)?.recipe
+                    target = try await BrowserFileDevelopment.load(url, override: draft, bins: histogramBins)
+                }
+                switch action {
+                case .copyEdit:
+                    try SettingsClipboard.copy(target.recipe, reference: target.development.whitePoint, source: target.development.url)
+                case .pasteEdit:
+                    pastedSettings = copied
+                    browserPaste = target
+                    showingPasteSettings = true
+                case .export:
+                    browserExport = target
+                    showingExportOptions = true
+                case .deleteEdit, .showInFinder: break
+                }
+            } catch { errorMessage = error.localizedDescription }
+        }
+    }
+
+    private func applyPastedSettings(_ selection: SettingsPasteSelection, target: BrowserFileDevelopment?) {
+        guard let pastedSettings, !loading else { return }
+        if let target, target.development.url.standardizedFileURL != recipeSourceURL?.standardizedFileURL {
+            let url = target.development.url
+            let draft = pendingEdits.entry(for: url)
+            let destination = draft?.recipe ?? target.recipe
+            let updated = pastedSettings.applying(selection, to: destination.mapping,
+                                                  reference: target.development.whitePoint, space: destination.colorSpace)
+            pendingEdits.remember(url: url,
+                recipe: DevelopmentRecipe(colorSpace: destination.colorSpace, mapping: updated,
+                    rawSettings: selection.raw && target.development.isRAW
+                        ? (pastedSettings.rawSettings?.resolved(using: target.development.rawDefaults ?? RAWSettings()) ?? destination.rawSettings)
+                        : destination.rawSettings),
+                baseline: draft?.baseline ?? target.recipe, saved: draft?.savedRecipe ?? target.savedRecipe)
+        } else {
+            guard development != nil else { return }
+            pendingAutoWhite = nil
+            pendingAutoContrast = nil
+            comparingColor = false
+            comparingHLS = false
+            comparingEffects = false
+            pickingWhiteBalance = false
+            let previousRAWSettings = rawSettings
+            if selection.raw, development?.isRAW == true, let copiedRAW = pastedSettings.rawSettings {
+                rawSettings = copiedRAW.resolved(using: development?.rawDefaults ?? RAWSettings())
+            }
+            let previousRAWBalance = mapping.rawWhiteBalance
+            mapping = pastedSettings.applying(selection, to: mapping, reference: development?.whitePoint, space: colorSpace)
+            if mapping.rawWhiteBalance != previousRAWBalance || rawSettings != previousRAWSettings { commitRAWWhiteBalance() }
+        }
+    }
+
+    private func deleteEdit(for url: URL) {
+        fileActionBusy = true
+        Task {
+            defer { fileActionBusy = false }
+            do {
+                try await RecipeStore.shared.delete(for: url)
+                pendingEdits.remove(url)
+                if url.standardizedFileURL == recipeSourceURL?.standardizedFileURL {
+                    // Explicit deletion has been confirmed; do not stash the discarded mapping again.
+                    baselineRecipe = currentRecipe
+                    load(url, resetEdits: true)
+                }
+            } catch { errorMessage = error.localizedDescription }
+        }
+    }
+
+    private func prepareExport(_ target: BrowserFileDevelopment? = nil) {
+        guard let development = target?.development ?? development else { return }
         let settings = exportSettings
-        let snapshot = mapping
+        let snapshot = target?.recipe.mapping ?? mapping
+        let worker = target?.worker ?? exportWorker
+        exportedSourceURL = development.url
         exporting = true
         exportContentType = settings.format.type
         exportName = development.url.deletingPathExtension().lastPathComponent + "." + settings.format.fileExtension
         Task {
             defer { exporting = false }
             do {
-                let data = try await exportWorker.exportHEIF(development.url, mapping: snapshot, settings: settings)
+                let data = try await worker.exportHEIF(development.url, mapping: snapshot, settings: settings)
                 exportDocument = HEIFDocument(data: data)
                 showingSave = true
             } catch { errorMessage = error.localizedDescription }

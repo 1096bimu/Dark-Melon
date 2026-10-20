@@ -1,7 +1,7 @@
 import CoreGraphics
 import Foundation
 
-/// Outer projection of the entire smaller RGB cube onto Lab a*/b*.
+/// Outer projection of the entire RGB cube onto Lab a*/b*.
 /// Inside is not proof of membership: the scope discards lightness.
 nonisolated enum ScopeGamutBoundary {
     struct Boundary {
@@ -10,13 +10,13 @@ nonisolated enum ScopeGamutBoundary {
     }
     // Lab is independent of the working RGB space, so each outline is built only once.
     private static let cache: [ProcessingColorSpace: Boundary] = [
-        .sRGB: boundary(from: .sRGB), .displayP3: boundary(from: .displayP3)
+        .sRGB: boundary(from: .sRGB), .displayP3: boundary(from: .displayP3), .rec2020: boundary(from: .rec2020)
     ]
     static func boundaries(in space: ProcessingColorSpace) -> [Boundary] {
         switch space {
-        case .sRGB: []
-        case .displayP3: [cache[.sRGB]!]
-        case .rec2020: [cache[.sRGB]!, cache[.displayP3]!]
+        case .sRGB: [cache[.sRGB]!]
+        case .displayP3: [cache[.sRGB]!, cache[.displayP3]!]
+        case .rec2020: [cache[.sRGB]!, cache[.displayP3]!, cache[.rec2020]!]
         }
     }
 
