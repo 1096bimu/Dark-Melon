@@ -2,6 +2,10 @@
 
 A SwiftUI image development app for RAW, SDR, and HDR images, with tone and color controls, GPU scopes, effects, and gain-map export.
 
+## Download
+
+**[Download Dark Melon for macOS](https://github.com/1096bimu/Dark-Melon/releases/latest)** — the current build requires **Apple Silicon and macOS 27 or later**. Unzip the download and drag Dark Melon into Applications. The app is Developer ID signed and notarized.
+
 ## HDR in formats people actually use
 
 Dark Melon prioritizes **JPEG and HEIF/HEIC with HDR gain maps**: familiar photo formats built around a usable SDR image, with extra HDR information for compatible viewers. JPEG provides the broadest everyday fallback, so people can open the photograph on most phones even when HDR rendering is unavailable. HEIC is a natural option for Apple photo workflows.
