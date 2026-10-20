@@ -17,7 +17,7 @@ struct EditingTutorial {
         var instruction: String {
             switch self {
             case .tone:
-                "In the Tone panel, drag Tone until the magenta overlay highlights the neutral skin tones you want to emphasize. The overlay appears while you drag. Choose Continue when the range looks right."
+                "In the Tone panel, drag Tone until the grey overlay highlights the neutral skin tones you want to emphasize. The overlay appears while you drag. Choose Continue when the range looks right."
             case .contrast:
                 "Adjust Contrast until the SDR image looks good, then choose Continue. HDR contrast is compensated automatically to preserve its curve."
             case .preview:

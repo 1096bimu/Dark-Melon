@@ -227,24 +227,27 @@ actor RAWDeveloper {
 
     private let toneLocatorKernel = CIColorKernel(source: """
         kernel vec4 toneLocator(__sample sourcePixel, __sample preview, vec3 weights,
-                                float position, float width) {
+                                float position, float width, float clipping) {
             vec3 rgb = unpremultiply(sourcePixel).rgb;
             float distance = abs(dot(rgb, weights) - position);
             float mask = 1.0 - smoothstep(width * 0.35, width, distance);
+            if (clipping > 0.5) { mask = step(position, max(rgb.r, max(rgb.g, rgb.b))); }
+            vec3 highlight = clipping > 0.5 ? vec3(1.0, 0.0, 0.0) : vec3(0.21404114);
             vec4 base = unpremultiply(preview);
-            return premultiply(vec4(mix(base.rgb, vec3(1.0, 0.0, 0.65), mask * 0.9), base.a));
+            return premultiply(vec4(mix(base.rgb, highlight, mask * 0.9), base.a));
         }
         """)
 
     /// One GPU composite over the cached preview; never enters the export or analysis pipeline.
-    func toneLocator(_ source: CGImage, preview: CGImage, mapping: ToneMapping, hdr: Bool) throws -> CGImage {
+    func toneLocator(_ source: CGImage, preview: CGImage, mapping: ToneMapping, hdr: Bool, clipping: Bool = false) throws -> CGImage {
         try Task.checkCancellation()
         let input = try toneInput(CIImage(cgImage: source), mapping: mapping)
         let weights = colorSpace.luminance
         guard let image = toneLocatorKernel?.apply(extent: input.extent, arguments: [
             input, CIImage(cgImage: preview),
             CIVector(x: weights.x, y: weights.y, z: weights.z),
-            mapping.peakPosition, max(0.0001, (mapping.white - mapping.black) * 0.025)
+            clipping ? mapping.white : mapping.peakPosition, max(0.0001, (mapping.white - mapping.black) * 0.025),
+            clipping ? 1.0 : 0.0
         ]) else { throw DevelopmentError.decode }
         return try displayPreview(image, hdr: hdr, headroom: mapping.hdrMax)
     }

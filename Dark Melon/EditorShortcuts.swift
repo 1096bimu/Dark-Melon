@@ -84,7 +84,21 @@ struct EditorCommands: Commands {
 }
 
 struct EditorSettingsView: View {
+    @State private var licenses = false
     var body: some View {
+        VStack(spacing: 0) {
+            Picker("Settings section", selection: $licenses) {
+                Text("Shortcuts").tag(false)
+                Text("Licenses").tag(true)
+            }
+            .pickerStyle(.segmented)
+            .padding()
+            if licenses { licenseView } else { shortcutsView }
+        }
+        .frame(width: 460, height: 600)
+    }
+
+    private var shortcutsView: some View {
         Form {
             Section("Keyboard Shortcuts") {
                 shortcut("Copy development settings", "⌘C")
@@ -102,8 +116,33 @@ struct EditorSettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 420, height: 600)
     }
+    private var licenseView: some View {
+        Form {
+            Section("Dark Melon") {
+                Text("GNU General Public License v3.0 (GPL-3.0-only)")
+                Text("Copyright © 2026 Dark Melon contributors. Distributed without warranty.")
+                    .foregroundStyle(.secondary)
+                Link("Source code", destination: URL(string: "https://github.com/1096bimu/Dark-Melon")!)
+            }
+            Section("Cinegrain 2") {
+                Text("Film grain adapted from cinegrain2 by mr-berndt.")
+                Text("Copyright © 2026 mr-berndt. GPL-3.0-or-later.")
+                    .foregroundStyle(.secondary)
+                Link("Cinegrain 2 source", destination: URL(string: "https://github.com/mr-berndt/cinegrain2")!)
+            }
+            Section("GNU GPL v3 — full license") {
+                if let url = Bundle.main.url(forResource: "Cinegrain2-LICENSE", withExtension: "txt"),
+                   let text = try? String(contentsOf: url, encoding: .utf8) {
+                    Text(text).font(.caption).textSelection(.enabled)
+                } else {
+                    Link("Read GNU GPL v3", destination: URL(string: "https://www.gnu.org/licenses/gpl-3.0.html")!)
+                }
+            }
+        }
+        .formStyle(.grouped)
+    }
+
     private func shortcut(_ title: String, _ keys: String) -> some View {
         LabeledContent(title) { Text(keys).monospaced().foregroundStyle(.secondary) }
     }

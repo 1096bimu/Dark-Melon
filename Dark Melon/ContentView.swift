@@ -15,7 +15,8 @@ struct ContentView: View {
     @State private var browserPaste: BrowserFileDevelopment?
     @State private var browserExport: BrowserFileDevelopment?
     @State private var fileActionBusy = false
-    @State private var deleteEditURL: URL?
+    @State private var deleteEditURLs: [URL] = []
+    @State private var pasteEditURLs: [URL] = []
     @State private var exportedSourceURL: URL?
     @State private var resettingTone = false
     @State private var browserModel = ImageBrowserModel()
@@ -64,6 +65,7 @@ struct ContentView: View {
     }
     @State private var previewImages: PreviewImages?
     @State private var adjustingTone = false
+    @State private var adjustingWhitePoint = false
     @State private var toneLocatorImage: CGImage?
     @State private var previewRevision = UUID()
     @State private var filename = "Dark Melon"
@@ -96,7 +98,7 @@ struct ContentView: View {
             EditorColumns {
                 if showingFileBrowser {
                     ImageFileBrowser(selectedURL: sourceURL, open: { load($0, resetEdits: true) }, model: browserModel, changeDirectory: changeDirectory,
-                                     fileAction: performFileAction, hasPendingEdit: hasPendingEdit)
+                                     fileAction: performFileAction, multipleFileAction: performMultipleFileAction, hasPendingEdit: hasPendingEdit)
                         .frame(minWidth: 180, idealWidth: 220, maxWidth: 320)
                         .disabled(loading || fileActionBusy)
                         .overlay { if fileActionBusy { ProgressView("Preparing…").padding().background(.regularMaterial) } }
@@ -106,7 +108,7 @@ struct ContentView: View {
                     Color.black
                     if let previewImages {
                         #if os(macOS)
-                        HDRImagePreview(image: (adjustingTone ? toneLocatorImage : nil) ?? (hdrPreview ? previewImages.hdr : previewImages.sdr),
+                        HDRImagePreview(image: ((adjustingTone || adjustingWhitePoint) ? toneLocatorImage : nil) ?? (hdrPreview ? previewImages.hdr : previewImages.sdr),
                                         hdr: hdrPreview, sourceID: development?.id ?? previewRevision,
                                         viewport: previewViewport,
                                         sampleTool: pickingWhiteBalance ? .whiteBalance : nil,
@@ -126,7 +128,7 @@ struct ContentView: View {
                         }
                             .padding(16)
                         #else
-                        Image(decorative: (adjustingTone ? toneLocatorImage : nil) ?? (hdrPreview ? previewImages.hdr : previewImages.sdr), scale: 1)
+                        Image(decorative: ((adjustingTone || adjustingWhitePoint) ? toneLocatorImage : nil) ?? (hdrPreview ? previewImages.hdr : previewImages.sdr), scale: 1)
                             .allowedDynamicRange(hdrPreview ? .high : .standard)
                             .resizable()
                             .scaledToFit()
@@ -267,6 +269,7 @@ struct ContentView: View {
             .onChange(of: panel) { _, _ in
                 pickingWhiteBalance = false
                 adjustingTone = false
+                adjustingWhitePoint = false
                 toneLocatorImage = nil
                 comparingColor = false
                 comparingEffects = false
@@ -279,6 +282,7 @@ struct ContentView: View {
                 pendingPicker = nil
                 pickingWhiteBalance = false
                 adjustingTone = false
+                adjustingWhitePoint = false
                 toneLocatorImage = nil
                 comparingColor = false
                 comparingEffects = false
@@ -287,13 +291,13 @@ struct ContentView: View {
             .onChange(of: mapping.white) { _, _ in
                 if !loading { hdrPreview = false }
             }
-            .task(id: ToneLocatorRequest(active: adjustingTone, mapping: previewMapping,
+            .task(id: ToneLocatorRequest(active: adjustingTone || adjustingWhitePoint, clipping: adjustingWhitePoint, mapping: previewMapping,
                                          revision: previewRevision, hdr: hdrPreview)) {
-                guard adjustingTone, let development, let previewImages else { return }
+                guard adjustingTone || adjustingWhitePoint, let development, let previewImages else { return }
                 do {
                     let image = try await developer.toneLocator(development.preview,
                         preview: hdrPreview ? previewImages.hdr : previewImages.sdr,
-                        mapping: previewMapping, hdr: hdrPreview)
+                        mapping: previewMapping, hdr: hdrPreview, clipping: adjustingWhitePoint)
                     try Task.checkCancellation()
                     toneLocatorImage = image
                 } catch is CancellationError {
@@ -414,8 +418,11 @@ struct ContentView: View {
                     .frame(width: 350)
                 }
             }
-            .sheet(isPresented: $showingPasteSettings, onDismiss: { browserPaste = nil }) {
-                SettingsPasteOptions { selection in applyPastedSettings(selection, target: browserPaste) }
+            .sheet(isPresented: $showingPasteSettings, onDismiss: { browserPaste = nil; pasteEditURLs = [] }) {
+                SettingsPasteOptions { selection in
+                    if pasteEditURLs.isEmpty { applyPastedSettings(selection, target: browserPaste) }
+                    else { pasteMultipleEdits(selection, urls: pasteEditURLs) }
+                }
             }
             .sheet(isPresented: $showingExportOptions, onDismiss: { browserExport = nil }) {
                 if let target = browserExport {
@@ -456,13 +463,13 @@ struct ContentView: View {
                 Button("OK", role: .cancel) { errorMessage = nil }
             } message: { Text(errorMessage ?? "") }
         }
-        .alert("Delete Edit?", isPresented: Binding(
-            get: { deleteEditURL != nil }, set: { if !$0 { deleteEditURL = nil } }
-        ), presenting: deleteEditURL) { url in
-            Button("Delete Edit", role: .destructive) { deleteEdit(for: url) }
+        .alert("Delete Edits?", isPresented: Binding(
+            get: { !deleteEditURLs.isEmpty }, set: { if !$0 { deleteEditURLs = [] } }
+        ), presenting: deleteEditURLs) { urls in
+            Button("Delete Edits", role: .destructive) { deleteEdits(for: urls) }
             Button("Cancel", role: .cancel) {}
-        } message: { url in
-            Text("Remove saved settings and discard pending edits for \(url.lastPathComponent)? The original image is kept. If Trash is unavailable, the settings sidecar is permanently deleted.")
+        } message: { urls in
+            Text("Remove saved settings and discard pending edits for \(urls.count) file(s)? Original images are kept. If Trash is unavailable, settings sidecars are permanently deleted.")
         }
         .preferredColorScheme(.dark)
         .alert("Unsaved edits", isPresented: $confirmingDiscard) {
@@ -483,6 +490,9 @@ struct ContentView: View {
         #endif
     }
     private func load(_ url: URL, resetEdits: Bool) {
+        #if os(macOS)
+        if resetEdits { SidecarFolderAccess.shared.requestIfNeeded(for: url) }
+        #endif
         if resetEdits { rememberCurrentEdits() }
         sourceURL = url
         pendingAutoWhite = nil
@@ -582,6 +592,11 @@ struct ContentView: View {
     private func savePendingEdits() throws {
         rememberCurrentEdits()
         for entry in pendingEdits.entries {
+            #if os(macOS)
+            guard SidecarFolderAccess.shared.requestIfNeeded(for: entry.url) else {
+                throw CocoaError(.userCancelled)
+            }
+            #endif
             let saved = try RecipeStore.shared.saveSynchronously(entry.recipe, for: entry.url)
             pendingEdits.remove(entry.url)
             if entry.url == recipeSourceURL?.standardizedFileURL {
@@ -652,6 +667,9 @@ struct ContentView: View {
         savingRecipe = true
         defer { savingRecipe = false }
         do {
+            #if os(macOS)
+            guard SidecarFolderAccess.shared.requestIfNeeded(for: sourceURL) else { return }
+            #endif
             let saved = try RecipeStore.shared.saveSynchronously(recipe, for: sourceURL)
             savedRecipe = saved
             baselineRecipe = saved
@@ -671,7 +689,11 @@ struct ContentView: View {
                         revision: previewRevision, colorSpace: colorSpace,
                         resettingTone: resettingTone, resetTone: resetTone,
                         showingSDR: $displayMode.sdrHistogram,
-                        hoverPosition: hoveredPreviewPixel)
+                        hoverPosition: hoveredPreviewPixel,
+                        onWhitePointEditingChanged: { editing in
+                            adjustingWhitePoint = editing
+                            toneLocatorImage = nil
+                        })
     }
 
     private func applyAutoTones() {
@@ -735,6 +757,9 @@ struct ContentView: View {
         guard let development, development.isRAW, !loading else { return }
         do {
             let baked = try RAWWhiteBalance.baked(currentRecipe, source: development.url)
+            if baked.mapping.whiteBalance != WhiteBalance() {
+                errorMessage = "White balance limits reached. The remaining adjustment has been retained in RGB gains."
+            }
             guard baked.mapping != mapping else { return }
             mapping = baked.mapping
             load(development.url, resetEdits: false)
@@ -791,7 +816,7 @@ struct ContentView: View {
 
     private func performFileAction(_ action: BrowserFileAction, _ url: URL) {
         guard !fileActionBusy else { return }
-        if action == .deleteEdit { deleteEditURL = url; return }
+        if action == .deleteEdit { deleteEditURLs = [url]; return }
         if action == .showInFinder {
             #if os(macOS)
             NSWorkspace.shared.activateFileViewerSelecting([url])
@@ -860,19 +885,55 @@ struct ContentView: View {
         }
     }
 
-    private func deleteEdit(for url: URL) {
+    private func performMultipleFileAction(_ action: BrowserFileAction, urls: [URL]) {
+        guard !fileActionBusy, !urls.isEmpty else { return }
+        if action == .deleteEdit { deleteEditURLs = urls; return }
+        do {
+            pastedSettings = try SettingsClipboard.read()
+            pasteEditURLs = urls
+            browserPaste = nil
+            showingPasteSettings = true
+        } catch { errorMessage = error.localizedDescription }
+    }
+
+    private func pasteMultipleEdits(_ selection: SettingsPasteSelection, urls: [URL]) {
         fileActionBusy = true
         Task {
             defer { fileActionBusy = false }
-            do {
-                try await RecipeStore.shared.delete(for: url)
-                pendingEdits.remove(url)
-                if url.standardizedFileURL == recipeSourceURL?.standardizedFileURL {
-                    // Explicit deletion has been confirmed; do not stash the discarded mapping again.
-                    baselineRecipe = currentRecipe
-                    load(url, resetEdits: true)
-                }
-            } catch { errorMessage = error.localizedDescription }
+            var failures: [String] = []
+            // Apply the current image last: RAW changes may start an editor reload.
+            for url in urls where url.standardizedFileURL != recipeSourceURL?.standardizedFileURL {
+                do {
+                    let target = try await BrowserFileDevelopment.load(url,
+                        override: pendingEdits.entry(for: url)?.recipe, bins: histogramBins)
+                    applyPastedSettings(selection, target: target)
+                } catch { failures.append("\(url.lastPathComponent): \(error.localizedDescription)") }
+            }
+            if urls.contains(where: { $0.standardizedFileURL == recipeSourceURL?.standardizedFileURL }) {
+                applyPastedSettings(selection, target: nil)
+            }
+            if !failures.isEmpty { errorMessage = failures.joined(separator: "\n") }
+        }
+    }
+
+    private func deleteEdits(for urls: [URL]) {
+        fileActionBusy = true
+        Task {
+            defer { fileActionBusy = false }
+            var failures: [String] = []
+            var reloadCurrent = false
+            for url in urls {
+                do {
+                    try await RecipeStore.shared.delete(for: url)
+                    pendingEdits.remove(url)
+                    if url.standardizedFileURL == recipeSourceURL?.standardizedFileURL { reloadCurrent = true }
+                } catch { failures.append("\(url.lastPathComponent): \(error.localizedDescription)") }
+            }
+            if reloadCurrent, let url = recipeSourceURL {
+                baselineRecipe = currentRecipe
+                load(url, resetEdits: true)
+            }
+            if !failures.isEmpty { errorMessage = failures.joined(separator: "\n") }
         }
     }
 
@@ -931,6 +992,7 @@ private struct LinearHistogram: View {
     let resetTone: () -> Void
     @Binding var showingSDR: Bool
     let hoverPosition: CGPoint?
+    var onWhitePointEditingChanged: (Bool) -> Void = { _ in }
     @State private var hoverSampler = ScopeHoverSampler()
     @State private var hoveredRGB: SIMD3<Double>?
     @State private var sampledHover: HistogramHoverRequest?
@@ -1030,7 +1092,7 @@ private struct LinearHistogram: View {
                 .allowsHitTesting(false)
             }
             .overlay {
-                if !showingSDR { HistogramPoints(mapping: $mapping) }
+                if !showingSDR { HistogramPoints(mapping: $mapping, onWhitePointEditingChanged: onWhitePointEditingChanged) }
             }
             .frame(height: 190)
             .onGeometryChange(for: Int.self) { geometry in
@@ -1129,6 +1191,7 @@ private struct SDRHistogramRequest: Equatable {
 
 private struct ToneLocatorRequest: Equatable {
     let active: Bool
+    let clipping: Bool
     let mapping: ToneMapping
     let revision: UUID
     let hdr: Bool

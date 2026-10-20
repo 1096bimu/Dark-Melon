@@ -2,6 +2,7 @@ import SwiftUI
 
 struct HistogramPoints: View {
     @Binding var mapping: ToneMapping
+    var onWhitePointEditingChanged: (Bool) -> Void = { _ in }
     @State private var draggingBlack: Bool?
 
     var body: some View {
@@ -39,9 +40,14 @@ struct HistogramPoints: View {
                 if draggingBlack == nil {
                     let start = value.startLocation.x / width
                     draggingBlack = abs(start - mapping.black) < abs(start - mapping.white)
+                    if draggingBlack == false { onWhitePointEditingChanged(true) }
                 }
                 update(value.location.x / width, black: draggingBlack == true)
-            }.onEnded { _ in draggingBlack = nil })
+            }.onEnded { _ in
+                onWhitePointEditingChanged(false)
+                draggingBlack = nil
+            })
+            .onDisappear { onWhitePointEditingChanged(false) }
         }
     }
 
@@ -146,7 +152,7 @@ struct SlopeEditor: View {
                     ControlInfo(.hdrGain)
                     if !mapping.hdrEnabled { Text("Off").foregroundStyle(.secondary) }
                     else { TextField("HDR Gain", value: Binding(get: { mapping.hdrGain }, set: { value in
-                              mapping.hdrGain = value.isFinite ? min(5, max(1, value)) : 1
+                              mapping.hdrGain = value.isFinite ? min(5, max(1, value)) : 1.01
                               onHDRGainAdjustment()
                           }),
                               format: .number.precision(.fractionLength(2)))
@@ -159,8 +165,8 @@ struct SlopeEditor: View {
                 HStack {
                     Image(systemName: "sun.max")
                         .frame(width: 22).accessibilityHidden(true)
-                    Slider(value: Binding(get: { mapping.hdrGain }, set: { value in
-                        mapping.hdrGain = value < 0.5 ? 0 : min(5, max(1, value))
+                    Slider(value: Binding(get: { mapping.hdrEnabled ? max(1.01, mapping.hdrGain) : 0 }, set: { value in
+                        mapping.hdrGain = value < 0.505 ? 0 : min(5, max(1.01, value))
                         onHDRGainAdjustment()
                     }), in: 0...5) { Text("HDR Gain") }
                         .labelsHidden()

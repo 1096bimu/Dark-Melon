@@ -112,3 +112,9 @@ Development edits are stored in XMP sidecars; see [DevelopmentSettings.md](Devel
 ## Third-party code
 
 The film grain implementation is adapted from [cinegrain2](https://github.com/mr-berndt/cinegrain2). Its attribution is in `FilmGrain.swift`, and its GPL-3.0-or-later license is included in `Dark Melon/Cinegrain2-LICENSE.txt`.
+
+## License
+
+Dark Melon source code is licensed under the **GNU General Public License version 3 (GPL-3.0-only)**. Copyright © 2026 Dark Melon contributors. See [LICENSE](LICENSE) for the full terms. This software is distributed without warranty.
+
+The film grain implementation is adapted from [cinegrain2](https://github.com/mr-berndt/cinegrain2), copyright © 2026 mr-berndt, licensed under **GPL-3.0-or-later**. Its original attribution and bundled license are retained. Dark Melon's adaptation adds image-processing integration and adjustable grain controls.

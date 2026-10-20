@@ -3,11 +3,15 @@ import Combine
 import UniformTypeIdentifiers
 import Observation
 import ImageIO
+#if os(macOS)
+import AppKit
+#endif
 
 nonisolated struct BrowserEntry: Identifiable, Sendable {
     let url: URL
     let isFolder: Bool
     var hasSavedSettings = false
+    var isRAW = false
     var id: URL { url }
 }
 
@@ -17,8 +21,12 @@ final class ImageBrowserModel {
     var root: URL?
     var directory: URL?
     var entries: [BrowserEntry] = []
+    var rawOnly = false
+    var visibleFiles: [BrowserEntry] {
+        entries.filter { !$0.isFolder && (!rawOnly || $0.isRAW) }
+    }
     var batchFiles: [BrowserEntry] {
-        let files = entries.filter { !$0.isFolder }
+        let files = visibleFiles
         return files.filter(\.hasSavedSettings) + files.filter { !$0.hasSavedSettings }
     }
     var folderCounts: [URL: Int] = [:]
@@ -67,7 +75,8 @@ final class ImageBrowserModel {
                         let folder = values.isDirectory == true && values.isPackage != true
                         guard folder || values.contentType?.conforms(to: .image) == true else { return nil }
                         return BrowserEntry(url: item, isFolder: folder,
-                            hasSavedSettings: !folder && names.contains(RecipeStore.sidecarURL(for: item).lastPathComponent))
+                            hasSavedSettings: !folder && names.contains(RecipeStore.sidecarURL(for: item).lastPathComponent),
+                            isRAW: values.contentType?.conforms(to: .rawImage) == true)
                     }.sorted {
                         if $0.isFolder != $1.isFolder { return $0.isFolder }
                         return $0.url.lastPathComponent.localizedStandardCompare($1.url.lastPathComponent) == .orderedAscending
@@ -123,8 +132,45 @@ struct ImageFileBrowser: View {
     var selection: Binding<Set<URL>>? = nil
     var changeDirectory: ((URL, Bool) -> Void)? = nil
     var fileAction: ((BrowserFileAction, URL) -> Void)? = nil
+    var multipleFileAction: ((BrowserFileAction, [URL]) -> Void)? = nil
     var hasPendingEdit: ((URL) -> Bool)? = nil
     @State private var choosingFolder = false
+    @State private var selectedFiles: Set<URL> = []
+    @State private var selectionAnchor: URL?
+
+    private var activeSelection: Set<URL> { selection?.wrappedValue ?? selectedFiles }
+    private func selectFile(_ url: URL, ordered: [URL]) {
+        var selected = activeSelection
+        #if os(macOS)
+        let flags = NSEvent.modifierFlags
+        let command = flags.contains(.command), shift = flags.contains(.shift)
+        if selection == nil, selectionAnchor == nil, let selectedURL, ordered.contains(selectedURL) {
+            selected.insert(selectedURL)
+        }
+        if shift, let anchor = selectionAnchor ?? selectedURL,
+           let a = ordered.firstIndex(of: anchor), let b = ordered.firstIndex(of: url) {
+            let range = Set(ordered[min(a,b)...max(a,b)])
+            selected = command ? selected.union(range) : range
+        } else if command {
+            if selected.contains(url) { selected.remove(url) } else { selected.insert(url) }
+            selectionAnchor = url
+        } else {
+            selected = [url]; selectionAnchor = url
+        }
+        if let selection { selection.wrappedValue = selected } else { selectedFiles = selected }
+        if selection == nil && !command && !shift { open(url) }
+        #else
+        if let selection {
+            if selected.contains(url) { selected.remove(url) } else { selected.insert(url) }
+            selection.wrappedValue = selected
+        } else { selectedFiles = [url]; open(url) }
+        #endif
+    }
+
+    private func contextFiles(_ url: URL, ordered: [URL]) -> [URL] {
+        activeSelection.contains(url) ? ordered.filter { activeSelection.contains($0) } : [url]
+    }
+
 
     private func navigate(_ url: URL, choose: Bool = false) {
         if let changeDirectory { changeDirectory(url, choose) }
@@ -138,7 +184,7 @@ struct ImageFileBrowser: View {
         // layout happened while the directory was still empty.
         let entries = model.entries
         let folders = selection == nil ? entries.filter(\.isFolder) : []
-        let files = selection == nil ? entries.filter { !$0.isFolder } : model.batchFiles
+        let files = selection == nil ? model.visibleFiles : model.batchFiles
         let folderCounts = model.folderCounts
         let listingRevision = model.listingRevision
         let returnFolder = model.returnFolder
@@ -200,14 +246,11 @@ struct ImageFileBrowser: View {
                             LazyVGrid(columns: [GridItem(.adaptive(minimum: 80), spacing: 8)], spacing: 8) {
                                 ForEach(files) { entry in
                                     Button {
-                                        if let selection {
-                                            if selection.wrappedValue.contains(entry.url) { selection.wrappedValue.remove(entry.url) }
-                                            else { selection.wrappedValue.insert(entry.url) }
-                                        } else { open(entry.url) }
+                                        selectFile(entry.url, ordered: files.map(\.url))
                                     } label: {
                                         FileThumbnail(url: entry.url)
                                             .padding(4)
-                                            .background((selection?.wrappedValue.contains(entry.url) ?? (selectedURL == entry.url)) ? Color.accentColor.opacity(0.25) : .clear,
+                                            .background((activeSelection.contains(entry.url) || (selectionAnchor == nil && activeSelection.isEmpty && selectedURL == entry.url)) ? Color.accentColor.opacity(0.25) : .clear,
                                                         in: RoundedRectangle(cornerRadius: 6))
                                             .overlay {
                                                 if entry.hasSavedSettings {
@@ -216,28 +259,28 @@ struct ImageFileBrowser: View {
                                                         .allowsHitTesting(false)
                                                 }
                                             }
-                                            .overlay(alignment: .topTrailing) {
-                                                if let selection {
-                                                    Image(systemName: selection.wrappedValue.contains(entry.url) ? "checkmark.circle.fill" : "circle")
-                                                        .foregroundStyle(selection.wrappedValue.contains(entry.url) ? Color.accentColor : .secondary)
-                                                        .background(.regularMaterial, in: Circle())
-                                                        .padding(5)
-                                                }
-                                            }
+
                                     }
                                     .buttonStyle(.plain)
                                     .help(entry.url.lastPathComponent + (entry.hasSavedSettings ? " · Saved development settings" : ""))
                                     .accessibilityValue(entry.hasSavedSettings ? "Saved development settings" : "")
                                     .contextMenu {
                                         if let fileAction {
-                                            Button("Delete Edit", role: .destructive) { fileAction(.deleteEdit, entry.url) }
-                                                .disabled(!entry.hasSavedSettings && !(hasPendingEdit?(entry.url) ?? false))
+                                            let targets = contextFiles(entry.url, ordered: files.map(\.url))
+                                            Button(targets.count > 1 ? "Delete Edits (\(targets.count))" : "Delete Edit", role: .destructive) {
+                                                if let multipleFileAction { multipleFileAction(.deleteEdit, targets) }
+                                                else { fileAction(.deleteEdit, entry.url) }
+                                            }
+                                            .disabled(!files.contains { targets.contains($0.url) && ($0.hasSavedSettings || (hasPendingEdit?($0.url) ?? false)) })
                                             #if os(macOS)
                                             Button("Show in Finder") { fileAction(.showInFinder, entry.url) }
                                             #endif
                                             Divider()
                                             Button("Copy Edit") { fileAction(.copyEdit, entry.url) }
-                                            Button("Paste Edit…") { fileAction(.pasteEdit, entry.url) }
+                                            Button(targets.count > 1 ? "Paste Edit to \(targets.count) Files…" : "Paste Edit…") {
+                                                if let multipleFileAction { multipleFileAction(.pasteEdit, targets) }
+                                                else { fileAction(.pasteEdit, entry.url) }
+                                            }
                                             Divider()
                                             Button("Export…") { fileAction(.export, entry.url) }
                                         }
@@ -264,7 +307,7 @@ struct ImageFileBrowser: View {
                 .overlay {
                     if model.loading { ProgressView() }
                     else if let error = model.error { Text(error).font(.caption).padding() }
-                    else if files.isEmpty && folders.isEmpty { Text(selection == nil ? "No images or folders" : "No images with saved settings").foregroundStyle(.secondary) }
+                    else if files.isEmpty && folders.isEmpty { Text(model.rawOnly ? "No RAW images" : "No images").foregroundStyle(.secondary) }
                 }
             } else {
                 Spacer()
@@ -274,11 +317,34 @@ struct ImageFileBrowser: View {
                 Spacer()
             }
         }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            HStack {
+                Picker("File filter", selection: Binding(get: { model.rawOnly }, set: { value in
+                    model.rawOnly = value
+                    let visible = Set(model.visibleFiles.map(\.url))
+                    selectedFiles.formIntersection(visible)
+                    if let selection { selection.wrappedValue.formIntersection(visible) }
+                    selectionAnchor = nil
+                })) {
+                    Text("ALL").tag(false)
+                    Text("RAW").tag(true)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                Spacer()
+            }
+            .padding(10)
+            .background(.bar)
+        }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.bar)
         .onReceive(NotificationCenter.default.publisher(for: .developmentSettingsChanged)
             .receive(on: DispatchQueue.main)) { notification in
             if let url = notification.object as? URL { model.refreshSavedSettingsFlag(for: url) }
+        }
+        .onChange(of: model.directory) { _, _ in
+            selectedFiles.removeAll(); selectionAnchor = nil
+            selection?.wrappedValue.removeAll()
         }
         .fileImporter(isPresented: $choosingFolder, allowedContentTypes: [.folder]) { result in
             switch result {

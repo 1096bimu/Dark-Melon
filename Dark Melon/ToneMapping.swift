@@ -17,7 +17,7 @@ nonisolated struct ToneMapping: Codable, Equatable, Sendable {
     var peakPosition: Double { black + tonePosition * (white - black) }
     var concentration = 0.2
     var hdrTarget = 4.0
-    var hdrGain = 1.0
+    var hdrGain = 1.01
     var hdrRolloff = 0.0
     var hdrEnabled: Bool { hdrGain > 0 }
     /// Rendering headroom and effect ceilings must cover the multiplied curve.
@@ -43,6 +43,7 @@ nonisolated struct ToneMapping: Codable, Equatable, Sendable {
         let join = peakPosition
         let gain = sdr.value(at: join) + sdrSlope(at: join, curve: sdr) * (1 - join)
         hdrTarget = min(20, max(1, gain))
+        if gain < 2 { hdrGain = 0 }
     }
 
     private func sdrSlope(at join: Double, curve sdr: ToneCurve) -> Double {

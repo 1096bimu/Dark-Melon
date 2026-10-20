@@ -33,6 +33,12 @@ nonisolated struct WhiteBalanceTarget: Codable, Sendable {
         }
     }
 
+    init?(chromaticity: CGPoint) {
+        x = chromaticity.x
+        y = chromaticity.y
+        guard isValid else { return nil }
+    }
+
     init?(gains: WhiteBalance, reference: CGPoint, space: ProcessingColorSpace) {
         let rgb = SIMD3(gains.red, gains.green, gains.blue)
         guard (0..<3).allSatisfy({ rgb[$0].isFinite && rgb[$0] > 0 }) else { return nil }
