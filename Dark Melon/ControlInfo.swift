@@ -3,15 +3,15 @@ import SwiftUI
 /// Short, accessible explanations shared by control headings and graph titles.
 struct ControlInfo: View {
     enum Topic {
-        case shadowBias, tone, contrast, hdrContrast, hdrGain, autoTones, saturation, luminanceSaturation
+        case shadowBias, tone, contrast, hdrGain, hdrRolloff, autoTones, saturation, luminanceSaturation
 
         var title: String {
             switch self {
             case .shadowBias: "Shadow Bias"
             case .tone: "Tone"
             case .contrast: "Contrast"
-            case .hdrContrast: "HDR Contrast"
             case .hdrGain: "HDR Gain"
+            case .hdrRolloff: "HDR Rolloff"
             case .autoTones: "Auto Tones"
             case .saturation: "Saturation → Saturation"
             case .luminanceSaturation: "Luminance → Saturation"
@@ -25,10 +25,10 @@ struct ControlInfo: View {
                 "Tone indicates the range of luminance that is of the most interest, usually set to skin tones, or 50% grey. Its luminance is generally protected when adjusting Contrast."
             case .contrast:
                 "Contrast indicates the level of contrast centered around the luminance indicated by Tone."
-            case .hdrContrast:
-                "HDR Contrast is the same as Contrast but only affects the HDR output."
+            case .hdrRolloff:
+                "Lowers HDR white below the calculated target while preserving the starting tangent. Zero keeps a straight continuation; 100% ends flat. HDR Gain multiplies the result and can be increased if the curves cross."
             case .hdrGain:
-                "HDR Gain indicates the target brightness in multiples of SDR brightness. Standard SDR is supposed to be 100 nits, which means a gain of 2.0 would target 200 nits of HDR brightness."
+                "HDR Gain multiplies the entire HDR curve. 1× keeps the automatically calculated rendition, 2× doubles its linear brightness, and 0 turns HDR off. Tone, Contrast, and white point update the hidden HDR Target without changing this multiplier."
             case .autoTones:
                 "Auto Tones attempts to adjust the other settings based on a user-selected shade of interest, usually set to skin tones. Select shadows for lighter skin tones and highlights for darker skin tones."
             case .saturation:

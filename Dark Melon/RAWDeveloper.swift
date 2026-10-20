@@ -174,8 +174,7 @@ actor RAWDeveloper {
         var automatic = ToneMapping()
         guard development.isRAW else {
             automatic.concentration = 0
-            automatic.hdrConcentrationOffset = 0
-            if development.sourceHeadroom <= 1 { automatic.hdrMax = 1 }
+            if development.sourceHeadroom <= 1 { automatic.hdrGain = 0 }
             return automatic
         }
         let sourceHistogram: HistogramData
@@ -192,9 +191,9 @@ actor RAWDeveloper {
         try Task.checkCancellation()
         if let statistics = SDRStatistics(counts: result.sdrLuma),
            let contrast = AutoContrast.suggestion(median: statistics.median, mapping: automatic, space: colorSpace) {
-            automatic.setContrastPreservingHDR(contrast)
+            automatic.concentration = contrast
         }
-        automatic.setAutomaticHDRGain()
+        automatic.setAutomaticHDRTarget()
         return automatic
     }
 

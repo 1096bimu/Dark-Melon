@@ -16,94 +16,72 @@ nonisolated struct ToneMapping: Codable, Equatable, Sendable {
     var tonePosition = 0.0
     var peakPosition: Double { black + tonePosition * (white - black) }
     var concentration = 0.2
-    var hdrMax = 4.0
-    var hdrEnabled: Bool { hdrMax > 1 }
-    var hdrConcentrationOffset = -0.2
-
-    var hdrConcentration: Double {
-        min(1, max(-1, concentration + hdrConcentrationOffset))
-    }
-    /// The HDR slider is an offset; compensate it when changing SDR contrast.
-    mutating func setContrastPreservingHDR(_ value: Double) {
-        let preserved = hdrConcentration
-        concentration = min(1, max(-1, value))
-        hdrConcentrationOffset = preserved - concentration
+    var hdrTarget = 4.0
+    var hdrGain = 1.0
+    var hdrRolloff = 0.0
+    var hdrEnabled: Bool { hdrGain > 0 }
+    /// Rendering headroom and effect ceilings must cover the multiplied curve.
+    var hdrMax: Double {
+        guard hdrEnabled else { return 1 }
+        let start = curve(hdr: false).value(at: peakPosition)
+        let endpoint = hdrHasContinuationRoom
+            ? start + (hdrTarget - start) * (1 - 0.5 * hdrRolloff) : 1
+        return max(1, endpoint * hdrGain)
     }
 
     static let minimumRange = 1.0 / 2048
 
-    /// HDR output scales linearly with gain. On each shared piecewise-linear
-    /// interval SDR/HDR is monotonic, so the maximum occurs at a knot.
-    var minimumNonCrossingHDRGain: Double {
-        var reference = self
-        reference.hdrMax = 2 // Keep the HDR branch active; divide out this gain below.
-        let sdr = curve(hdr: false), hdr = reference.curve(hdr: true)
-        var required = 1.0
-        for curve in [sdr, hdr] {
-            for index in curve.values.indices {
-                let input = curve.black + (curve.white - curve.black)
-                    * Double(index) / Double(curve.values.count - 1)
-                let target = sdr.value(at: input) - 0.000001 // Same tolerance as the warning.
-                guard target > 0 else { continue }
-                let unitHDR = hdr.value(at: input) / 2
-                guard unitHDR > 0 else { return .infinity }
-                required = max(required, target / unitHDR)
-            }
-        }
-        // Avoid a warning caused solely by floating-point rounding at the limiting knot.
-        return required * (1 + 1e-12)
-    }
-
-    mutating func setAutomaticHDRGain() {
-        hdrMax = min(20, max(2, minimumNonCrossingHDRGain))
-    }
+    var hdrHasContinuationRoom: Bool { peakPosition < 1 - 1e-12 }
 
     var hdrFallsBelowSDR: Bool {
         hdrEnabled && curve(hdr: true).fallsBelow(curve(hdr: false))
     }
 
-    /// Search both directions because changing beta concentration does not move
-    /// the entire curve in one direction. Preserve gain and SDR controls.
-    mutating func fitHDRContrastAboveSDR() {
-        guard hdrEnabled else { return }
+    /// Hidden endpoint of the unscaled HDR continuation.
+    mutating func setAutomaticHDRTarget() {
         let sdr = curve(hdr: false)
-        guard curve(hdr: true).fallsBelow(sdr) else { return }
-        let original = hdrConcentration
-        var candidate = self
-        func safe(_ concentration: Double) -> Bool {
-            candidate.hdrConcentrationOffset = concentration - self.concentration
-            return !candidate.curve(hdr: true).fallsBelow(sdr)
-        }
-        var closest: Double?
-        // Find the first safe bracket on each side, then refine its boundary.
-        for direction in [-1.0, 1.0] {
-            var failing = original
-            for step in 1...512 {
-                let value = min(1, max(-1, original + direction * Double(step) / 256))
-                if value == failing { break }
-                if let closest, abs(value-original) - 1.0/256 > abs(closest-original) { break }
-                if safe(value) {
-                    var passing = value
-                    for _ in 0..<24 {
-                        let middle = (failing + passing) / 2
-                        if safe(middle) { passing = middle } else { failing = middle }
-                    }
-                    if closest == nil || abs(passing-original) < abs(closest!-original) { closest = passing }
-                    break
-                }
-                failing = value
+        let join = peakPosition
+        let gain = sdr.value(at: join) + sdrSlope(at: join, curve: sdr) * (1 - join)
+        hdrTarget = min(20, max(1, gain))
+    }
+
+    private func sdrSlope(at join: Double, curve sdr: ToneCurve) -> Double {
+        // Use the actual sampled SDR segment's slope, including its left-hand
+        // slope at white (the clipped segment to its right is not the tangent).
+        let position = min(1, max(0, (join - black) / (white - black)))
+        let index = min(sdr.values.count - 2, Int(position * Double(sdr.values.count - 1)))
+        return (sdr.values[index + 1] - sdr.values[index])
+            * Double(sdr.values.count - 1) / (white - black)
+    }
+
+    private func hdrCurve() -> ToneCurve {
+        let sdr = curve(hdr: false)
+        let join = peakPosition
+        let start = sdr.value(at: join)
+        let width = 1 - join
+        let count = 2000
+        let values = (0...count).map { index -> Double in
+            let input = black + (1 - black) * Double(index) / Double(count)
+            let base: Double
+            if input <= join || width <= 1e-12 {
+                base = sdr.value(at: input)
+            } else {
+                let t = (input - join) / width
+                // The slope declines from its starting value to zero at full rolloff.
+                base = start + (hdrTarget - start) * (t - 0.5 * hdrRolloff * t * t)
             }
+            return base * hdrGain
         }
-        if let closest { hdrConcentrationOffset = closest - concentration }
+        return ToneCurve(values: values, black: black, white: 1)
     }
 
     func curve(hdr: Bool) -> ToneCurve {
-        let hdr = hdr && hdrEnabled
-        let upperInput = hdr ? 1.0 : white
-        let outputMax = hdr ? hdrMax : 1.0
+        if hdr && hdrEnabled { return hdrCurve() }
+        let upperInput = white
+        let outputMax = 1.0
         let span = max(Self.minimumRange, upperInput - black)
         let count = 2000
-        let effectiveConcentration = hdr ? hdrConcentration : concentration
+        let effectiveConcentration = concentration
         guard effectiveConcentration != 0 else {
             return ToneCurve(values: (0...count).map { Double($0) / Double(count) * outputMax },
                              black: black, white: upperInput)

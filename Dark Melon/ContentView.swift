@@ -257,6 +257,9 @@ struct ContentView: View {
             .onChange(of: recipeSourceURL) { _, _ in
                 if tutorial.active { tutorial.resetForImage() }
             }
+            .onChange(of: autoTones) { _, enabled in
+                if enabled { applyAutoTones() }
+            }
             .onChange(of: exportSettings) { _, settings in settings.remember() }
             .onChange(of: mapping.blackAndWhite.isEnabled) { _, _ in
                 pickingWhiteBalance = false
@@ -283,9 +286,6 @@ struct ContentView: View {
             }
             .onChange(of: mapping.white) { _, _ in
                 if !loading { hdrPreview = false }
-            }
-            .onChange(of: mapping.hdrMax) { _, _ in
-                if !loading { hdrPreview = mapping.hdrEnabled }
             }
             .task(id: ToneLocatorRequest(active: adjustingTone, mapping: previewMapping,
                                          revision: previewRevision, hdr: hdrPreview)) {
@@ -318,8 +318,8 @@ struct ContentView: View {
                         guard mapping == renderedMapping, self.development?.id == development.id else { return }
                         if let statistics = SDRStatistics(counts: result.sdrLuma),
                            let contrast = AutoContrast.suggestion(median: statistics.median, mapping: mapping, space: colorSpace) {
-                            mapping.setContrastPreservingHDR(contrast)
-                            mapping.setAutomaticHDRGain()
+                            mapping.concentration = contrast
+                            mapping.setAutomaticHDRTarget()
                             baselineRecipe = currentRecipe
                         }
                     }
@@ -345,7 +345,7 @@ struct ContentView: View {
                         // Do not overwrite edits made while the asynchronous histogram loaded.
                         if mapping == pending.mapping, let white = result.overlapWhitePoint {
                             mapping.white = min(1, max(mapping.black + ToneMapping.minimumRange, white))
-                            mapping.setAutomaticHDRGain()
+                            mapping.setAutomaticHDRTarget()
                             baselineRecipe = currentRecipe
                             pendingAutoContrast = AutoWhiteRequest(sourceID: development.id, mapping: mapping)
                         } else if mapping != pending.mapping {
@@ -535,11 +535,9 @@ struct ContentView: View {
                     }
                 }
                 if resetEdits {
-                    if initializeEdits, loaded.isRAW { mapping.setAutomaticHDRGain() }
                     if initializeEdits, !loaded.isRAW {
                         mapping.concentration = 0
-                        mapping.hdrConcentrationOffset = 0
-                        if loaded.sourceHeadroom <= 1 { mapping.hdrMax = 1 }
+                        if loaded.sourceHeadroom <= 1 { mapping.hdrGain = 0 }
                     }
                     hdrPreview = mapping.hdrEnabled
                 }
@@ -676,21 +674,26 @@ struct ContentView: View {
                         hoverPosition: hoveredPreviewPixel)
     }
 
+    private func applyAutoTones() {
+        guard autoTones, development != nil, !loading else { return }
+        pendingAutoWhite = nil
+        pendingAutoContrast = nil
+        mapping = ToneSampleWhitePoint.automaticTones(mapping: mapping, space: colorSpace)
+        mapping.setAutomaticHDRTarget()
+    }
+
     private var tonePanel: some View {
     VStack(spacing: 0) {
         SlopeEditor(mapping: $mapping, autoTones: $autoTones,
            onToneChanged: { tutorial.record(.tone) },
            onContrastChanged: { tutorial.record(.contrast) },
            onContrastAdjustment: { hdrPreview = false },
-           onHDRContrastAdjustment: { hdrPreview = mapping.hdrEnabled }) { editing in
+           onHDRGainAdjustment: { hdrPreview = mapping.hdrEnabled }) { editing in
             adjustingTone = editing
             if !editing {
                 toneLocatorImage = nil
-                if autoTones, development != nil, !loading {
-                    pendingAutoWhite = nil
-                    pendingAutoContrast = nil
-                    mapping = ToneSampleWhitePoint.automaticTones(mapping: mapping, space: colorSpace)
-                }
+                applyAutoTones()
+                if development != nil, !loading { mapping.setAutomaticHDRTarget() }
             }
         }
         Divider()

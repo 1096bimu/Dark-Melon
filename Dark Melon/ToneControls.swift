@@ -50,6 +50,7 @@ struct HistogramPoints: View {
             mapping.black = max(0, min(mapping.white - ToneMapping.minimumRange, value))
         } else {
             mapping.white = min(1, max(mapping.black + ToneMapping.minimumRange, value))
+            mapping.setAutomaticHDRTarget()
         }
     }
 }
@@ -60,7 +61,7 @@ struct SlopeEditor: View {
     var onToneChanged: () -> Void = {}
     var onContrastChanged: () -> Void = {}
     var onContrastAdjustment: () -> Void = {}
-    var onHDRContrastAdjustment: () -> Void = {}
+    var onHDRGainAdjustment: () -> Void = {}
     var onToneEditingChanged: (Bool) -> Void = { _ in }
     @State private var showLowContrastTip = false
 
@@ -76,7 +77,7 @@ struct SlopeEditor: View {
                         #if os(macOS)
                         .toggleStyle(.checkbox)
                         #endif
-                        .help("Adjust white point and HDR when you release the Tone slider.")
+                        .help("Adjust white point when you release the Tone slider. The hidden HDR Target follows Tone and Contrast adjustments.")
                     ControlInfo(.autoTones)
                 }
                 HStack {
@@ -86,6 +87,7 @@ struct SlopeEditor: View {
                                       set: {
                                           if mapping.tonePosition != 1 - $0 { onToneChanged() }
                                           mapping.tonePosition = 1 - $0
+                                          mapping.setAutomaticHDRTarget()
                                           showLowContrastTip = abs(mapping.concentration) <= 0.1
                                       }),
                        in: 0...1) {
@@ -114,7 +116,8 @@ struct SlopeEditor: View {
                     Slider(value: Binding(get: { mapping.concentration },
                                           set: {
                                               if mapping.concentration != $0 { onContrastChanged() }
-                                              mapping.setContrastPreservingHDR($0)
+                                              mapping.concentration = $0
+                                              mapping.setAutomaticHDRTarget()
                                               onContrastAdjustment()
                                           }), in: -1...1) { Text("Contrast") }
                         onEditingChanged: { editing in
@@ -124,32 +127,17 @@ struct SlopeEditor: View {
                 }
                     .help("Zero is linear. Negative values reduce contrast around the tone position.")
             }
-            VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    Text("HDR Contrast")
-                    ControlInfo(.hdrContrast)
-                    Text(mapping.hdrConcentrationOffset,
-                         format: .percent.precision(.fractionLength(0)).sign(strategy: .always()))
-                }
-                HStack {
-                    Image(systemName: "circle.lefthalf.filled.righthalf.striped.horizontal")
-                        .frame(width: 22).accessibilityHidden(true)
-                    Slider(value: Binding(get: { mapping.hdrConcentrationOffset }, set: {
-                        mapping.hdrConcentrationOffset = $0
-                        onHDRContrastAdjustment()
-                    }), in: -2...2) { Text("HDR Contrast") }
-                        onEditingChanged: { editing in
-                            if editing { onHDRContrastAdjustment() }
-                        }
-                        .labelsHidden()
-                        .disabled(!mapping.hdrEnabled)
-                }
-                    .help("Offset from Contrast for the HDR curve. Adjusts automatically when Contrast changes to preserve the HDR curve.")
-                if mapping.hdrFallsBelowSDR {
+            Group {
+                if mapping.hdrEnabled && !mapping.hdrHasContinuationRoom {
+                    Label("No room for HDR continuation. Move Tone or the SDR white point below 1.", systemImage: "exclamationmark.triangle")
+                        .font(.caption).foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else if mapping.hdrFallsBelowSDR {
                     Label("HDR cannot be darker than SDR. The curves cross.", systemImage: "exclamationmark.triangle")
                         .font(.caption)
                         .foregroundStyle(.orange)
                         .fixedSize(horizontal: false, vertical: true)
+                        .help("No HDR pixel can be darker than its SDR counterpart in a gain map based file. PQ and other direct HDR formats are not affected. You may add a small amount of HDR Gain to fix this issue.")
                 }
             }
             VStack(alignment: .leading, spacing: 6) {
@@ -157,25 +145,43 @@ struct SlopeEditor: View {
                     Text("HDR Gain")
                     ControlInfo(.hdrGain)
                     if !mapping.hdrEnabled { Text("Off").foregroundStyle(.secondary) }
-                    else { TextField("HDR Gain", value: $mapping.hdrMax,
+                    else { TextField("HDR Gain", value: Binding(get: { mapping.hdrGain }, set: { value in
+                              mapping.hdrGain = value.isFinite ? min(5, max(1, value)) : 1
+                              onHDRGainAdjustment()
+                          }),
                               format: .number.precision(.fractionLength(2)))
                         .labelsHidden()
                         .textFieldStyle(.roundedBorder)
                         .frame(width: 70)
-                        .onChange(of: mapping.hdrMax) { _, value in
-                            mapping.hdrMax = value.isFinite ? (value < 1.5 ? 1 : min(20, max(2, value))) : 4
-                        }
+                        Text("×").foregroundStyle(.secondary)
                     }
                 }
                 HStack {
                     Image(systemName: "sun.max")
                         .frame(width: 22).accessibilityHidden(true)
-                    Slider(value: Binding(get: { mapping.hdrMax }, set: { value in
-                        mapping.hdrMax = value < 1.5 ? 1 : max(2, value)
-                    }), in: 1...20) { Text("HDR Gain") }
+                    Slider(value: Binding(get: { mapping.hdrGain }, set: { value in
+                        mapping.hdrGain = value < 0.5 ? 0 : min(5, max(1, value))
+                        onHDRGainAdjustment()
+                    }), in: 0...5) { Text("HDR Gain") }
                         .labelsHidden()
                 }
             }
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text("HDR Rolloff")
+                    ControlInfo(.hdrRolloff)
+                    Text(mapping.hdrRolloff, format: .percent.precision(.fractionLength(0)))
+                }
+                HStack {
+                    Image(systemName: "line.diagonal").frame(width: 22).accessibilityHidden(true)
+                    Slider(value: Binding(get: { mapping.hdrRolloff }, set: {
+                        mapping.hdrRolloff = $0
+                        onHDRGainAdjustment()
+                    }), in: 0...1) { Text("HDR Rolloff") }
+                        .labelsHidden()
+                }
+            }
+            .disabled(!mapping.hdrEnabled)
         }
         .font(.callout.monospacedDigit())
         .padding()
@@ -207,7 +213,7 @@ struct HistogramToneCurve: View {
             context.stroke(reference, with: .color(.white.opacity(0.5)),
                            style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
 
-            for (curve, color) in (mapping.hdrEnabled ? [(sdrCurve, Color.mint), (hdrCurve, Color.orange)] : [(sdrCurve, Color.mint)]) {
+            for (curve, color) in (mapping.hdrEnabled ? [(hdrCurve, Color.orange), (sdrCurve, Color.mint)] : [(sdrCurve, Color.mint)]) {
                 var path = Path()
                 for index in 0...2000 {
                     let input = Double(index) / 2000
@@ -227,7 +233,7 @@ struct HistogramToneCurve: View {
                 context.fill(Path(ellipseIn: CGRect(x: crossing.x - 3, y: crossing.y - 3,
                                                    width: 6, height: 6)), with: .color(.white))
             }
-            context.draw(Text(mapping.hdrEnabled ? "HDR Gain \(mapping.hdrMax.formatted(.number.precision(.fractionLength(2))))" : "HDR Off")
+            context.draw(Text(mapping.hdrEnabled ? "HDR Output \(mapping.hdrMax.formatted(.number.precision(.fractionLength(2))))" : "HDR Off")
                 .font(.caption2.monospacedDigit()).foregroundStyle(.orange),
                          at: CGPoint(x: size.width - 5, y: 3), anchor: .topTrailing)
             context.draw(Text("1.0 · SDR white").font(.caption2).foregroundStyle(.white),

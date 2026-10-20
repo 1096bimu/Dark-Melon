@@ -21,8 +21,9 @@ nonisolated struct SettingsPasteSelection {
             result.white = source.white
             result.tonePosition = source.tonePosition
             result.concentration = source.concentration
-            result.hdrMax = source.hdrMax
-            result.hdrConcentrationOffset = source.hdrConcentrationOffset
+            result.hdrTarget = source.hdrTarget
+            result.hdrGain = source.hdrGain
+            result.hdrRolloff = source.hdrRolloff
         }
         if whiteBalance {
             result.whiteBalance = source.whiteBalance

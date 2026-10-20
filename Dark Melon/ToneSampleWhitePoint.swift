@@ -10,13 +10,6 @@ nonisolated enum ToneSampleWhitePoint {
         let shade = SIMD3<Double>(repeating: input)
         result.white = adjustedWhite(sample: shade, mapping: mapping, space: space)
         result.tonePosition = min(1, max(0, (input - result.black) / max(ToneMapping.minimumRange, result.white - result.black)))
-        if result.white >= 1 {
-            result.hdrMax = 1
-        } else if result.hdrFallsBelowSDR {
-            result.fitHDRContrastAboveSDR()
-        } else if result.hdrEnabled {
-            result.hdrMax = min(result.hdrMax, max(2, result.minimumNonCrossingHDRGain))
-        }
         return result
     }
 

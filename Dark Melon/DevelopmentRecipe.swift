@@ -16,9 +16,17 @@ nonisolated struct DevelopmentRecipe: Codable, Equatable, Sendable {
 
     static func decode(_ data: Data) throws -> Self {
         guard data.count <= 256 * 1024,
-              let document = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              var document = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let version = document["version"] as? Int, version == 1 else {
             throw RecipeError.unsupported
+        }
+        // Old HDR Gain was an endpoint, not a multiplier. Keep that endpoint
+        // and use neutral gain; preserve the old Off state.
+        if var mapping = document["mapping"] as? [String: Any],
+           mapping["hdrTarget"] == nil, let old = mapping["hdrMax"] as? Double {
+            mapping["hdrTarget"] = old
+            mapping["hdrGain"] = old > 1 ? 1.0 : 0.0
+            document["mapping"] = mapping
         }
         // Missing fields inherit current defaults; unknown fields are ignored by Codable.
         // This allows additive controls without invalidating existing recipes.
@@ -32,8 +40,10 @@ nonisolated struct DevelopmentRecipe: Codable, Equatable, Sendable {
             }
             return result
         }
-        let result = try JSONDecoder().decode(Self.self, from: JSONSerialization.data(withJSONObject: merged(defaults, document)))
+        var result = try JSONDecoder().decode(Self.self, from: JSONSerialization.data(withJSONObject: merged(defaults, document)))
         try result.validate()
+        // Preserve older recipes while bringing their multiplier into the current range.
+        result.mapping.hdrGain = result.mapping.hdrGain == 0 ? 0 : min(5, max(1, result.mapping.hdrGain))
         return result
     }
 
@@ -51,7 +61,7 @@ nonisolated struct DevelopmentRecipe: Codable, Equatable, Sendable {
         guard m.hls.count == 6,
               within(m.black, 0...1), within(m.white, 0...1), m.white - m.black >= ToneMapping.minimumRange * 0.999,
               within(m.tonePosition, 0...1), within(m.concentration, -1...1),
-              within(m.hdrMax, 1...20), within(m.hdrConcentrationOffset, -2...2),
+              within(m.hdrRolloff, 0...1), within(m.hdrTarget, 1...20), within(m.hdrGain, 0...20),
               within(m.clarity, -2...2), within(m.clarityRadius, 15...90),
               within(m.hdf, 0...0.2), within(m.hdfRadius, 50...200),
               within(m.grain.size, 0.2...3), within(m.grain.strength, 0...5), within(m.grain.distribution, 0...1),
