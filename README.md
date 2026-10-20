@@ -57,8 +57,7 @@ Instead of asking you to balance separate Exposure, Shadows, Highlights, Whites,
 
 | Control | Role |
 | --- | --- |
-| Black point | Sets the shared input black level. |
-| White point | Chooses which input level reaches SDR white. |
+| White point | Chooses which input level reaches SDR white. This value alone dictates the clipping point without guess work.|
 | Tone | Moves the region where the curve allocates contrast, relative to the black and SDR white points. |
 | Contrast | Controls how concentrated that allocation is; negative values provide a complementary curve shape for reducing contrast. |
 | HDR Gain | Multiplies the entire HDR rendition, or disables HDR. |
@@ -72,29 +71,17 @@ This is a useful constraint for natural photographic rendering. It makes the tra
 
 Both renditions start from the same linear RGB image and black point. The SDR curve maps the interval between black and white into output 0–1, clipping above the selected white point. **The HDR extension grows out of that SDR curve at Tone**, using its brightness and local slope as the starting reference.
 
-With HDR Rolloff at zero and HDR Gain at 1.00, the HDR curve follows SDR up to Tone, then continues along its tangent toward input 1.0. There is no independent HDR Contrast control to balance: changing Tone, Contrast, or the white point updates the hidden **HDR Target** from that tangent. The target is limited to 1–20, so the tangent relationship is exact before that limit intervenes. An automatically calculated target below 2 turns HDR off.
+HDR Gain is a separate multiplier, not the endpoint: the default 1.01× prevents intersection which is not supported by HDR gain maps. This can be used to make the entire HDR image brighter if needed, but we advise against that approach as HDR should be used exclusively to enhance highlight detail, that was its intended purpose.
 
-HDR Gain is a separate multiplier, not the endpoint: the default 1.01× gives a small lift to the whole HDR rendition; the slider runs from Off to 1.01–5×, and the value field also accepts 1.00. **HDR Output** on the graph shows the resulting endpoint after gain and rolloff.
-
-Rolloff bends the highlight extension downward smoothly. At zero it is straight; at maximum it finishes with zero slope. It retains the starting slope of the unrolled extension while reducing its final brightness. Before the Gain multiplier, the extension is:
-
-```text
-t = input position selected by Tone
-u = (input - t) / (1 - t)
-HDR(input) = SDR(t) + (HDR Target - SDR(t)) × (u - Rolloff × u² / 2)
-```
-
-This applies above Tone; below Tone the base curve follows SDR. If Tone reaches input 1.0, there is no remaining interval to extend. Gain then multiplies the complete HDR curve.
+Rolloff bends the highlight extension downward smoothly. At zero it is straight; at maximum it finishes with zero slope. It retains the starting slope of the unrolled extension while reducing its final brightness. 
 
 For example, the SDR white point can expose a room naturally while bright window detail reaches white. The HDR continuation retains separation in brighter source values and displays it above SDR white, using detail already present in the source. It cannot recover detail clipped during capture or beyond the implemented input endpoint.
 
-**Auto Tones** helps place the selected shade: when you release Tone, it adjusts the white point toward an SDR level of 120–140/255 using the smallest necessary change. A grey preview overlay identifies the affected input range while dragging. Start with skin tones or another shade you want to prioritize, adjust Contrast, and compare the SDR and HDR previews. Fresh SDR imports start with HDR off and neutral contrast.
+**Auto Tones** when enabled, adjusting only the tone value by placing it over neutral skin tone, other settings are automatically adjusted to create a pleasant image in both HDR and SDR with a single input. 
 
 ### Reading the two curves
 
 <img src="docs/images/tone-histogram.png" alt="Updated Dark Melon tone controls: cyan SDR curve levels off at the white point near 0.725; orange HDR extension reaches output 2.44 with Gain 1.01 and Rolloff zero." width="640">
-
-*Tone is 0.205 of the black-to-white interval and Contrast is 21%. The cyan SDR curve reaches output 1.0 at W (about input 0.725); the orange HDR extension continues to input 1.0. HDR Gain is only 1.01×, while the resulting HDR Output is 2.44—the multiplier and final brightness are different quantities.*
 
 The horizontal axis is linear source RGB intensity. The colored histogram fills show pixel counts on a **logarithmic** vertical scale; the overlaid curves use a separate **linear output** scale, reduced to fit HDR headroom. The dashed “1.0 · SDR white” line marks reference white on that curve scale. A curve crossing a histogram trace has no special meaning—the two heights represent different quantities.
 
