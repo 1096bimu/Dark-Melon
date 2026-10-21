@@ -1097,6 +1097,16 @@
         }
       }
     },
+    "Edit": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "编辑"
+          }
+        }
+      }
+    },
     "Edits Saved": {
       "extractionState": "manual",
       "localizations": {
@@ -1115,6 +1125,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "效果"
+          }
+        }
+      }
+    },
+    "Enable HDR Gain to use Halation.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "开启 HDR 增益以使用光晕效果。"
           }
         }
       }
@@ -1300,6 +1320,16 @@
         }
       }
     },
+    "First image": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "首张图像"
+          }
+        }
+      }
+    },
     "Format": {
       "extractionState": "manual",
       "localizations": {
@@ -1416,6 +1446,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "操作教程…"
+          }
+        }
+      }
+    },
+    "Halation": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "光晕"
+          }
+        }
+      }
+    },
+    "Halation radius": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "光晕半径"
           }
         }
       }
@@ -1916,6 +1966,27 @@
         }
       }
     },
+    "Max. %lld × %lld pixels · 100% export": {
+      "extractionState": "stale",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最大 %1$lld × %2$lld 像素 · 100% 导出"
+          }
+        }
+      }
+    },
+    "Max. %lld × %lld pixels · 100%% export": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Max. %1$lld × %2$lld pixels · 100%% export"
+          }
+        }
+      }
+    },
     "Median: %lld": {
       "extractionState": "manual",
       "localizations": {
@@ -2191,6 +2262,16 @@
         }
       }
     },
+    "Paste Edits": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "粘贴编辑"
+          }
+        }
+      }
+    },
     "Paste Settings": {
       "extractionState": "manual",
       "localizations": {
@@ -2358,6 +2439,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "红色"
+          }
+        }
+      }
+    },
+    "Redo": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重做"
           }
         }
       }
@@ -3188,6 +3279,16 @@
         }
       }
     },
+    "Transmission": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "透射率"
+          }
+        }
+      }
+    },
     "Tutorial complete": {
       "extractionState": "manual",
       "localizations": {
@@ -3231,6 +3332,16 @@
         }
       }
     },
+    "Unable to create the Halation processing kernels.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法创建光晕处理内核。"
+          }
+        }
+      }
+    },
     "Unable to render the GPU vectorscope.": {
       "localizations": {
         "zh-Hans": {
@@ -3248,6 +3359,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "不可用"
+          }
+        }
+      }
+    },
+    "Undo": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "撤销"
           }
         }
       }
@@ -3472,52 +3593,68 @@
         }
       }
     },
-    "Halation": {
+    "Vignette": {
+      "extractionState": "manual",
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "光晕"
+            "value": "暗角"
           }
         }
       }
     },
-    "Halation radius": {
+    "Spread": {
+      "extractionState": "manual",
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "光晕半径"
+            "value": "扩散范围"
           }
         }
       }
     },
-    "Enable HDR Gain to use Halation.": {
+    "Vignette amount": {
+      "extractionState": "manual",
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "开启 HDR 增益以使用光晕效果。"
+            "value": "暗角强度"
           }
         }
       }
     },
-    "Unable to create the Halation processing kernels.": {
+    "Vignette spread": {
+      "extractionState": "manual",
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "无法创建光晕处理内核。"
+            "value": "暗角扩散范围"
           }
         }
       }
     },
-    "Transmission": {
+    "%@ stops": {
+      "extractionState": "manual",
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "透射率"
+            "value": "%@ 档"
+          }
+        }
+      }
+    },
+    "Unable to create the Vignette processing kernel.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法创建暗角处理内核。"
           }
         }
       }

@@ -7,6 +7,7 @@ struct EffectsControls: View {
     @Binding var hdfRadius: Double
     @Binding var grain: FilmGrainSettings
     @Binding var halation: HalationSettings
+    @Binding var vignette: VignetteSettings
     let hdrEnabled: Bool
     @Binding var comparing: Bool
 
@@ -16,9 +17,9 @@ struct EffectsControls: View {
                 Text("Effects").font(.headline)
                 Spacer()
                 HoldCompareButton(comparing: $comparing)
-                    .disabled(clarity == 0 && hdf == 0 && grain.strength == 0 && (!hdrEnabled || halation.inputCurve == 0))
-                Button("Reset Effects") { clarity = 0; radius = 30; hdf = 0; hdfRadius = 100; grain = FilmGrainSettings(); halation = HalationSettings() }
-                    .disabled(clarity == 0 && radius == 30 && hdf == 0 && hdfRadius == 100 && grain == FilmGrainSettings() && halation == HalationSettings())
+                    .disabled(clarity == 0 && hdf == 0 && grain.strength == 0 && vignette.amount == 0 && (!hdrEnabled || halation.inputCurve == 0))
+                Button("Reset Effects") { clarity = 0; radius = 30; hdf = 0; hdfRadius = 100; grain = FilmGrainSettings(); halation = HalationSettings(); vignette = VignetteSettings() }
+                    .disabled(clarity == 0 && radius == 30 && hdf == 0 && hdfRadius == 100 && grain == FilmGrainSettings() && halation == HalationSettings() && vignette == VignetteSettings())
             }
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
@@ -101,6 +102,22 @@ struct EffectsControls: View {
             .disabled(!hdrEnabled)
             if !hdrEnabled {
                 Text("Enable HDR Gain to use Halation.").font(.caption).foregroundStyle(.secondary)
+            }
+            Divider()
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Vignette").font(.headline)
+                HStack {
+                    Text("Amount")
+                    Text("\(vignette.amount, format: .number.precision(.fractionLength(2))) stops")
+                        .monospacedDigit().foregroundStyle(.secondary)
+                }
+                Slider(value: $vignette.amount, in: 0...4) { Text("Vignette amount") }.labelsHidden()
+                HStack {
+                    Text("Spread")
+                    Text(vignette.spread, format: .percent.precision(.fractionLength(0)))
+                        .monospacedDigit().foregroundStyle(.secondary)
+                }
+                Slider(value: $vignette.spread, in: 0...1) { Text("Vignette spread") }.labelsHidden()
             }
         }
         .padding(12)

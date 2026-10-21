@@ -50,11 +50,30 @@ extension FocusedValues {
 
 #if os(macOS)
 struct EditorCommands: Commands {
+    @FocusedValue(\.editorUndo) private var editUndo
     @FocusedValue(\.toggleEditorPicker) private var togglePicker
     @FocusedBinding(\.editorPanel) private var panel
     @FocusedValue(\.batchExport) private var batchExport
     @FocusedValue(\.startTutorial) private var startTutorial
+    private var textCanUndo: Bool { (NSApp.keyWindow?.firstResponder as? NSTextView)?.undoManager?.canUndo ?? false }
+    private var textCanRedo: Bool { (NSApp.keyWindow?.firstResponder as? NSTextView)?.undoManager?.canRedo ?? false }
     var body: some Commands {
+        CommandGroup(replacing: .undoRedo) {
+            Button(editUndo?.undoTitle ?? String(localized: "Undo")) {
+                if let text = NSApp.keyWindow?.firstResponder as? NSTextView, let manager = text.undoManager, manager.canUndo {
+                    manager.undo()
+                } else { editUndo?.undo() }
+            }
+            .keyboardShortcut("z", modifiers: .command)
+            .disabled(!(editUndo?.canUndo ?? false) && !textCanUndo)
+            Button(editUndo?.redoTitle ?? String(localized: "Redo")) {
+                if let text = NSApp.keyWindow?.firstResponder as? NSTextView, let manager = text.undoManager, manager.canRedo {
+                    manager.redo()
+                } else { editUndo?.redo() }
+            }
+            .keyboardShortcut("z", modifiers: [.command, .shift])
+            .disabled(!(editUndo?.canRedo ?? false) && !textCanRedo)
+        }
         CommandGroup(after: .newItem) {
             Divider()
             Button("Batch Export…") { batchExport?() }.disabled(batchExport == nil)
@@ -102,6 +121,8 @@ struct EditorSettingsView: View {
     private var shortcutsView: some View {
         Form {
             Section("Keyboard Shortcuts") {
+                shortcut("Undo", "⌘Z")
+                shortcut("Redo", "⇧⌘Z")
                 shortcut("Copy development settings", "⌘C")
                 shortcut("Paste development settings…", "⌘V")
                 shortcut("Save development settings", "⌘S")

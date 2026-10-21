@@ -57,9 +57,13 @@ bytes. GUI interaction and sandbox permission flows require in-app testing.
 Transform settings store four normalized source-image corners, the output aspect
 ratio control, rotation, and perspective controls. Older recipes without a
 transform remain uncropped. The same geometry applies to SDR and HDR before
-export resizing and gain-map generation. Output dimensions are rounded down
-using the shorter opposing source-space edges, constrained to the crop aspect
-ratio. Original image pixels remain untouched.
+export resizing and gain-map generation. The Transform panel shows conservative
+(shortest aspect-normalized edge) and maximum (longest aspect-normalized edge)
+resolution estimates. Dimensions are rounded down at the crop aspect ratio.
+The maximum estimate defines 100% export size; it can interpolate less-detailed
+parts of a perspective crop. Batch export applies one shared percentage to each
+image's own maximum dimensions, rather than a shared pixel size. Original image
+pixels remain untouched.
 
 Processing order is RAW decoding (including decoder white balance), tone mapping,
 Effects (Clarity, HDF, Halation, Film Grain), RGB white balance or monochrome
@@ -72,3 +76,40 @@ strength is HDR output brightness divided by 5, capped at 1.0 and shared by both
 Green uses red’s blur radius divided by sqrt(2), with Transmission controlling its
 contribution. These source references remain independent of tone and later color
 adjustments; the effects are blended into the tone-mapped rendition.
+
+Undo/redo keeps up to 100 development recipe snapshots per file in memory, with
+one step per pointer gesture (including Auto Tones adjustments). Keyboard changes
+are coalesced briefly. A committed transform is one step. Undo restores the saved
+values directly, reloading RAW decoding only when its settings or color space
+changed. Saving preserves history; dirty state is still compared with the saved
+recipe. Changing folders/discarding the session clears history. Browser paste
+also records history for files that are not currently displayed. Regression checks:
+`Tests/check-edit-history.sh` on Apple Silicon macOS with Xcode installed.
+
+Preview resolution follows the available view size in physical display pixels.
+The decoded linear CIImage graph is retained, together with one cached overview,
+rather than materializing a full-resolution developed bitmap for interaction.
+On macOS, a separate worker refines the visible zoomed region after 200 ms idle,
+with cancellation checks and source/settings identity guards. Two overscanned
+patches are retained for the active panel’s edited and comparison states, and
+reused for nearby pans. Holding Compare does not pause detail rendering; its
+counterpart is prefetched while idle. Resolution is capped at source/output 1:1.
+Core Image evaluates the full logical effect/transform graph with a final crop,
+so blur ROI expansion and image-relative effect sizes remain intact. Native
+nearest-neighbor switching uses source/output pixels instead of overview pixels.
+Transform editing and tone/clipping masks use the overview. RAW decoding itself
+may still require full-source work; this optimization limits downstream renders.
+Regression checks: `Tests/check-preview-detail.sh`.
+
+Vignette is a pre-tone linear exposure adjustment in Effects. Amount is corner
+loss in stops (0–4, default 0); Spread (0–1, default 0.5) sets exponent
+`2 * 8^(1-spread)`. RGB is multiplied by `2^(-amount * radius^exponent)`;
+alpha is preserved. Radius is circular distance divided by the crop half-diagonal.
+The inverse committed crop homography maps full-source coordinates into this
+geometry. Draft transforms leave the anchor unchanged until committed. Uncropped
+overviews retain this anchor; viewport patches evaluate the same full-image graph.
+The source histogram stays unchanged. Downstream tone mapping, effects, sampling,
+and SDR histograms see the adjusted input. Amount zero bypasses the kernel.
+Old recipes default to Off; Effects paste, compare, reset and undo include it.
+`Tests/VignetteChecks.swift` exercises GPU falloff, transformed geometry and recipes;
+preview detail and edit history checks include nonzero vignette settings.

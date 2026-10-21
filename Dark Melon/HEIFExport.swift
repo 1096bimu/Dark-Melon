@@ -95,6 +95,7 @@ struct HEIFExportOptions: View {
     let mapping: ToneMapping
     let colorSpace: ProcessingColorSpace
     let rawSettings: RAWSettings
+    var percentageOnly = false
     let save: () -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var widthText = ""
@@ -104,7 +105,7 @@ struct HEIFExportOptions: View {
     @State private var sizeError: String?
     @FocusState private var editingDimension: Dimension?
     private enum Dimension: Hashable { case width, height }
-    private var baseSize: CGSize { mapping.transform?.resolution(width: width, height: height) ?? CGSize(width: width, height: height) }
+    private var baseSize: CGSize { mapping.transform?.resolution(width: width, height: height, estimate: .maximum) ?? CGSize(width: width, height: height) }
     private var outputWidth: Int { max(1, Int((Double(baseSize.width) * settings.scale).rounded())) }
     private var outputHeight: Int { max(1, Int((Double(baseSize.height) * settings.scale).rounded())) }
 
@@ -194,6 +195,10 @@ struct HEIFExportOptions: View {
             Slider(value: Binding(get: { min(1, max(0.25, (settings.scale * 20).rounded() / 20)) },
                                   set: { settings.scale = ($0 * 20).rounded() / 20 }),
                    in: 0.25...1, step: 0.05) { Text("Linear size") }
+            if percentageOnly {
+                LabeledContent("First image", value: "\(outputWidth) × \(outputHeight) px")
+                    .monospacedDigit().foregroundStyle(.secondary)
+            } else {
             HStack {
                 TextField("Width", text: Binding(get: { widthText }, set: {
                     widthText = $0; updateDimension($0, dimension: .width)
@@ -215,6 +220,7 @@ struct HEIFExportOptions: View {
             }
             .textFieldStyle(.roundedBorder)
             .monospacedDigit()
+            }
             if format != .tiff {
                 LabeledContent("Quality", value: settings.quality.formatted(.percent.precision(.fractionLength(0))))
                 Slider(value: $settings.quality, in: 0...1, step: 0.01) { Text("Quality") }

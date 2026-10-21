@@ -7,6 +7,7 @@ import UniformTypeIdentifiers
 nonisolated struct RAWDevelopment: @unchecked Sendable {
     let id = UUID()
     let preview: CGImage
+    let linearSource: CIImage
     let url: URL
     let width: Int
     let height: Int
@@ -45,6 +46,7 @@ nonisolated struct HistogramData: Sendable {
 }
 
 nonisolated struct PreviewImages: @unchecked Sendable {
+    let source: CGImage
     let sdr: CGImage
     let hdr: CGImage
     let fullSDR: CGImage
@@ -71,6 +73,7 @@ actor RAWDeveloper {
 
     private var filmGrain: FilmGrain?
     private lazy var halation = Halation()
+    private lazy var vignette = Vignette()
 
     private lazy var hdfKernel = CIColorKernel(source: """
         kernel vec4 hdfAdd(__sample pixel, __sample blurred, float amount, float ceiling) {
@@ -118,15 +121,59 @@ actor RAWDeveloper {
         }
         """)
 
+    private var overviewCache: (UUID, CGSize, CGImage)?
+
+    func overview(_ development: RAWDevelopment, canvas: CGSize) throws -> CGImage {
+        try Task.checkCancellation()
+        let source = development.linearSource
+        let scale = PreviewResolution.overviewScale(source: source.extent.size, canvas: canvas)
+        let size = CGSize(width: floor(source.extent.width * scale), height: floor(source.extent.height * scale))
+        if let cached = overviewCache, cached.0 == development.id, cached.1 == size { return cached.2 }
+        let access = development.url.startAccessingSecurityScopedResource()
+        defer { if access { development.url.stopAccessingSecurityScopedResource() } }
+        let scaled = source.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+        guard let image = context.createCGImage(scaled, from: scaled.extent, format: .RGBAh, colorSpace: linearSpace) else {
+            throw DevelopmentError.decode
+        }
+        try Task.checkCancellation()
+        overviewCache = (development.id, size, image)
+        return image
+    }
+
+    /// Only the final visible rectangle is materialized. The full logical source
+    /// extent preserves effect scale, perspective geometry, and blur neighborhoods.
+    func detail(_ development: RAWDevelopment, mapping: ToneMapping, hdr: Bool,
+                region: PreviewRegion) throws -> PreviewDetail {
+        try Task.checkCancellation()
+        let access = development.url.startAccessingSecurityScopedResource()
+        defer { if access { development.url.stopAccessingSecurityScopedResource() } }
+        let output = mapping.transform?.resolution(width: development.width, height: development.height, estimate: .maximum)
+            ?? CGSize(width: development.width, height: development.height)
+        let scale = PreviewResolution.detailScale(display: region.displayPixels, output: output)
+        let source = development.linearSource.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+        let mapped = try mappedImage(source, mapping: mapping, hdr: hdr)
+        let extent = mapped.extent
+        let rect = PreviewResolution.renderRect(region: region.rect, extent: extent)
+        guard !rect.isEmpty else { throw DevelopmentError.decode }
+        try Task.checkCancellation()
+        let image = try displayPreview(mapped.cropped(to: rect), hdr: hdr, headroom: mapping.hdrMax)
+        return PreviewDetail(image: image,
+            rect: CGRect(x: (rect.minX - extent.minX) / extent.width, y: (rect.minY - extent.minY) / extent.height,
+                         width: rect.width / extent.width, height: rect.height / extent.height),
+            scale: scale, sourceID: development.id, mapping: mapping, hdr: hdr)
+    }
+
     func previews(_ source: CGImage, mapping: ToneMapping) throws -> PreviewImages {
-        var fullMapping = mapping
-        fullMapping.transform = nil
-        let fullSDR = try preview(source, mapping: fullMapping, hdr: false)
-        let fullHDR = mapping.hdrEnabled ? try preview(source, mapping: fullMapping, hdr: true) : fullSDR
+        // Develop without resampling geometry, but retain the committed transform
+        // for source-space effects that are anchored to the final crop.
+        let input = CIImage(cgImage: source)
+        let fullSDR = try displayPreview(developedImage(input, mapping: mapping, hdr: false), hdr: false, headroom: mapping.hdrMax)
+        let fullHDR = mapping.hdrEnabled
+            ? try displayPreview(developedImage(input, mapping: mapping, hdr: true), hdr: true, headroom: mapping.hdrMax) : fullSDR
         let sdr = try transformedPreview(fullSDR, mapping: mapping, hdr: false)
         let hdr = mapping.hdrEnabled ? try transformedPreview(fullHDR, mapping: mapping, hdr: true) : sdr
         try Task.checkCancellation()
-        return PreviewImages(sdr: sdr, hdr: hdr, fullSDR: fullSDR, fullHDR: fullHDR)
+        return PreviewImages(source: source, sdr: sdr, hdr: hdr, fullSDR: fullSDR, fullHDR: fullHDR)
     }
 
     private func transformedPreview(_ source: CGImage, mapping: ToneMapping, hdr: Bool) throws -> CGImage {
@@ -209,7 +256,7 @@ actor RAWDeveloper {
     }
 
     func sampleWhiteBalance(_ source: CGImage, center: CGPoint, radius: CGFloat, mapping: ToneMapping) throws -> WhiteBalance {
-        let input = CIImage(cgImage: source)
+        let input = try vignette.apply(to: CIImage(cgImage: source), settings: mapping.vignette, transform: mapping.transform)
         let toned = try applyTone(input, curve: mapping.curve(hdr: false))
         let effected = try applyEffects(toned, source: input, mapping: mapping, hdr: false)
         let mean = try sampleMean(effected, center: center, radius: radius)
@@ -255,7 +302,7 @@ actor RAWDeveloper {
     /// One GPU composite over the cached preview; never enters the export or analysis pipeline.
     func toneLocator(_ source: CGImage, preview: CGImage, mapping: ToneMapping, hdr: Bool, clipping: Bool = false) throws -> CGImage {
         try Task.checkCancellation()
-        let input = CIImage(cgImage: source)
+        let input = try vignette.apply(to: CIImage(cgImage: source), settings: mapping.vignette, transform: mapping.transform)
         let weights = colorSpace.luminance
         guard let image = toneLocatorKernel?.apply(extent: input.extent, arguments: [
             input, CIImage(cgImage: preview),
@@ -271,14 +318,15 @@ actor RAWDeveloper {
         return try mapping.transform?.apply(to: developed) ?? developed
     }
 
-    private func developedImage(_ image: CIImage, mapping: ToneMapping, hdr: Bool) throws -> CIImage {
+    private func developedImage(_ source: CIImage, mapping: ToneMapping, hdr: Bool) throws -> CIImage {
         try Task.checkCancellation()
+        let image = try vignette.apply(to: source, settings: mapping.vignette, transform: mapping.transform)
         var color = mapping.color
         if mapping.blackAndWhite.isEnabled {
             color.saturationStart = 1; color.saturationEnd = 1; color.saturationCurve = 0
             color.luminanceSaturationStart = 1; color.luminanceSaturationEnd = 1; color.luminanceSaturationCurve = 0
         }
-        // Shared by preview and export: tone → effects → RGB WB/monochrome → Color → HLS.
+        // Shared by preview and export: vignette → tone → effects → RGB WB/monochrome → Color → HLS.
         // RAW decoder white balance is already part of the decoded source.
         let toned = try applyTone(image, curve: mapping.curve(hdr: hdr))
         let effected = try applyEffects(toned, source: image, mapping: mapping, hdr: hdr)
@@ -515,7 +563,7 @@ actor RAWDeveloper {
 
     func exportImage(_ source: CIImage, mapping: ToneMapping, settings: HEIFSettings) throws -> Data {
         let sourceBounds = source.extent.integral
-        let transformedSize = mapping.transform?.resolution(width: Int(sourceBounds.width), height: Int(sourceBounds.height)) ?? sourceBounds.size
+        let transformedSize = mapping.transform?.resolution(width: Int(sourceBounds.width), height: Int(sourceBounds.height), estimate: .maximum) ?? sourceBounds.size
         let bounds = CGRect(origin: .zero, size: transformedSize)
         let width = max(1, Int((bounds.width * settings.scale).rounded()))
         let height = max(1, Int((bounds.height * settings.scale).rounded()))
@@ -674,13 +722,13 @@ actor RAWDeveloper {
         return result
     }
 
-    func develop(_ url: URL) throws -> RAWDevelopment {
+    func develop(_ url: URL, previewCanvas: CGSize = CGSize(width: 2560, height: 2560)) throws -> RAWDevelopment {
         let accessed = url.startAccessingSecurityScopedResource()
         defer { if accessed { url.stopAccessingSecurityScopedResource() } }
         let source = try sourceImage(url)
         let image = source.image
         let bounds = image.extent.integral
-        let scale = min(1, 2560 / max(bounds.width, bounds.height))
+        let scale = PreviewResolution.overviewScale(source: bounds.size, canvas: previewCanvas)
         let previewImage = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
         guard let preview = context.createCGImage(previewImage, from: previewImage.extent,
                                                   format: .RGBAh, colorSpace: linearSpace) else {
@@ -688,7 +736,9 @@ actor RAWDeveloper {
         }
         let container = CGImageSourceCreateWithURL(url as CFURL, nil)
         let properties = container.flatMap { CGImageSourceCopyPropertiesAtIndex($0, 0, nil) } as? [CFString: Any] ?? [:]
-        return RAWDevelopment(preview: preview, url: url, width: Int(bounds.width), height: Int(bounds.height), whitePoint: source.whitePoint, metadata: CameraMetadata(properties: properties), isRAW: source.isRAW, rawDefaults: source.rawDefaults, sourceHeadroom: source.headroom)
+        let development = RAWDevelopment(preview: preview, linearSource: image, url: url, width: Int(bounds.width), height: Int(bounds.height), whitePoint: source.whitePoint, metadata: CameraMetadata(properties: properties), isRAW: source.isRAW, rawDefaults: source.rawDefaults, sourceHeadroom: source.headroom)
+        overviewCache = (development.id, CGSize(width: floor(image.extent.width * scale), height: floor(image.extent.height * scale)), preview)
+        return development
     }
 
     private var gpuHistogram: GPUHistogram?

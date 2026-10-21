@@ -3,6 +3,13 @@ import CoreImage
 import UniformTypeIdentifiers
 
 struct ContentView: View {
+    @Environment(\.displayScale) private var displayScale
+    @State private var previewCanvas = CGSize(width: 2560, height: 2560)
+    @State private var renderedCanvas = CGSize.zero
+    @State private var renderedMapping: ToneMapping?
+    @State private var previewRegion: PreviewRegion?
+    @State private var previewDetails: [PreviewDetail] = []
+    @State private var detailWorker = RAWDeveloper()
     #if os(macOS)
     @State private var previewViewport = PreviewViewport()
     #endif
@@ -10,6 +17,7 @@ struct ContentView: View {
     @State private var cropTransform = CropTransform()
     @State private var cropping = false
     @State private var cropRatioPosition = 5.0
+    @State private var editHistory = EditHistory()
     @State private var pendingEdits = PendingEdits()
     @State private var pendingControlsWidth: CGFloat = 120
     @State private var baselineRecipe: DevelopmentRecipe?
@@ -77,6 +85,63 @@ struct ContentView: View {
     @State private var loading = false
     @State private var errorMessage: String?
 
+    private var undoActions: EditorUndoActions {
+        let _ = editHistory.revision
+        return EditorUndoActions(canUndo: !loading && editHistory.canUndo,
+            canRedo: !loading && editHistory.canRedo,
+            undoTitle: editHistory.undoTitle, redoTitle: editHistory.redoTitle,
+            undo: { commitHistory(); editHistory.undo() },
+            redo: { editHistory.redo() })
+    }
+
+    private func commitHistory() {
+        guard development != nil, !loading else { return }
+        editHistory.observe(currentRecipe, name: cropping ? String(localized: "Transform") : nil)
+        editHistory.flush()
+    }
+
+    private func restoreHistory(_ recipe: DevelopmentRecipe) {
+        pendingAutoWhite = nil; pendingAutoContrast = nil
+        let reload = colorSpace != recipe.colorSpace || rawSettings != (recipe.rawSettings ?? rawSettings)
+            || mapping.rawWhiteBalance != recipe.mapping.rawWhiteBalance
+        cropping = false
+        adjustingTone = false; adjustingWhitePoint = false; pickingWhiteBalance = false
+        comparingColor = false; comparingHLS = false; comparingEffects = false
+        colorSpace = recipe.colorSpace
+        mapping = recipe.mapping
+        if let settings = recipe.rawSettings { rawSettings = settings }
+        cropPolygon = mapping.transform?.points ?? [CGPoint(x: 0, y: 0), CGPoint(x: 1, y: 0), CGPoint(x: 1, y: 1), CGPoint(x: 0, y: 1)]
+        if reload, let sourceURL { load(sourceURL, resetEdits: false) }
+        rememberCurrentEdits()
+    }
+
+    private var comparing: Bool { comparingColor || comparingEffects || comparingHLS }
+
+    private var detailRequest: DetailPreviewRequest {
+        let counterpart: ToneMapping? = [.color, .hls, .effects].contains(panel)
+            ? (comparing ? mapping : comparisonMapping(panel)) : nil
+        return DetailPreviewRequest(sourceID: development?.id, mapping: previewMapping,
+            counterpart: counterpart, comparing: comparing, hdr: hdrPreview,
+            region: previewRegion, enabled: !loading && !cropping && !adjustingTone && !adjustingWhitePoint
+                && (!editHistory.interacting || comparing) && pendingAutoWhite == nil)
+    }
+
+    private var visibleDetail: PreviewDetail? {
+        guard !cropping, !adjustingTone, !adjustingWhitePoint,
+              let detail = previewDetails.last(where: {
+                  $0.sourceID == development?.id && $0.mapping == previewMapping && $0.hdr == hdrPreview
+              }) else { return nil }
+        // A cached patch covering the viewport can switch immediately, without
+        // waiting for the background overview to finish rendering its counterpart.
+        guard renderedMapping == previewMapping || previewRegion.map({ detail.rect.contains($0.rect) }) == true else { return nil }
+        return detail
+    }
+
+    private var previewOutputSize: CGSize {
+        let size = CGSize(width: development?.width ?? 1, height: development?.height ?? 1)
+        return cropping ? size : mapping.transform?.resolution(width: Int(size.width), height: Int(size.height), estimate: .maximum) ?? size
+    }
+
     private var tutorialNeedsSave: Bool {
         tutorial.active && tutorial.step == .save && !tutorial.fulfilled
     }
@@ -125,16 +190,23 @@ struct ContentView: View {
         return CGPoint(x: source.x, y: 1 - source.y)
     }
 
-    private var previewMapping: ToneMapping {
+    private func comparisonMapping(_ panel: EditorPanel) -> ToneMapping {
         var result = mapping
-        if comparingColor { result.color = ColorAdjustments() }
-        if comparingHLS {
+        if panel == .color { result.color = ColorAdjustments() }
+        if panel == .hls {
             result.hls = Array(repeating: HLSAdjustment(), count: 6)
             result.blackAndWhite = BlackAndWhiteSettings()
             result.blackAndWhite.isEnabled = mapping.blackAndWhite.isEnabled
         }
-        if comparingEffects { result.clarity = 0; result.hdf = 0; result.grain.strength = 0; result.halation.inputCurve = 0 }
+        if panel == .effects { result.clarity = 0; result.hdf = 0; result.grain.strength = 0; result.halation.inputCurve = 0; result.vignette.amount = 0 }
         return result
+    }
+
+    private var previewMapping: ToneMapping {
+        if comparingColor { return comparisonMapping(.color) }
+        if comparingHLS { return comparisonMapping(.hls) }
+        if comparingEffects { return comparisonMapping(.effects) }
+        return mapping
     }
 
     var body: some View {
@@ -153,6 +225,8 @@ struct ContentView: View {
                     if let previewImages {
                         #if os(macOS)
                         HDRImagePreview(image: ((adjustingTone || adjustingWhitePoint) ? toneLocatorImage : nil) ?? (cropping ? (hdrPreview ? previewImages.fullHDR : previewImages.fullSDR) : (hdrPreview ? previewImages.hdr : previewImages.sdr)),
+                                        sourceSize: previewOutputSize, detail: visibleDetail,
+                                        regionChanged: { previewRegion = $0 },
                                         hdr: hdrPreview, sourceID: development?.id ?? previewRevision,
                                         viewport: previewViewport,
                                         cropRatio: cropping ? CropGeometry.ratio(at: cropRatioPosition) : nil,
@@ -206,6 +280,11 @@ struct ContentView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .onGeometryChange(for: CGSize.self) { proxy in
+                    // Quantize resize requests slightly, while covering Retina physical pixels.
+                    CGSize(width: max(64, ceil((proxy.size.width - 32) * displayScale / 64) * 64),
+                           height: max(64, ceil((proxy.size.height - 32) * displayScale / 64) * 64))
+                } action: { previewCanvas = $0 }
                 .overlay(alignment: .bottomLeading) {
                     if !cropping && !pendingEdits.entries.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
@@ -290,6 +369,8 @@ struct ContentView: View {
                                 polygon: cropping ? cropPolygon : mapping.transform?.points ?? cropPolygon,
                                 resolution: (cropping ? draftTransform : mapping.transform)?.resolution(width: development?.width ?? 1, height: development?.height ?? 1)
                                     ?? CGSize(width: development?.width ?? 1, height: development?.height ?? 1),
+                                maximumResolution: (cropping ? draftTransform : mapping.transform)?.resolution(width: development?.width ?? 1, height: development?.height ?? 1, estimate: .maximum)
+                                    ?? CGSize(width: development?.width ?? 1, height: development?.height ?? 1),
                                 toggle: toggleTransform,
                                 resetPerspective: { if !cropping { toggleTransform() }; cropTransform.horizontal = 0; cropTransform.vertical = 0 },
                                 resetRotation: { if !cropping { toggleTransform() }; cropTransform.rotation = 0 },
@@ -308,7 +389,7 @@ struct ContentView: View {
                         } else if panel == .hls {
                             HLSControls(adjustments: $mapping.hls, comparing: $comparingHLS, blackAndWhite: $mapping.blackAndWhite)
                         } else if panel == .effects {
-                            EffectsControls(clarity: $mapping.clarity, radius: $mapping.clarityRadius, hdf: $mapping.hdf, hdfRadius: $mapping.hdfRadius, grain: $mapping.grain, halation: $mapping.halation, hdrEnabled: mapping.hdrEnabled, comparing: $comparingEffects)
+                            EffectsControls(clarity: $mapping.clarity, radius: $mapping.clarityRadius, hdf: $mapping.hdf, hdfRadius: $mapping.hdfRadius, grain: $mapping.grain, halation: $mapping.halation, vignette: $mapping.vignette, hdrEnabled: mapping.hdrEnabled, comparing: $comparingEffects)
                         } else {
                             tonePanel
                         }
@@ -318,10 +399,15 @@ struct ContentView: View {
                 .frame(minWidth: 320, idealWidth: 360, maxWidth: 480)
             }
             .task {
+                editHistory.restore = restoreHistory
                 if !tutorialPresented {
                     tutorialPresented = true
                     startTutorial()
                 }
+            }
+            .onChange(of: currentRecipe) { old, new in
+                guard !loading, development != nil, !cropping else { return }
+                editHistory.observe(new, name: EditHistory.actionName(from: old, to: new))
             }
             .onChange(of: recipeSourceURL) { _, _ in
                 if tutorial.active { tutorial.resetForImage() }
@@ -361,9 +447,9 @@ struct ContentView: View {
             }
             .task(id: ToneLocatorRequest(active: adjustingTone || adjustingWhitePoint, clipping: adjustingWhitePoint, mapping: previewMapping,
                                          revision: previewRevision, hdr: hdrPreview)) {
-                guard adjustingTone || adjustingWhitePoint, let development, let previewImages else { return }
+                guard adjustingTone || adjustingWhitePoint, development != nil, let previewImages else { return }
                 do {
-                    let image = try await developer.toneLocator(development.preview,
+                    let image = try await developer.toneLocator(previewImages.source,
                         preview: hdrPreview ? previewImages.fullHDR : previewImages.fullSDR,
                         mapping: previewMapping, hdr: hdrPreview, clipping: adjustingWhitePoint)
                     try Task.checkCancellation()
@@ -372,13 +458,18 @@ struct ContentView: View {
                 } catch { errorMessage = error.localizedDescription }
             }
             .task(id: PreviewRequest(mapping: previewMapping,
-                                     sourceID: development?.id, loading: loading, waitingForAutoWhite: pendingAutoWhite != nil)) {
+                                     sourceID: development?.id, loading: loading, waitingForAutoWhite: pendingAutoWhite != nil, canvas: previewCanvas)) {
                 guard let development, !loading else { return }
                 do {
                     let renderedMapping = previewMapping
-                    let images = try await developer.previews(development.preview, mapping: renderedMapping)
+                    let canvas = previewCanvas
+                    if canvas != renderedCanvas { try await Task.sleep(for: .milliseconds(100)) }
+                    let source = try await developer.overview(development, canvas: canvas)
+                    let images = try await developer.previews(source, mapping: renderedMapping)
                     try Task.checkCancellation()
                     previewImages = images
+                    self.renderedMapping = renderedMapping
+                    renderedCanvas = canvas
                     previewRevision = UUID()
                     if pendingAutoWhite == nil, let pending = pendingAutoContrast,
                        pending.sourceID == development.id {
@@ -393,11 +484,41 @@ struct ContentView: View {
                             mapping.concentration = contrast
                             mapping.setAutomaticHDRTarget()
                             baselineRecipe = currentRecipe
+                            editHistory.seed(currentRecipe)
                         }
                     }
                 } catch is CancellationError {
                     // A newer drag position supersedes this render.
                 } catch { errorMessage = error.localizedDescription }
+            }
+            .task(id: detailRequest) {
+                let request = detailRequest
+                guard request.enabled, let development, let region = request.region else { return }
+                do {
+                    if !request.comparing { try await Task.sleep(for: .milliseconds(200)) }
+                    let output = request.mapping.transform?.resolution(width: development.width, height: development.height, estimate: .maximum)
+                        ?? CGSize(width: development.width, height: development.height)
+                    let overview = previewImages?.source ?? development.preview
+                    let overviewScale = Double(overview.width) / Double(development.width)
+                    if PreviewResolution.requiredScale(display: region.displayPixels, output: output) <= overviewScale * 1.01 {
+                        previewDetails.removeAll()
+                        return
+                    }
+                    // Render the visible state first, then warm the active panel's comparison.
+                    let states = [request.mapping] + (request.counterpart.map { [$0] } ?? [])
+                    for state in states {
+                        if previewDetails.contains(where: { $0.covers(region, sourceID: development.id,
+                            mapping: state, hdr: request.hdr, outputSize: output) }) { continue }
+                        let detail = try await detailWorker.detail(development, mapping: state, hdr: request.hdr, region: region)
+                        try Task.checkCancellation()
+                        previewDetails.removeAll { $0.sourceID == detail.sourceID && $0.mapping == state && $0.hdr == detail.hdr }
+                        previewDetails.append(detail)
+                        if previewDetails.count > 2 { previewDetails.removeFirst(previewDetails.count - 2) }
+                    }
+                } catch is CancellationError {
+                } catch {
+                    // Detail is an optional refinement; retain the usable overview on failure.
+                }
             }
             .task(id: HistogramRequest(sourceID: development?.id, loading: loading, previewReady: previewImages != nil, bins: histogramBins)) {
                 histogramError = nil
@@ -419,6 +540,7 @@ struct ContentView: View {
                             mapping.white = min(1, max(mapping.black + ToneMapping.minimumRange, white))
                             mapping.setAutomaticHDRTarget()
                             baselineRecipe = currentRecipe
+                            editHistory.seed(currentRecipe)
                             pendingAutoContrast = AutoWhiteRequest(sourceID: development.id, mapping: mapping)
                         } else if mapping != pending.mapping {
                             pendingAutoContrast = nil
@@ -427,7 +549,15 @@ struct ContentView: View {
                 } catch is CancellationError {
                 } catch { histogramError = error.localizedDescription }
             }
+            .background(EditGestureBoundary(began: {
+                editHistory.flush()
+                editHistory.interacting = true
+            }, ended: {
+                editHistory.interacting = false
+                if !cropping { commitHistory() }
+            }))
             .navigationTitle(filename)
+            .focusedSceneValue(\.editorUndo, undoActions)
             .focusedSceneValue(\.editorPanel, $panel)
             .focusedSceneValue(\.startTutorial, { startTutorial() })
             .focusedSceneValue(\.toggleEditorPicker, pickerShortcutAction)
@@ -442,6 +572,14 @@ struct ContentView: View {
                 ToolbarItem(placement: .navigation) { fileBrowserToggle }
                 #else
                 ToolbarItem(placement: .topBarLeading) { fileBrowserToggle }
+                #endif
+                #if !os(macOS)
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    Button("Undo", systemImage: "arrow.uturn.backward", action: undoActions.undo)
+                        .disabled(!undoActions.canUndo)
+                    Button("Redo", systemImage: "arrow.uturn.forward", action: undoActions.redo)
+                        .disabled(!undoActions.canRedo)
+                }
                 #endif
                 ToolbarItem(placement: .principal) {
                     HStack(spacing: 12) {
@@ -561,6 +699,7 @@ struct ContentView: View {
         #if os(macOS)
         if resetEdits { SidecarFolderAccess.shared.requestIfNeeded(for: url) }
         #endif
+        commitHistory()
         if resetEdits { rememberCurrentEdits() }
         if resetEdits { cropping = false; cropRatioPosition = 5; cropTransform = CropTransform(); cropPolygon = [CGPoint(x: 0, y: 0), CGPoint(x: 1, y: 0), CGPoint(x: 1, y: 1), CGPoint(x: 0, y: 1)] }
         sourceURL = url
@@ -570,10 +709,17 @@ struct ContentView: View {
         if resetEdits { mapping = ToneMapping(); savedRecipe = nil; recipeSourceURL = nil; baselineRecipe = nil }
         development = nil
         previewImages = nil
+        previewDetails.removeAll()
+        renderedMapping = nil
         histogram = nil
         previewRevision = UUID()
         Task {
-            defer { loading = false }
+            defer {
+                if recipeSourceURL == url, development != nil {
+                    editHistory.activate(url, recipe: currentRecipe)
+                }
+                loading = false
+            }
             do {
                 var restored: DevelopmentRecipe?
                 let draft = resetEdits ? pendingEdits.entry(for: url) : nil
@@ -597,7 +743,8 @@ struct ContentView: View {
                 developer = RAWDeveloper(colorSpace: colorSpace, rawSettings: options, rawWhiteBalance: mapping.rawWhiteBalance)
                 histogramWorker = RAWDeveloper(colorSpace: colorSpace, rawSettings: options, rawWhiteBalance: mapping.rawWhiteBalance)
                 exportWorker = RAWDeveloper(colorSpace: colorSpace, rawSettings: options, rawWhiteBalance: mapping.rawWhiteBalance)
-                let loaded = try await developer.develop(url)
+                detailWorker = RAWDeveloper(colorSpace: colorSpace)
+                let loaded = try await developer.develop(url, previewCanvas: previewCanvas)
                 if resetEdits {
                     let defaults = loaded.rawDefaults ?? RAWSettings()
                     rawSettings = options?.resolved(using: defaults) ?? defaults
@@ -639,6 +786,7 @@ struct ContentView: View {
         guard let development, !loading, !resettingTone else { return }
         pendingAutoWhite = nil
         pendingAutoContrast = nil
+        commitHistory()
         let original = mapping
         let worker = developer
         let existingHistogram = histogram
@@ -652,6 +800,8 @@ struct ContentView: View {
                 guard self.development?.id == development.id, mapping == original else { return }
                 mapping = SettingsPasteSelection(tone: true, whiteBalance: false, color: false,
                                                  hls: false, effects: false).applying(automatic, to: mapping)
+                editHistory.observe(currentRecipe, name: String(localized: "Reset Tone"))
+                editHistory.flush()
             } catch { errorMessage = error.localizedDescription }
         }
     }
@@ -662,6 +812,7 @@ struct ContentView: View {
     }
 
     private func savePendingEdits() throws {
+        commitHistory()
         rememberCurrentEdits()
         for entry in pendingEdits.entries {
             #if os(macOS)
@@ -694,6 +845,7 @@ struct ContentView: View {
         let action = pendingTransition
         pendingTransition = nil
         pendingEdits.clear()
+        editHistory.clear()
         // Prevent load from stashing the deliberately discarded current edits again.
         baselineRecipe = currentRecipe
         action?()
@@ -734,6 +886,7 @@ struct ContentView: View {
     #endif
 
     private func saveRecipe() {
+        commitHistory()
         guard let sourceURL, development != nil, !loading else { return }
         let recipe = currentRecipe
         savingRecipe = true
@@ -927,17 +1080,19 @@ struct ContentView: View {
 
     private func applyPastedSettings(_ selection: SettingsPasteSelection, target: BrowserFileDevelopment?) {
         guard let pastedSettings, !loading else { return }
+        commitHistory()
         if let target, target.development.url.standardizedFileURL != recipeSourceURL?.standardizedFileURL {
             let url = target.development.url
             let draft = pendingEdits.entry(for: url)
             let destination = draft?.recipe ?? target.recipe
             let updated = pastedSettings.applying(selection, to: destination.mapping,
                                                   reference: target.development.whitePoint, space: destination.colorSpace)
-            pendingEdits.remember(url: url,
-                recipe: DevelopmentRecipe(colorSpace: destination.colorSpace, mapping: updated,
-                    rawSettings: selection.raw && target.development.isRAW
-                        ? (pastedSettings.rawSettings?.resolved(using: target.development.rawDefaults ?? RAWSettings()) ?? destination.rawSettings)
-                        : destination.rawSettings),
+            let updatedRecipe = DevelopmentRecipe(colorSpace: destination.colorSpace, mapping: updated,
+                rawSettings: selection.raw && target.development.isRAW
+                    ? (pastedSettings.rawSettings?.resolved(using: target.development.rawDefaults ?? RAWSettings()) ?? destination.rawSettings)
+                    : destination.rawSettings)
+            editHistory.record(url, from: destination, to: updatedRecipe, name: String(localized: "Paste Edits"))
+            pendingEdits.remember(url: url, recipe: updatedRecipe,
                 baseline: draft?.baseline ?? target.recipe, saved: draft?.savedRecipe ?? target.savedRecipe)
         } else {
             guard development != nil else { return }
@@ -953,6 +1108,8 @@ struct ContentView: View {
             }
             let previousRAWBalance = mapping.rawWhiteBalance
             mapping = pastedSettings.applying(selection, to: mapping, reference: development?.whitePoint, space: colorSpace)
+            editHistory.observe(currentRecipe, name: String(localized: "Paste Edits"))
+            editHistory.flush()
             if mapping.rawWhiteBalance != previousRAWBalance || rawSettings != previousRAWSettings { commitRAWWhiteBalance() }
         }
     }
@@ -997,6 +1154,7 @@ struct ContentView: View {
             for url in urls {
                 do {
                     try await RecipeStore.shared.delete(for: url)
+                    editHistory.remove(url)
                     pendingEdits.remove(url)
                     if url.standardizedFileURL == recipeSourceURL?.standardizedFileURL { reloadCurrent = true }
                 } catch { failures.append("\(url.lastPathComponent): \(error.localizedDescription)") }
@@ -1237,6 +1395,17 @@ private struct PreviewRequest: Equatable {
     let sourceID: UUID?
     let loading: Bool
     let waitingForAutoWhite: Bool
+    let canvas: CGSize
+}
+
+private struct DetailPreviewRequest: Equatable {
+    let sourceID: UUID?
+    let mapping: ToneMapping
+    let counterpart: ToneMapping?
+    let comparing: Bool
+    let hdr: Bool
+    let region: PreviewRegion?
+    let enabled: Bool
 }
 
 

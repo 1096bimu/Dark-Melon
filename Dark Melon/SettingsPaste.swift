@@ -40,6 +40,7 @@ nonisolated struct SettingsPasteSelection {
             result.hdfRadius = source.hdfRadius
             result.grain = source.grain
             result.halation = source.halation
+            result.vignette = source.vignette
         }
         return result
     }

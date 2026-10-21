@@ -13,6 +13,7 @@ nonisolated struct ToneMapping: Codable, Equatable, Sendable {
     var hdfRadius = 100.0
     var grain = FilmGrainSettings()
     var halation = HalationSettings()
+    var vignette = VignetteSettings()
     var black = 0.0
     var white = 1.0
     var tonePosition = 0.0
@@ -45,7 +46,7 @@ nonisolated struct ToneMapping: Codable, Equatable, Sendable {
         let join = peakPosition
         let gain = sdr.value(at: join) + sdrSlope(at: join, curve: sdr) * (1 - join)
         hdrTarget = min(20, max(1, gain))
-        if gain < 2 { hdrGain = 0 }
+        // Updating the target preserves the user’s HDR Gain, including an explicit Off.
     }
 
     private func sdrSlope(at join: Double, curve sdr: ToneCurve) -> Double {

@@ -30,6 +30,7 @@ struct TransformControls: View {
     let image: CGImage?
     let polygon: [CGPoint]
     let resolution: CGSize
+    let maximumResolution: CGSize
     let toggle: () -> Void
     let resetPerspective: () -> Void
     let resetRotation: () -> Void
@@ -42,8 +43,11 @@ struct TransformControls: View {
                 HStack { transformButton; resetButtons }
                 VStack(alignment: .leading) { transformButton; resetButtons }
             }
-            Text("Approx. \(Int(resolution.width)) × \(Int(resolution.height)) pixels")
-                .font(.caption).foregroundStyle(.secondary).monospacedDigit()
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Approx. \(Int(resolution.width)) × \(Int(resolution.height)) pixels")
+                Text("Max. \(Int(maximumResolution.width)) × \(Int(maximumResolution.height)) pixels · 100% export")
+            }
+            .font(.caption).foregroundStyle(.secondary).monospacedDigit()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()

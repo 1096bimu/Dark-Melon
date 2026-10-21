@@ -1,5 +1,6 @@
 import Foundation
 import CoreImage
+import simd
 
 /// A normalized source quadrilateral plus the editor controls that produced it.
 /// Point order is top-left, top-right, bottom-right, bottom-left, independent of platform.
@@ -12,14 +13,17 @@ nonisolated struct TransformSettings: Codable, Equatable, Sendable {
 
     var aspect: Double { CropGeometry.ratio(at: ratioPosition) }
 
-    func resolution(width: Int, height: Int) -> CGSize {
+    enum ResolutionEstimate { case conservative, maximum }
+
+    func resolution(width: Int, height: Int, estimate: ResolutionEstimate = .conservative) -> CGSize {
         guard points.count == 4 else { return CGSize(width: width, height: height) }
         func length(_ a: Int, _ b: Int) -> Double {
             hypot((points[a].x - points[b].x) * Double(width), (points[a].y - points[b].y) * Double(height))
         }
-        let w = min(length(0, 1), length(3, 2))
-        let h = min(length(0, 3), length(1, 2))
-        let outputHeight = max(1, floor(min(h, w / aspect)))
+        let edges = [length(0, 1) / aspect, length(3, 2) / aspect,
+                     length(0, 3), length(1, 2)]
+        let projectedHeight = estimate == .maximum ? edges.max()! : edges.min()!
+        let outputHeight = max(1, floor(projectedHeight))
         return CGSize(width: max(1, floor(outputHeight * aspect)), height: outputHeight)
     }
 
@@ -47,7 +51,7 @@ nonisolated struct TransformSettings: Codable, Equatable, Sendable {
             "inputTopLeft": vector(0), "inputTopRight": vector(1),
             "inputBottomRight": vector(2), "inputBottomLeft": vector(3), "inputCrop": true
         ])
-        let size = resolution(width: Int(extent.width), height: Int(extent.height))
+        let size = resolution(width: Int(extent.width), height: Int(extent.height), estimate: .maximum)
         let rect = corrected.extent
         guard rect.width > 0, rect.height > 0, !rect.isInfinite else { throw RecipeError.invalid }
         return corrected.transformed(by: CGAffineTransform(translationX: -rect.minX, y: -rect.minY))
@@ -56,15 +60,21 @@ nonisolated struct TransformSettings: Codable, Equatable, Sendable {
     }
 
     /// Homography from the final rectangle back to the source, for hover and sampling.
-    func sourcePoint(_ point: CGPoint) -> CGPoint {
+    var sourceHomography: simd_double3x3 {
         let a = points[0], b = points[1], c = points[2], d = points[3]
         let dx1 = b.x-c.x, dx2 = d.x-c.x, dx3 = a.x-b.x+c.x-d.x
         let dy1 = b.y-c.y, dy2 = d.y-c.y, dy3 = a.y-b.y+c.y-d.y
         let determinant = dx1*dy2-dx2*dy1
         let g = (dx3*dy2-dx2*dy3) / determinant
         let h = (dx1*dy3-dx3*dy1) / determinant
-        let w = g*point.x+h*point.y+1
-        return CGPoint(x: ((b.x-a.x+g*b.x)*point.x+(d.x-a.x+h*d.x)*point.y+a.x)/w,
-                       y: ((b.y-a.y+g*b.y)*point.x+(d.y-a.y+h*d.y)*point.y+a.y)/w)
+        return simd_double3x3(columns: (
+            SIMD3(b.x-a.x+g*b.x, b.y-a.y+g*b.y, g),
+            SIMD3(d.x-a.x+h*d.x, d.y-a.y+h*d.y, h),
+            SIMD3(a.x, a.y, 1)))
+    }
+
+    func sourcePoint(_ point: CGPoint) -> CGPoint {
+        let projected = sourceHomography * SIMD3(point.x, point.y, 1)
+        return CGPoint(x: projected.x / projected.z, y: projected.y / projected.z)
     }
 }

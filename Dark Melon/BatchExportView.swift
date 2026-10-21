@@ -64,7 +64,7 @@ struct BatchExportView: View {
                 HEIFExportOptions(settings: $settings, width: sample.width, height: sample.height,
                                   hdrEnabled: true, sourceURL: sample.url, mapping: sampleRecipe.mapping,
                                   colorSpace: sampleRecipe.colorSpace, rawSettings: sampleRecipe.rawSettings ?? sample.rawDefaults ?? RAWSettings(),
-                                  save: { destinationAfterOptions = true })
+                                  percentageOnly: true, save: { destinationAfterOptions = true })
                     .safeAreaInset(edge: .bottom) {
                         Text("Size and estimate use the first selected image. The same size percentage applies to each image. Images use saved settings when available, otherwise automatic adjustments.")
                             .font(.caption).foregroundStyle(.secondary).padding()
@@ -80,6 +80,7 @@ struct BatchExportView: View {
     }
 
     private func prepareOptions() {
+        settings.scale = min(1, max(0.25, (settings.scale * 20).rounded() / 20))
         sources = browser.batchFiles.filter { selection.contains($0.url) }.map(\.url)
         guard let first = sources.first else { return }
         busy = true; completed = 0; failures = []; status = String(localized: "Preparing export settings…")

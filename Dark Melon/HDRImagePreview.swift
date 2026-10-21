@@ -13,6 +13,9 @@ final class PreviewViewport {
 /// Keeps HDR presentation on the image layer while zooming and panning.
 struct HDRImagePreview: NSViewRepresentable {
     let image: CGImage
+    let sourceSize: CGSize
+    let detail: PreviewDetail?
+    let regionChanged: (PreviewRegion?) -> Void
     let hdr: Bool
     let sourceID: UUID
     let viewport: PreviewViewport
@@ -32,13 +35,20 @@ struct HDRImagePreview: NSViewRepresentable {
         view.cropTransform = cropTransform
         view.configureCrop(ratio: cropRatio, saved: savedTransform)
         view.hover = hover
-        view.display(image, hdr: hdr, sourceID: sourceID)
+        view.regionChanged = regionChanged
+        view.display(image, sourceSize: sourceSize, detail: detail, hdr: hdr, sourceID: sourceID)
         view.sample = sample
         view.sampleTool = sampleTool
     }
 
     final class ImageDisplay: NSView {
         private let imageLayer = CALayer()
+        private let detailLayer = CALayer()
+        private var detailRect: CGRect?
+        var regionChanged: ((PreviewRegion?) -> Void)?
+        private var pendingRegion: PreviewRegion?
+        private var reportedRegion: PreviewRegion?
+        private var regionUpdateScheduled = false
         private let circle = CAShapeLayer()
         private let cropShade = CAShapeLayer()
         private let cropBorder = CAShapeLayer()
@@ -146,6 +156,7 @@ struct HDRImagePreview: NSViewRepresentable {
             let container = CALayer()
             container.masksToBounds = true
             container.addSublayer(imageLayer)
+            imageLayer.addSublayer(detailLayer)
             circle.strokeColor = NSColor.white.cgColor
             circle.fillColor = NSColor.white.withAlphaComponent(0.12).cgColor
             circle.lineWidth = 2
@@ -173,7 +184,7 @@ struct HDRImagePreview: NSViewRepresentable {
         }
         required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
-        func display(_ image: CGImage, hdr: Bool, sourceID: UUID) {
+        func display(_ image: CGImage, sourceSize: CGSize, detail: PreviewDetail?, hdr: Bool, sourceID: UUID) {
             if self.sourceID != sourceID {
                 self.sourceID = sourceID
                 reportedCropPolygon = []
@@ -182,12 +193,17 @@ struct HDRImagePreview: NSViewRepresentable {
                 sampleCenter = nil
                 circle.path = nil
             }
-            imageSize = CGSize(width: image.width, height: image.height)
+            imageSize = sourceSize
             CATransaction.begin()
             CATransaction.setDisableActions(true)
             imageLayer.preferredDynamicRange = hdr ? .high : .standard
             imageLayer.contentsHeadroom = hdr ? CGFloat(image.contentHeadroom) : 1
             imageLayer.contents = image
+            detailLayer.contents = detail?.image
+            detailLayer.isHidden = detail == nil || cropRatio != nil
+            detailLayer.preferredDynamicRange = hdr ? .high : .standard
+            detailLayer.contentsHeadroom = hdr ? CGFloat(detail?.image.contentHeadroom ?? 1) : 1
+            detailRect = detail?.rect
             positionImage()
             CATransaction.commit()
         }
@@ -250,17 +266,32 @@ struct HDRImagePreview: NSViewRepresentable {
                 }
                 cropBorder.path = border
             }
-            // 1:1 means one preview image pixel per physical display pixel.
+            // 1:1 refers to source/output pixels, independent of overview resolution.
             let backingSize = convertToBacking(CGRect(origin: .zero, size: size)).size
             let pixelScale = min(backingSize.width / imageSize.width, backingSize.height / imageSize.height)
             let filter: CALayerContentsFilter = pixelScale >= 1 ? .nearest : .linear
             imageLayer.magnificationFilter = filter
             imageLayer.minificationFilter = filter
+            detailLayer.magnificationFilter = filter
+            detailLayer.minificationFilter = filter
             imageLayer.bounds = CGRect(origin: .zero, size: size)
             imageLayer.position = crop == nil ? CGPoint(x: bounds.midX + offset.x, y: bounds.midY + offset.y)
                                              : CGPoint(x: bounds.midX, y: bounds.midY)
             imageLayer.transform = crop == nil ? CATransform3DIdentity : cropTransform.matrix(in: crop ?? bounds, pan: offset)
+            if let detailRect {
+                detailLayer.frame = CGRect(x: detailRect.minX * size.width, y: detailRect.minY * size.height,
+                                           width: detailRect.width * size.width, height: detailRect.height * size.height)
+            }
             CATransaction.commit()
+            if crop == nil {
+                let frame = CGRect(x: imageLayer.position.x - size.width / 2,
+                                   y: imageLayer.position.y - size.height / 2, width: size.width, height: size.height)
+                let visible = frame.intersection(bounds)
+                reportRegion(visible.isEmpty ? nil : PreviewRegion(
+                    rect: CGRect(x: (visible.minX - frame.minX) / size.width, y: (visible.minY - frame.minY) / size.height,
+                                 width: visible.width / size.width, height: visible.height / size.height),
+                    displayPixels: backingSize))
+            } else { reportRegion(nil) }
             if let crop {
                 pendingCropPolygon = cropTransform.sourcePolygon(crop: crop, bounds: bounds, imageSize: size,
                                                                  center: imageLayer.position, pan: offset, flippedY: true)
@@ -276,6 +307,19 @@ struct HDRImagePreview: NSViewRepresentable {
                 }
             }
             scheduleHoverUpdate()
+        }
+
+        private func reportRegion(_ region: PreviewRegion?) {
+            pendingRegion = region
+            guard !regionUpdateScheduled else { return }
+            regionUpdateScheduled = true
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.regionUpdateScheduled = false
+                guard self.pendingRegion != self.reportedRegion else { return }
+                self.reportedRegion = self.pendingRegion
+                self.regionChanged?(self.reportedRegion)
+            }
         }
 
         private func rememberViewport() {
