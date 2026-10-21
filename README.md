@@ -8,13 +8,9 @@ A SwiftUI image development app for RAW, SDR, and HDR images, with tone and colo
 
 ## HDR in formats people actually use
 
-Dark Melon prioritizes **JPEG and HEIF/HEIC with HDR gain maps**: familiar photo formats built around a usable SDR image, with extra HDR information for compatible viewers. JPEG provides the broadest everyday fallback, so people can open the photograph on most phones even when HDR rendering is unavailable. HEIC is a natural option for Apple photo workflows.
+Export **JPEG or HEIF/HEIC with an HDR gain map**. Each file contains a finished SDR photograph plus extra highlight information for HDR viewers. JPEG gives recipients a familiar format that opens on most phones; HEIC fits naturally into Apple photo workflows.
 
-The goal is practical delivery, not merely a file that can technically encode HDR. We choose this approach over requiring recipients to use AVIF or JPEG XL, where support for opening the format does not necessarily mean their particular photo app, browser, or sharing service will preserve and display its HDR rendition. Those formats can deliver excellent HDR in supported workflows; they are simply not a prerequisite for viewing a Dark Melon export.
-
-**A good SDR photograph everywhere the base format is supported; an HDR extension where the full viewing path supports it.** Actual HDR still depends on the display, OS, viewer, and preservation of the gain map. Dark Melon writes ISO 21496-1 gain maps; older viewers that only understand a different gain-map variant may show SDR. HEIC is less universally viewable than JPEG, and messaging or social platforms may strip HDR metadata during conversion.
-
-For the platform mechanisms behind this approach, see [Apple's Adaptive HDR overview](https://developer.apple.com/videos/play/wwdc2024/10177/) and [Android's gain-map format documentation](https://developer.android.com/media/platform/hdr-image-format).
+You do not need an AVIF- or JPEG XL-specific workflow to see the photograph. Compatible viewers reveal the HDR rendition; other viewers show the SDR base. HDR still depends on the display and viewer, and sharing services may discard the gain map. Dark Melon writes ISO 21496-1 gain maps and also offers direct PQ HDR HEIF export.
 
 ## Sample image
 
@@ -29,12 +25,13 @@ An original 2736 × 1824 JPEG export with an embedded ISO 21496-1 HDR gain map. 
 - **RAW, SDR, and HDR image development**, with paired SDR/HDR previews and JPEG, HEIF, and TIFF export.
 - **Batch export on macOS**, using saved settings or automatic development for unedited files, concurrent processing with a memory budget, and automatic filename-conflict handling.
 - **Portable XMP sidecar settings**, leaving original images untouched. Unsaved recipes stay in a pending-edits list when switching images. Save commits them to sidecars; folder changes and normal close/quit ask before discarding pending work.
-- **Copy and paste settings**, with separate choices for Tone, White Balance, Color, HLS, Effects, and RAW controls.
+- **Copy and paste settings**, with separate choices for Tone, White Balance, Color, Effects, and RAW controls.
 - **Folder-based file browser** with thumbnails, RAW/All filtering, Command/Shift selection, and outlines identifying images with saved edits.
 - **White balance**, including averaged circular sampling, RGB gains, and RAW temperature/tint controls. Convert to WB transfers RGB adjustments into the RAW decoder where possible, preserving residual gains when its limits are reached.
 - **Nondestructive crop, rotation, and perspective correction**, with a full-photo crop overview, conservative output-resolution estimate, and matching SDR/HDR export geometry.
-- **Split toning**, saturation-versus-saturation and luminance-versus-saturation controls.
-- **HSL color adjustments and black-and-white conversion** with an adjustable color-sensitivity curve, designed for physically plausible tonal relationships and smooth near-white transitions.
+- **Perceptual color controls** in OKLab: drag six color handles to adjust hue and chroma, with a Lightness slider for the selected color.
+- **Chroma → Chroma and Lightness → Chroma graphs**, for controlling color intensity by existing chroma or brightness.
+- **Gradient split toning**, with up to six tint nodes across shadows, midtones, and highlights.
 - **Clarity** for local contrast, using a large-radius high-pass layer blended with Soft Light. Similar in purpose to Lightroom's Clarity, but a different implementation; negative strength softens contrast.
 - **HDF filter** for soft glow, adding a blurred version of the image with adjustable strength and radius.
 - **Film grain** based on cinegrain2, with adjustable size, strength, and tonal distribution—from a shadow-weighted response to a midtone peak—for convincing texture across different tones.
@@ -51,59 +48,93 @@ Dark Melon is a focused image developer, not a full replacement for a commercial
 - No updated thumbnails of edits in the file browser. Original files and their embedded previews remain untouched; the browser shows source thumbnails, while the main preview shows the developed result.
 - No masks, brushes, gradients, subject selections, or other spatially selective edits. Color and tonal-range controls are global.
 
-## Development philosophy: one edit, two useful renditions
+## Develop one photograph for SDR and HDR
 
-Dark Melon aims to make natural-looking SDR and HDR photographs together, using a small, coordinated set of tone controls. The SDR version should be a finished photograph with sensible exposure and contrast. The HDR version should use the display's extra headroom to reveal highlight separation and luminous detail that SDR cannot show, rather than simply turning up the brightness of the whole image.
+Dark Melon uses a small set of coordinated controls to produce two useful renditions together. Start with an SDR image that looks properly exposed and toned. Then use HDR to reveal separation in bright windows, reflections, stage lights, and other highlights that SDR cannot fully show.
 
-### Fewer controls, one coherent curve
+### A simple starting workflow
 
-Instead of asking you to balance separate Exposure, Shadows, Highlights, Whites, and Blacks adjustments, the core tone model uses two endpoints and four sliders:
+1. **Set white balance** so neutral surfaces and skin look right.
+2. **Place Tone over the shade that matters most**, often a representative skin tone or midtone. While dragging, the gray overlay shows which pixels you are targeting.
+3. **Adjust Contrast** for the desired separation and depth. The selected Tone region acts as your reference; negative contrast can soften an overly harsh image.
+4. **Set the white point** to decide where the SDR rendition reaches white. Enable **Auto Tones** if you want help adjusting the tonal settings after releasing the Tone slider.
+5. **Compare SDR and HDR.** Keep HDR Gain near its default for a restrained result. Add Rolloff to soften the brightest highlights, or turn HDR off for SDR-only output.
+6. **Save the edit and export.** Sidecars keep your settings separate from the original; JPEG and HEIC gain maps carry both renditions in one file.
 
-| Control | Role |
+| Control | What to use it for |
 | --- | --- |
-| White point | Chooses which input level reaches SDR white. This value alone dictates the clipping point without guess work.|
-| Tone | Moves the region where the curve allocates contrast, relative to the black and SDR white points. |
-| Contrast | Controls how concentrated that allocation is; negative values provide a complementary curve shape for reducing contrast. |
-| HDR Gain | Multiplies the entire HDR rendition, or disables HDR. |
-| HDR Rolloff | Gradually flattens the HDR highlight extension, lowering its endpoint. |
+| Black point | Choose where the deepest shadows become black. |
+| White point | Choose which source brightness reaches white in SDR. Lower it to bring more of the image toward white. |
+| Tone | Pick the source brightness around which you want to shape contrast. |
+| Contrast | Add separation around Tone, or reduce contrast for a gentler rendering. |
+| HDR Gain | Raise the brightness of the HDR rendition, or switch HDR off. |
+| HDR Rolloff | Soften the HDR highlight shoulder instead of letting it continue straight upward. |
 
-The SDR curve is constructed by integrating a nonnegative slope profile and normalizing its total area. Positive Contrast uses a beta-shaped profile; negative Contrast uses its broad, nonnegative complement. This creates a fixed **contrast budget**: allocating more slope to one tonal region necessarily leaves less elsewhere. The controls reshape a single continuous, monotonic mapping instead of stacking independently adjusted tonal regions. Within each RGB channel, a brighter input cannot become a darker output through this tone curve, although clipping can make different inputs equal.
+<img src="docs/images/tone-histogram.png" alt="Dark Melon tone histogram: the cyan SDR curve reaches white while the orange HDR curve continues into brighter highlights." width="640">
 
-This is a useful constraint for natural photographic rendering. It makes the tradeoff between shadow, midtone, and highlight separation explicit and reduces the number of interacting controls needed to find a balanced result.
+**Cyan is SDR; orange is HDR.** The white-point handle marks where SDR highlights reach white. The orange extension shows how HDR retains separation above that level. Neither version can restore detail that was already lost during capture.
 
-### SDR and HDR share an input reference
+If the app warns that HDR has become darker than SDR, a small increase in HDR Gain can resolve the crossing for gain-map export. Always check both previews: a pleasing HDR result should still have a useful SDR companion.
 
-Both renditions start from the same linear RGB image and black point. The SDR curve maps the interval between black and white into output 0–1, clipping above the selected white point. **The HDR extension grows out of that SDR curve at Tone**, using its brightness and local slope as the starting reference.
+## An alternative to traditional HSL
 
-HDR Gain is a separate multiplier, not the endpoint: the default 1.01× prevents intersection which is not supported by HDR gain maps. This can be used to make the entire HDR image brighter if needed, but we advise against that approach as HDR should be used exclusively to enhance highlight detail, that was its intended purpose.
+Dark Melon's color controls are designed for **natural photographic adjustments with smooth transitions in perceived hue and brightness**. Use them to refine skin, calm strong greens, or bring neighboring colors closer together without introducing obvious bands between color ranges.
 
-Rolloff bends the highlight extension downward smoothly. At zero it is straight; at maximum it finishes with zero slope. It retains the starting slope of the unrolled extension while reducing its final brightness. 
+In the Color panel, drag a colored handle **inward or outward to change chroma**, or **around the graph to shift hue**. Select a handle to adjust its Lightness. The central ring represents zero chroma. Each color's influence fades smoothly toward its neighbors: adjusting red affects the range between magenta and yellow, leaving colors beyond those boundaries alone.
 
-For example, the SDR white point can expose a room naturally while bright window detail reaches white. The HDR continuation retains separation in brighter source values and displays it above SDR white, using detail already present in the source. It cannot recover detail clipped during capture or beyond the implemented input endpoint.
+These controls use OKLab, a color space designed around perceived color differences. The practical benefit is smoother-looking transitions as colors change intensity or hue, helping processed photographs retain a natural appearance.
 
-**Auto Tones** when enabled, adjusting only the tone value by placing it over neutral skin tone, other settings are automatically adjusted to create a pleasant image in both HDR and SDR with a single input. 
+**This is a grading tool, not a color-replacement tool.** Hue movement is deliberately limited: a red car cannot be turned blue. Use small moves to refine the colors already present in the photograph.
 
-### Reading the two curves
+### Test 1: red, green, and blue chroma set to zero
 
-<img src="docs/images/tone-histogram.png" alt="Updated Dark Melon tone controls: cyan SDR curve levels off at the white point near 0.725; orange HDR extension reaches output 2.44 with Gain 1.01 and Rolloff zero." width="640">
+The “RGB removed” test sets the **red, green, and blue color controls to zero saturation/chroma**, leaving the other three controls unchanged. It does **not** remove the image's RGB channels.
 
-The horizontal axis is linear source RGB intensity. The colored histogram fills show pixel counts on a **logarithmic** vertical scale; the overlaid curves use a separate **linear output** scale, reduced to fit HDR headroom. The dashed “1.0 · SDR white” line marks reference white on that curve scale. A curve crossing a histogram trace has no special meaning—the two heights represent different quantities.
+Compare the transitions into gray and the brightness of the remaining colors. In these samples, Dark Melon retains smoother transitions; the traditional HSL result shows more pronounced wedges and brightness changes around the desaturated ranges.
 
-### Designed for gain-map delivery
+| Traditional HSL | Dark Melon |
+| --- | --- |
+| [![Traditional HSL: red, green, and blue desaturated](docs/images/color-comparison/rgb-removed-traditional.png)](docs/images/color-comparison/rgb-removed-traditional.png) | [![Dark Melon: red, green, and blue chroma set to zero](docs/images/color-comparison/rgb-removed-dark-melon.png)](docs/images/color-comparison/rgb-removed-dark-melon.png) |
 
-An SDR-base gain-map file contains a conventional SDR image plus information for reconstructing an HDR rendition. The SDR image is what a viewer sees when HDR is unavailable or the gain map is ignored, so a dark, flat fallback is still a failed delivery even if the HDR rendition looks good.
+### Test 2: alternating hue shifts
 
-Dark Melon develops both images first, then derives the gain map from their relationship. In simplified form, the stored quantity is `log2((HDR + epsilon) / (SDR + epsilon))`, calculated per RGB channel or from luminance for a monochrome map. The small offset handles values near black. The map therefore describes where the HDR rendition differs from the SDR base, rather than applying one global brightness multiplier. Compatible viewers can adapt that enhancement to available display headroom. See Apple's [overview of adaptive HDR and gain maps](https://developer.apple.com/videos/play/wwdc2024/10177/).
+The “alternate” test shifts successive color controls by **alternating +10° and −10°**. Neighboring colors move in opposing directions, making uneven transitions easier to see.
 
-The intended result is a convincing SDR photograph with an HDR extension that adds selective highlight detail and brightness. The mathematical structure supports that goal, but does not enforce it: aggressive settings can also brighten midtones substantially. The app warns when the HDR tone curve falls below the SDR curve; it does not automatically prevent crossings. Rolloff can cause such a crossing; a small increase in HDR Gain can resolve it. Direct PQ HEIF export is also available without a gain map.
+Dark Melon's result shows smoother perceived hue and brightness transitions, while the traditional result develops more distinct bands between some neighboring colors. This is the behavior we want when making modest color changes in a photograph: gradual variation should continue to look gradual.
 
-### Why this approach instead of a traditional multi-slider workflow?
+| Traditional HSL | Dark Melon |
+| --- | --- |
+| [![Traditional HSL with alternating plus and minus ten-degree hue shifts](docs/images/color-comparison/alternating-traditional.png)](docs/images/color-comparison/alternating-traditional.png) | [![Dark Melon with alternating plus and minus ten-degree hue shifts](docs/images/color-comparison/alternating-dark-melon.png)](docs/images/color-comparison/alternating-dark-melon.png) |
 
-For this goal, we prefer a compact, constrained model over the many interacting tonal adjustments familiar from Lightroom-style workflows. Extensive local or tonal manipulation can produce relationships that no longer resemble the photographed lighting—for example, heavily lifted shadows alongside strongly compressed highlights. Independent adjustments also do not, by themselves, define how a finished SDR image should extend into HDR. Dark Melon's paired curves make that relationship part of the development model from the start.
+### In a photograph
 
-This is a workflow advantage and a design preference, not a claim that Lightroom cannot produce natural HDR. [Current Lightroom supports HDR editing, SDR preview adjustments, and gain-map output](https://helpx.adobe.com/lightroom/desktop/edit-photos/hdr-output.html). Dark Melon's distinction is using fewer coupled controls to shape the two renditions together.
+The supplied photo comparison illustrates why those transitions matter. Look at the green-lit fabric and the changes between green and cyan: smoother color and brightness transitions help keep the material and lighting looking natural after processing.
 
-“Physically plausible” describes the rendering goal, not a guarantee of radiometric accuracy. Nonlinear tone mapping changes light ratios, per-channel curves can change color, and creative effects can deliberately depart from realism. The concrete guarantees here are nonnegative tone-curve slopes, defined endpoints, and a shared source reference—not a simulation of scene lighting.
+| Traditional adjustment | Dark Melon |
+| --- | --- |
+| [![Photo processed with traditional color controls](docs/images/color-comparison/photo-traditional.jpg)](docs/images/color-comparison/photo-traditional.jpg) | [![Photo processed with Dark Melon color controls](docs/images/color-comparison/photo-dark-melon.jpg)](docs/images/color-comparison/photo-dark-melon.jpg) |
+
+Click any comparison image to view it larger. Gradient samples are 1280 × 720 PNGs; the photo samples are approximately 720 pixels high. These are SDR, sRGB presentation copies of the supplied examples. The comparisons illustrate these edits, rather than every possible HSL implementation or setting.
+
+### Finish the color grade
+
+The Color panel follows the processing order:
+
+1. **Chroma graphs:** tame already-vivid colors, enrich quieter ones, or adjust color intensity separately in shadows and highlights.
+2. **Per-color graph:** refine individual hue ranges and their lightness.
+3. **Split tone:** add a finishing tint with nodes along the lightness gradient. A single node tints the whole range; additional nodes let shadows, midtones, and highlights take on different colors. Move a node's strength toward the center for less tint.
+
+## Effects: texture, glow, and emphasis
+
+- **Clarity:** bring out local texture, or use a negative amount for a softer look. Radius controls the scale of the detail being emphasized.
+- **HDF:** add a broad, soft glow. Start with a small amount to retain structure while softening the overall impression.
+- **Halation:** add a warm halo around bright areas when HDR is enabled. Radius changes its reach; Transmission changes how much green joins the red glow.
+- **Film Grain:** add texture with controls for size, strength, and distribution. Shift the distribution toward shadows or midtones to decide where the grain is most visible.
+- **Vignette:** darken the corners of the committed crop. Amount controls the darkening; Spread brings the effect farther toward the center.
+
+Use the panel's hold-to-Compare button to judge whether the effect improves the photograph. Start gently, then check both SDR and HDR before exporting.
+
+For implementation and recipe details, see [DevelopmentSettings.md](DevelopmentSettings.md).
 
 ## Open the project
 
