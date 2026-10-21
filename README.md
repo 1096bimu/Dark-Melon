@@ -106,15 +106,19 @@ Dark Melon's result shows smoother perceived hue and brightness transitions, whi
 | --- | --- |
 | [![Traditional HSL with alternating plus and minus ten-degree hue shifts](docs/images/color-comparison/alternating-traditional.png)](docs/images/color-comparison/alternating-traditional.png) | [![Dark Melon with alternating plus and minus ten-degree hue shifts](docs/images/color-comparison/alternating-dark-melon.png)](docs/images/color-comparison/alternating-dark-melon.png) |
 
-### In a photograph
+### From color to natural black and white
 
-The supplied photo comparison illustrates why those transitions matter. Look at the green-lit fabric and the changes between green and cyan: smoother color and brightness transitions help keep the material and lighting looking natural after processing.
+The same controls extend to monochrome: **set all six color handles to zero chroma** to remove color while retaining OKLab lightness. This gives a starting point that respects the perceived brightness differences in the color image, with smooth transitions between the resulting gray tones.
 
-| Traditional adjustment | Dark Melon |
+The B&W test below compares the supplied black-and-white filter result with Dark Melon. Notice the filter result's bright outer regions and central dark shape, while Dark Melon keeps a gradual progression of light and dark across the gradient. The difference is not simply how much color disappears, but which brightness relationships remain afterward.
+
+| B&W filter | Dark Melon |
 | --- | --- |
-| [![Photo processed with traditional color controls](docs/images/color-comparison/photo-traditional.jpg)](docs/images/color-comparison/photo-traditional.jpg) | [![Photo processed with Dark Melon color controls](docs/images/color-comparison/photo-dark-melon.jpg)](docs/images/color-comparison/photo-dark-melon.jpg) |
+| [![Supplied B&W filter test with bright outer regions and a darker center](docs/images/color-comparison/bw-filter.jpg)](docs/images/color-comparison/bw-filter.jpg) | [![Dark Melon monochrome test with smooth transitions in perceived lightness](docs/images/color-comparison/bw-dark-melon.jpg)](docs/images/color-comparison/bw-dark-melon.jpg) |
 
-Click any comparison image to view it larger. Gradient samples are 1280 × 720 PNGs; the photo samples are approximately 720 pixels high. These are SDR, sRGB presentation copies of the supplied examples. The comparisons illustrate these edits, rather than every possible HSL implementation or setting.
+For a color photograph, start with all six chroma controls at zero, then select individual handles and adjust **Lightness** to refine how their original colors appear in monochrome. For example, lighten skin-related hues or deepen blue skies while retaining gradual transitions into neighboring tones. Leave Split Tone neutral for pure black and white, or add a subtle tint as a finishing step.
+
+Click any comparison image to view it larger. Color gradient samples are 1280 × 720 PNGs; the B&W samples retain their supplied 960 × 540 resolution. All are SDR, sRGB images. These comparisons illustrate the supplied examples, rather than every possible HSL or black-and-white implementation.
 
 ### Finish the color grade
 
