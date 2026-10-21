@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ColorControls: View {
     @Binding var settings: ColorAdjustments
+    @Binding var vertices: [OKLabVertexAdjustment]
     @Binding var comparing: Bool
     var monochrome = false
     var hdrMax = 1.0
@@ -13,9 +14,9 @@ struct ColorControls: View {
                 Text("Color").font(.headline)
                 Spacer()
                 HoldCompareButton(comparing: $comparing)
-                    .disabled(settings.isIdentity)
-                Button("Reset Color") { settings = ColorAdjustments(); comparing = false }
-                    .disabled(settings.isIdentity)
+                    .disabled(settings.isIdentity && vertices.allSatisfy(\.isIdentity))
+                Button("Reset Color") { settings = ColorAdjustments(); vertices = Array(repeating: OKLabVertexAdjustment(), count: 6); comparing = false }
+                    .disabled(settings.isIdentity && vertices.allSatisfy(\.isIdentity))
             }
             ChromaCurveEditor(title: "Chroma → Chroma", start: $settings.saturationStart,
                 middle: $settings.saturationMid, sdr: $settings.saturationEnd, hdr: $settings.saturationHDR,
@@ -25,6 +26,8 @@ struct ColorControls: View {
                 middle: $settings.luminanceSaturationMid, sdr: $settings.luminanceSaturationEnd,
                 hdr: $settings.luminanceSaturationHDR, sdrMaximum: 1, hdrMax: hdrMax, info: .luminanceSaturation)
                 .disabled(monochrome)
+            Divider()
+            OKLabVertexControls(controls: $vertices, space: colorSpace)
             Divider()
             HStack {
                 Text("Split Tone").font(.headline)

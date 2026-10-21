@@ -9,10 +9,9 @@ nonisolated struct SettingsPasteSelection {
     var tone = true
     var whiteBalance = true
     var color = true
-    var hls = true
     var effects = true
     var raw = true
-    var isEmpty: Bool { !tone && !whiteBalance && !color && !hls && !effects && !raw }
+    var isEmpty: Bool { !tone && !whiteBalance && !color && !effects && !raw }
 
     func applying(_ source: ToneMapping, to destination: ToneMapping) -> ToneMapping {
         var result = destination
@@ -32,8 +31,7 @@ nonisolated struct SettingsPasteSelection {
                 result.rawWhiteBalance = rawBalance
             }
         }
-        if color { result.color = source.color }
-        if hls { result.hls = source.hls; result.blackAndWhite = source.blackAndWhite }
+        if color { result.color = source.color; result.vertexWarp = source.vertexWarp; result.hls = source.hls; result.blackAndWhite = source.blackAndWhite }
         if effects {
             result.clarity = source.clarity
             result.clarityRadius = source.clarityRadius
@@ -99,11 +97,10 @@ struct SettingsPasteOptions: View {
     @AppStorage("pasteSettings.tone") private var tone = true
     @AppStorage("pasteSettings.whiteBalance") private var whiteBalance = true
     @AppStorage("pasteSettings.color") private var color = true
-    @AppStorage("pasteSettings.hls") private var hls = true
     @AppStorage("pasteSettings.effects") private var effects = true
     @AppStorage("pasteSettings.raw") private var raw = true
     private var selection: SettingsPasteSelection {
-        SettingsPasteSelection(tone: tone, whiteBalance: whiteBalance, color: color, hls: hls, effects: effects, raw: raw)
+        SettingsPasteSelection(tone: tone, whiteBalance: whiteBalance, color: color, effects: effects, raw: raw)
     }
 
     var body: some View {
@@ -112,7 +109,6 @@ struct SettingsPasteOptions: View {
                 Toggle("Tone", isOn: $tone)
                 Toggle("White Balance", isOn: $whiteBalance)
                 Toggle("Color", isOn: $color)
-                Toggle("HLS", isOn: $hls)
                 Toggle("Effects", isOn: $effects)
                 Toggle("RAW", isOn: $raw)
             }

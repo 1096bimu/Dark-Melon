@@ -6,6 +6,7 @@ nonisolated struct ToneMapping: Codable, Equatable, Sendable {
     var rawWhiteBalance: RAWWhiteBalance?
     var blackAndWhite = BlackAndWhiteSettings()
     var color = ColorAdjustments()
+    var vertexWarp = [OKLabVertexAdjustment](repeating: OKLabVertexAdjustment(), count: 6)
     var hls = [HLSAdjustment](repeating: HLSAdjustment(), count: 6)
     var clarity = 0.0
     var clarityRadius = 30.0

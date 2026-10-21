@@ -51,43 +51,18 @@ nonisolated enum OKLabColor {
 }
 
 nonisolated final class SplitToneGradient {
-    private let kernel: CIKernel? = {
-        let functions=String(ColorPixelKernel.source.prefix(upTo:ColorPixelKernel.source.range(of:"kernel vec4 colorAdjust")!.lowerBound))
-        return CIKernel(source:functions + """
-        kernel vec4 gradientTint(sampler image, sampler table, float ceiling, float domain,
-            vec3 to0,vec3 to1,vec3 to2,vec3 from0,vec3 from1,vec3 from2) {
-            vec4 p=unpremultiply(sample(image,samplerCoord(image)));
-            vec3 lab=toOKLab(convertRGB(p.rgb,to0,to1,to2));
-            vec2 tint=sample(table,vec2(clamp(lab.x/domain,0.0,1.0)*511.0+0.5,0.5)).xy;
-            if (length(tint)<0.0000001) { return premultiply(p); }
-            vec3 target=vec3(lab.x,lab.yz+tint);
-            vec3 rgb=convertRGB(fromOKLab(target),from0,from1,from2);
-            if (min(rgb.r,min(rgb.g,rgb.b))<0.0 || max(rgb.r,max(rgb.g,rgb.b))>ceiling) {
-                float low=0.0; float high=1.0;
-                for (int i=0;i<14;i++) {
-                    float t=(low+high)*0.5;
-                    vec3 candidate=convertRGB(fromOKLab(vec3(target.x,target.yz*t)),from0,from1,from2);
-                    if (min(candidate.r,min(candidate.g,candidate.b))>=0.0 && max(candidate.r,max(candidate.g,candidate.b))<=ceiling) { low=t; } else { high=t; }
-                }
-                rgb=convertRGB(fromOKLab(vec3(target.x,target.yz*low)),from0,from1,from2);
-            }
-            return premultiply(vec4(rgb,p.a));
-        }
-        """)
-    }()
-
-    func apply(_ image: CIImage, settings: SplitToneSettings, space: ProcessingColorSpace, ceiling: Double, domainCeiling: Double) throws -> CIImage {
-        guard let nodes=settings.nodes, nodes.contains(where:{$0.strength>0}) else { return image }
-        let domain=cbrt(domainCeiling)
-        let knots=nodes.sorted{$0.lightness<$1.lightness}.map{($0.lightness,OKLabColor.tint($0,ceiling:domainCeiling,space:space))}
+    static func table(settings: SplitToneSettings, space: ProcessingColorSpace, ceiling: Double) -> CIImage {
+        let domain=cbrt(ceiling)
+        let knots=(settings.nodes ?? []).sorted{$0.lightness<$1.lightness}.map{($0.lightness,OKLabColor.tint($0,ceiling:ceiling,space:space))}
         let pixels=(0..<512).flatMap { i -> [Float] in
             let tint=OKLabColor.interpolate(domain*Double(i)/511,nodes:knots)
             return [Float(tint.x),Float(tint.y),0,1]
         }
-        let table=CIImage(bitmapData:pixels.withUnsafeBytes{Data($0)},bytesPerRow:512*16,size:CGSize(width:512,height:1),format:.RGBAf,colorSpace:nil)
-        let to=ScopeProjection.matrix(.sRGB).inverse * ScopeProjection.matrix(space), from=to.inverse
-        func row(_ m:simd_double3x3,_ i:Int)->CIVector { CIVector(x:m[0][i],y:m[1][i],z:m[2][i]) }
-        guard let output=kernel?.apply(extent:image.extent,roiCallback:{index,rect in index==1 ? table.extent:rect},arguments:[image,CISampler(image:table,options:[kCISamplerFilterMode:kCISamplerFilterLinear,kCISamplerWrapMode:kCISamplerWrapClamp]),ceiling,domain,row(to,0),row(to,1),row(to,2),row(from,0),row(from,1),row(from,2)]) else { throw CocoaError(.coderInvalidValue) }
-        return output
+        return CIImage(bitmapData:pixels.withUnsafeBytes{Data($0)},bytesPerRow:512*16,size:CGSize(width:512,height:1),format:.RGBAf,colorSpace:nil)
+    }
+    private let pipeline=OKLabColorPipeline()
+    func apply(_ image: CIImage, settings: SplitToneSettings, space: ProcessingColorSpace, ceiling: Double, domainCeiling: Double) throws -> CIImage {
+        var color=ColorAdjustments();color.splitTone=settings
+        return try pipeline.apply(image,color:color,vertices:Array(repeating:OKLabVertexAdjustment(),count:6),space:space,ceiling:ceiling,domainCeiling:domainCeiling)
     }
 }

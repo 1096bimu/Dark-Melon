@@ -4,10 +4,10 @@ import CoreImage
 @main struct Check {
  static func main() async throws {
   for space in ProcessingColorSpace.allCases { print("Maximum chroma \(space.rawValue): \(OKLCHGamut.maxima[space]!)") }
-  let kernel=CIColorKernel(source:ColorPixelKernel.source)!
+  let pipeline=OKLabColorPipeline()
   let space=CGColorSpace(name:CGColorSpace.extendedLinearSRGB)!
   let context=CIContext(options:[.workingColorSpace:space,.workingFormat:CIFormat.RGBAf])
-  let functions=String(ColorPixelKernel.source.prefix(upTo:ColorPixelKernel.source.range(of:"    kernel vec4 colorAdjust")?.lowerBound ?? ColorPixelKernel.source.range(of:"kernel vec4 colorAdjust")!.lowerBound))
+  let functions=ColorPixelKernel.functions
   let probe=CIColorKernel(source:functions + "kernel vec4 probe(float x) { float y=chromaMultiplier(x,vec4(0.0,1.0,0.5,2.0),2.0); return vec4(y,y,y,1.0); }")!
   for (x,expected) in [(0.0,0.0),(0.25,0.5),(0.5,1.0),(0.75,0.75),(1.0,0.5),(1.5,1.25),(2.0,2.0),(3.0,2.0)] {
    let out=probe.apply(extent:CGRect(x:0,y:0,width:1,height:1),arguments:[x])!
@@ -33,7 +33,9 @@ import CoreImage
   }
   let original=lab(rgb.map(Float.init))
   for amount in [0.0,0.5,1.0,2.0] {
-   let output=kernel.apply(extent:image.extent,arguments:[image,image,1.0,CIVector(x:amount,y:amount,z:amount,w:amount),CIVector(x:1,y:1,z:1,w:1),CIVector(x:0,y:0,z:0,w:0),CIVector(x:0,y:0),0.0,CIVector(x:0,y:0,z:0),CIVector(x:0.2126,y:0.7152,z:0.0722),OKLCHGamut.maxima[.sRGB]!,2.0,CIVector(x:1,y:0,z:0),CIVector(x:0,y:1,z:0),CIVector(x:0,y:0,z:1),CIVector(x:1,y:0,z:0),CIVector(x:0,y:1,z:0),CIVector(x:0,y:0,z:1)])!
+   var color=ColorAdjustments()
+   color.saturationStart=amount; color.saturationMid=amount; color.saturationEnd=amount; color.saturationHDR=amount
+   let output=try pipeline.apply(image,color:color,vertices:Array(repeating:OKLabVertexAdjustment(),count:6),space:.sRGB,ceiling:1,domainCeiling:8)
    var data=[Float](repeating:0,count:4)
    context.render(output,toBitmap:&data,rowBytes:16,bounds:CGRect(x:0,y:0,width:1,height:1),format:.RGBAf,colorSpace:space)
    let result=lab(data)

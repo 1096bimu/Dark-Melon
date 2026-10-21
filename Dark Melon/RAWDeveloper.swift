@@ -102,12 +102,10 @@ actor RAWDeveloper {
         }
         """)
 
-    private lazy var splitToneGradient = SplitToneGradient()
     private lazy var monochromeKernel = CIColorKernel(source: MonochromeKernel.source)
 
-    private lazy var hlsKernel = CIColorKernel(source: HLSPixelKernel.source)
 
-    private lazy var colorKernel = CIColorKernel(source: ColorPixelKernel.source)
+    private lazy var colorPipeline = OKLabColorPipeline()
 
     private lazy var toneKernel = CIKernel(source: """
         kernel vec4 toneMap(sampler source, sampler table, float black, float span,
@@ -327,66 +325,15 @@ actor RAWDeveloper {
             color.saturationStart = 1; color.saturationEnd = 1; color.saturationMid = 1; color.saturationHDR = 1
             color.luminanceSaturationStart = 1; color.luminanceSaturationEnd = 1; color.luminanceSaturationMid = 1; color.luminanceSaturationHDR = 1
         }
-        // Shared by preview and export: offset → vignette → tone → effects → RGB WB/monochrome → Color → HLS.
+        // Shared by preview and export: offset → vignette → tone → effects → RGB WB/monochrome → shared OKLab Color + vertex deformation.
         // RAW decoder white balance is already part of the decoded source.
         let toned = try applyTone(image, curve: mapping.curve(hdr: hdr))
         let effected = try applyEffects(toned, source: image, mapping: mapping, hdr: hdr)
         let balanced = try applyWhiteBalance(effected, mapping: mapping)
         try Task.checkCancellation()
-        let split = color.splitTone
-        let hasHLS = !mapping.blackAndWhite.isEnabled && !mapping.hls.allSatisfy(\.isIdentity)
-        // Split Tone and HLS keep their SDR tonal reference; OKLCH graphs use the actual pixel.
-        let reference = hdr && mapping.hdrEnabled && (!split.isIdentity || hasHLS)
-            ? try applyTone(image, curve: mapping.curve(hdr: false)) : toned
-        let mapped = balanced
-        guard !color.isIdentity else { return try applyHLS(mapped, reference: reference, mapping: mapping, hdr: hdr) }
-        let start = split.huePoint(at: 0), end = split.huePoint(at: 1)
-        let naturalRadius = hypot(split.chordMidpoint.x, split.chordMidpoint.y)
-        let radius = (split.midpointRadius ?? naturalRadius).clamped(to: 0...1)
-        let middle = split.hueNormal * radius
-        let rimWeight = radius > naturalRadius && naturalRadius < 1 - 0.000001
-            ? (radius - naturalRadius) / (1 - naturalRadius) : 0
-        let amountLimits = BoundedQuadraticCurve.coefficientRange(start: split.shadowAmount, end: split.highlightAmount,
-                                                                outputRange: 0...SplitToneSettings.maximumAmount, curvatureScale: 1)
-        // D50 adaptation in the shared matrices cancels, yielding linear RGB→RGB.
-        let toSRGB = ScopeProjection.matrix(.sRGB).inverse * ScopeProjection.matrix(colorSpace)
-        let fromSRGB = toSRGB.inverse
-        func row(_ m: simd_double3x3, _ i: Int) -> CIVector {
-            CIVector(x: m[0][i], y: m[1][i], z: m[2][i])
-        }
-        guard let colored = colorKernel?.apply(extent: mapped.extent, arguments: [
-            mapped, reference, hdr && mapping.hdrEnabled ? mapping.hdrMax : 1,
-            CIVector(x: color.saturationStart, y: color.saturationMid, z: color.saturationEnd, w: color.saturationHDR),
-            CIVector(x: color.luminanceSaturationStart, y: color.luminanceSaturationMid, z: color.luminanceSaturationEnd, w: color.luminanceSaturationHDR),
-            CIVector(x: start.x, y: start.y, z: end.x, w: end.y),
-            CIVector(x: middle.x, y: middle.y), rimWeight,
-            CIVector(x: split.nodes == nil ? split.shadowAmount : 0, y: split.nodes == nil ? split.highlightAmount : 0, z: split.nodes == nil ? split.amountCurveA.clamped(to: amountLimits) : 0),
-            CIVector(x: colorSpace.luminance.x, y: colorSpace.luminance.y, z: colorSpace.luminance.z),
-            OKLCHGamut.maxima[colorSpace]!, cbrt(mapping.hdrMax),
-            row(toSRGB, 0), row(toSRGB, 1), row(toSRGB, 2),
-            row(fromSRGB, 0), row(fromSRGB, 1), row(fromSRGB, 2)
-        ]) else { throw DevelopmentError.decode }
-        let tinted = try splitToneGradient.apply(colored, settings: split, space: colorSpace,
-            ceiling: hdr && mapping.hdrEnabled ? mapping.hdrMax : 1, domainCeiling: mapping.hdrMax)
-        return try applyHLS(tinted, reference: reference, mapping: mapping, hdr: hdr)
-    }
-
-    private func applyHLS(_ image: CIImage, reference: CIImage, mapping: ToneMapping, hdr: Bool) throws -> CIImage {
-        let controls = mapping.hls
-        guard !mapping.blackAndWhite.isEnabled else { return image }
-        guard !controls.allSatisfy(\.isIdentity) else { return image }
-        let weights = colorSpace.luminance
-        var arguments: [Any] = [image, reference, hdr && mapping.hdrEnabled ? mapping.hdrMax : 1,
-                                CIVector(x: weights.x, y: weights.y, z: weights.z)]
-        arguments += controls.map {
-            CIVector(x: $0.shadowHue, y: $0.midtoneHue, z: $0.highlightHue, w: $0.saturation)
-        }
-        arguments += [CIVector(x: controls[0].lightness, y: controls[1].lightness, z: controls[2].lightness),
-                      CIVector(x: controls[3].lightness, y: controls[4].lightness, z: controls[5].lightness)]
-        guard let result = hlsKernel?.apply(extent: image.extent, arguments: arguments) else {
-            throw DevelopmentError.decode
-        }
-        return result
+        return try colorPipeline.apply(balanced, color: color, vertices: mapping.vertexWarp,
+            space: colorSpace, ceiling: hdr && mapping.hdrEnabled ? mapping.hdrMax : 1,
+            domainCeiling: mapping.hdrMax)
     }
 
     private func applyEffects(_ image: CIImage, source: CIImage, mapping: ToneMapping, hdr: Bool) throws -> CIImage {

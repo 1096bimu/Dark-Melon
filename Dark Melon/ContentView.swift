@@ -44,7 +44,6 @@ struct ContentView: View {
     @State private var panel = EditorPanel.tone
     @State private var comparingColor = false
     @State private var comparingEffects = false
-    @State private var comparingHLS = false
     @State private var colorSpace = ProcessingColorSpace.sRGB
     @State private var sourceURL: URL?
     @State private var developer = RAWDeveloper()
@@ -103,7 +102,7 @@ struct ContentView: View {
             || mapping.rawWhiteBalance != recipe.mapping.rawWhiteBalance
         cropping = false
         adjustingTone = false; adjustingWhitePoint = false; pickingWhiteBalance = false
-        comparingColor = false; comparingHLS = false; comparingEffects = false
+        comparingColor = false; comparingEffects = false
         colorSpace = recipe.colorSpace
         mapping = recipe.mapping
         if let settings = recipe.rawSettings { rawSettings = settings }
@@ -112,10 +111,10 @@ struct ContentView: View {
         rememberCurrentEdits()
     }
 
-    private var comparing: Bool { comparingColor || comparingEffects || comparingHLS }
+    private var comparing: Bool { comparingColor || comparingEffects }
 
     private var detailRequest: DetailPreviewRequest {
-        let counterpart: ToneMapping? = [.color, .hls, .effects].contains(panel)
+        let counterpart: ToneMapping? = [.color, .effects].contains(panel)
             ? (comparing ? mapping : comparisonMapping(panel)) : nil
         return DetailPreviewRequest(sourceID: development?.id, mapping: previewMapping,
             counterpart: counterpart, comparing: comparing, hdr: hdrPreview,
@@ -189,8 +188,9 @@ struct ContentView: View {
 
     private func comparisonMapping(_ panel: EditorPanel) -> ToneMapping {
         var result = mapping
-        if panel == .color { result.color = ColorAdjustments() }
-        if panel == .hls {
+        if panel == .color {
+            result.color = ColorAdjustments()
+            result.vertexWarp = Array(repeating: OKLabVertexAdjustment(), count: 6)
             result.hls = Array(repeating: HLSAdjustment(), count: 6)
             result.blackAndWhite = BlackAndWhiteSettings()
             result.blackAndWhite.isEnabled = mapping.blackAndWhite.isEnabled
@@ -201,7 +201,6 @@ struct ContentView: View {
 
     private var previewMapping: ToneMapping {
         if comparingColor { return comparisonMapping(.color) }
-        if comparingHLS { return comparisonMapping(.hls) }
         if comparingEffects { return comparisonMapping(.effects) }
         return mapping
     }
@@ -383,9 +382,7 @@ struct ContentView: View {
                                 }
                             })
                         } else if panel == .color {
-                            ColorControls(settings: $mapping.color, comparing: $comparingColor, monochrome: mapping.blackAndWhite.isEnabled, hdrMax: mapping.hdrMax, colorSpace: colorSpace)
-                        } else if panel == .hls {
-                            HLSControls(adjustments: $mapping.hls, comparing: $comparingHLS, blackAndWhite: $mapping.blackAndWhite)
+                            ColorControls(settings: $mapping.color, vertices: $mapping.vertexWarp, comparing: $comparingColor, monochrome: mapping.blackAndWhite.isEnabled, hdrMax: mapping.hdrMax, colorSpace: colorSpace)
                         } else if panel == .effects {
                             EffectsControls(clarity: $mapping.clarity, radius: $mapping.clarityRadius, hdf: $mapping.hdf, hdfRadius: $mapping.hdfRadius, grain: $mapping.grain, halation: $mapping.halation, vignette: $mapping.vignette, hdrEnabled: mapping.hdrEnabled, comparing: $comparingEffects)
                         } else {
@@ -425,7 +422,6 @@ struct ContentView: View {
                 toneLocatorImage = nil
                 comparingColor = false
                 comparingEffects = false
-                comparingHLS = false
                 let requested = pendingPicker
                 pendingPicker = nil
                 if panel == .tone, let requested { togglePicker(requested) }
@@ -438,7 +434,6 @@ struct ContentView: View {
                 toneLocatorImage = nil
                 comparingColor = false
                 comparingEffects = false
-                comparingHLS = false
             }
             .onChange(of: mapping.white) { _, _ in
                 if !loading { hdrPreview = false }
@@ -765,7 +760,7 @@ struct ContentView: View {
                                                                   histogram: existingHistogram)
                 guard self.development?.id == development.id, mapping == original else { return }
                 mapping = SettingsPasteSelection(tone: true, whiteBalance: false, color: false,
-                                                 hls: false, effects: false, raw: false).applying(automatic, to: mapping)
+                                                 effects: false, raw: false).applying(automatic, to: mapping)
                 editHistory.observe(currentRecipe, name: String(localized: "Reset Tone"))
                 editHistory.flush()
             } catch { errorMessage = error.localizedDescription }
@@ -1061,7 +1056,6 @@ struct ContentView: View {
         } else {
             guard development != nil else { return }
                     comparingColor = false
-            comparingHLS = false
             comparingEffects = false
             pickingWhiteBalance = false
             let previousRAWSettings = rawSettings

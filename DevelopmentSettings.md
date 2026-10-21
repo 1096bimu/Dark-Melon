@@ -127,8 +127,7 @@ uses C=0…the selected SDR gamut maximum; Lightness → Chroma uses L=0…1 (SD
 using the right endpoint. Both multipliers are evaluated on the input color and
 multiplied together. Scaling a/b preserves L and hue; a bounded chroma search
 fits out-of-gamut results without per-channel hue distortion. HDR values use
-absolute lightness/chroma, not a normalization by HDR Gain. Split Tone retains
-its existing SDR reference and follows these controls. The existing recipe keys
+absolute lightness/chroma, not a normalization by HDR Gain. Split Tone uses absolute OKLab lightness and follows these controls. The existing recipe keys
 are retained, so previously saved multipliers acquire the new OKLCH behavior.
 Conversion reference: https://bottosson.github.io/posts/oklab/
 Regression checks: `Tests/OKLCHChecks.swift`.
@@ -157,3 +156,30 @@ A 512-entry float lookup table feeds the GPU. Old hue/amount recipes are approxi
 with three nodes at lightness 0.2, 0.5, 0.8. New nodes participate in Color reset,
 Compare, clipboard, sidecars and undo via the existing Color settings container.
 Regression checks: `Tests/SplitToneGradientChecks.swift`.
+
+
+### Shared OKLab color deformation
+
+Color graphs, gradient split toning, and the experimental six-vertex controls
+share one GPU kernel: linear RGB → OKLab → chroma multipliers → vertex deformation →
+additive tint → final gamut fit → linear RGB. There is no intermediate RGB
+round trip or gamut clipping between those operations. Tone, spatial effects and
+RGB white balance remain in their existing linear RGB stages.
+
+The vertex field uses compact hue wedges in OKLab. Each vertex affects only the
+sector between its two original neighboring hue faces, independent of its target
+position. Smoothstep interpolation between adjacent controls gives zero influence
+and zero influence slope at each outer face. Chroma multipliers and rotation
+angles interpolate directly; lightness offsets fade smoothly to zero toward the
+neutral axis. Uniform chroma edits scale the entire volume consistently, including
+complete monochrome at zero. No global radial-basis solve or RGB weights remain.
+Extreme edits can still fold the volume within the affected wedges.
+
+HDR evaluates the same field in coordinates normalized by the cube root of its
+output ceiling. The Color graphs and tint positions retain their absolute OKLab
+coordinates. Final gamut fitting reduces chroma at fixed lightness and hue; it
+does not force an out-of-range lightness into the output range.
+
+Validation: `Tests/OKLabVolumeChecks.swift`, `Tests/VertexWarpChecks.swift`,
+`Tests/OKLCHChecks.swift`, `Tests/SplitToneGradientChecks.swift`, and
+`Tests/PreviewDetailChecks.swift`.

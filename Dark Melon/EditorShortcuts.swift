@@ -4,7 +4,6 @@ import SwiftUI
 enum EditorPanel: String, CaseIterable, Identifiable {
     case tone = "Tone"
     case color = "Color"
-    case hls = "HLS"
     case effects = "Effects"
     case transform = "Transform"
     case raw = "RAW"

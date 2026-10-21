@@ -115,7 +115,7 @@ import AppKit
         if a.transform != b.transform { return String(localized: "Transform") }
         if a.whiteBalance != b.whiteBalance || a.rawWhiteBalance != b.rawWhiteBalance { return String(localized: "White Balance") }
         if a.color != b.color { return String(localized: "Color") }
-        if a.hls != b.hls || a.blackAndWhite != b.blackAndWhite { return String(localized: "HLS") }
+        if a.vertexWarp != b.vertexWarp || a.hls != b.hls || a.blackAndWhite != b.blackAndWhite { return String(localized: "Color") }
         if a.vignette != b.vignette || a.clarity != b.clarity || a.hdf != b.hdf || a.grain != b.grain || a.halation != b.halation || a.clarityRadius != b.clarityRadius || a.hdfRadius != b.hdfRadius { return String(localized: "Effects") }
         if a.tonePosition != b.tonePosition { return String(localized: "Tone") }
         if a.offset != b.offset { return String(localized: "Offset") }

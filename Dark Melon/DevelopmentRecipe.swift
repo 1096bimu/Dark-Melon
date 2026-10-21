@@ -116,7 +116,9 @@ nonisolated struct DevelopmentRecipe: Codable, Equatable, Sendable {
         if let wb = m.rawWhiteBalance {
             guard within(Double(wb.temperature), 2000...50000), within(Double(wb.tint), -150...150) else { throw RecipeError.invalid }
         }
-        guard m.hls.count == 6,
+        guard m.vertexWarp.count == 6,
+              m.vertexWarp.allSatisfy({ within($0.chroma, 0...2) && within($0.lightness, -0.25...0.25) && within($0.rotation, -1...1) }),
+              m.hls.count == 6,
               within(m.offset, -0.3...0.3), within(m.black, 0...1), within(m.white, 0...1), m.white - m.black >= ToneMapping.minimumRange * 0.999,
               within(m.tonePosition, 0...1), within(m.concentration, -1...1),
               within(m.hdrRolloff, 0...1), within(m.hdrTarget, 1...20), within(m.hdrGain, 0...20),
