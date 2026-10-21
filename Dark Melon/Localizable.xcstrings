@@ -13,6 +13,16 @@
     "%@": {
       "shouldTranslate": false
     },
+    "%@ %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "%1$@ %2$@"
+          }
+        }
+      }
+    },
     "%@ degrees": {
       "extractionState": "manual",
       "localizations": {
@@ -75,6 +85,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@饱和度"
+          }
+        }
+      }
+    },
+    "%@ stops": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 档"
           }
         }
       }
@@ -143,9 +164,6 @@
         }
       }
     },
-    "%lld°  ·  %lld°": {
-      "shouldTranslate": false
-    },
     "%lldnm": {
       "shouldTranslate": false
     },
@@ -165,9 +183,6 @@
           }
         }
       }
-    },
-    "1×": {
-      "shouldTranslate": false
     },
     "8 bit": {
       "extractionState": "manual",
@@ -220,6 +235,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "授权访问其他文件夹并不能读取或保存此图像的附属文件。"
+          }
+        }
+      }
+    },
+    "Adds an equal offset to linear RGB before tone mapping. Negative values clip shadows; positive values lift black.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在色调映射前为线性 RGB 添加相同的偏移量。负值会裁切阴影，正值会抬高黑位。"
           }
         }
       }
@@ -420,6 +446,17 @@
         }
       }
     },
+    "Black": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "黑色"
+          }
+        }
+      }
+    },
     "Black & White": {
       "extractionState": "manual",
       "localizations": {
@@ -574,6 +611,39 @@
         }
       }
     },
+    "Chroma → Chroma": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "色度 → 色度"
+          }
+        }
+      }
+    },
+    "Chroma 0": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "色度 0"
+          }
+        }
+      }
+    },
+    "Chroma 0.4": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "色度 0.4"
+          }
+        }
+      }
+    },
     "Cinegrain 2": {
       "shouldTranslate": false
     },
@@ -617,6 +687,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "点击圆心，拖动设置半径，再次点击以应用。点击吸管可取消。"
+          }
+        }
+      }
+    },
+    "Click the gradient to add a tone node.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点击渐变条添加色调节点。"
           }
         }
       }
@@ -1020,6 +1101,17 @@
         }
       }
     },
+    "Delete Node": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除节点"
+          }
+        }
+      }
+    },
     "Deselect All": {
       "extractionState": "manual",
       "localizations": {
@@ -1337,6 +1429,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "格式"
+          }
+        }
+      }
+    },
+    "Four chroma multipliers joined by straight lines at OKLCH lightness 0, 0.5, 1 (SDR white), and the cube root of the HDR output ceiling. The SDR and HDR intervals are displayed separately. 1× is unchanged.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "四个色度倍率控制点以直线连接，分别位于 OKLCH 明度 0、0.5、1（SDR 白色）及 HDR 输出上限的立方根。SDR 和 HDR 区间分开展示。1× 保持不变。"
+          }
+        }
+      }
+    },
+    "Four chroma multipliers joined by straight lines: zero, SDR midpoint, SDR gamut maximum, and HDR gamut maximum. The HDR endpoint follows the current HDR output ceiling. 1× is unchanged.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "四个色度倍率控制点以直线连接：零、SDR 中点、SDR 色域最大值及 HDR 色域最大值。HDR 端点随当前 HDR 输出上限变化。1× 保持不变。"
           }
         }
       }
@@ -1834,6 +1948,39 @@
         }
       }
     },
+    "Lightness → Chroma": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "明度 → 色度"
+          }
+        }
+      }
+    },
+    "Lightness 0": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "明度 0"
+          }
+        }
+      }
+    },
+    "Lightness 1": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "明度 1"
+          }
+        }
+      }
+    },
     "Linear RGB": {
       "extractionState": "manual",
       "localizations": {
@@ -1987,6 +2134,17 @@
         }
       }
     },
+    "Maximum chroma": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最大色度"
+          }
+        }
+      }
+    },
     "Median: %lld": {
       "extractionState": "manual",
       "localizations": {
@@ -2075,6 +2233,39 @@
         }
       }
     },
+    "Multiplies OKLCH chroma according to input chroma, from 0 to 0.4. Values above 0.4 use the right endpoint. 1× is unchanged; lightness and hue are preserved within the working gamut.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "根据输入色度（0 至 0.4）调整 OKLCH 色度倍率。超过 0.4 的值使用右端点。1× 保持不变；在工作色域内保持明度和色相。"
+          }
+        }
+      }
+    },
+    "Multiplies OKLCH chroma according to input chroma, from 0 to the maximum chroma in the selected SDR color space. HDR values above that maximum use the right endpoint. 1× is unchanged; lightness and hue are preserved within the working gamut.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "根据输入色度调整 OKLCH 色度倍率，范围为 0 至所选 SDR 色彩空间的最大色度。超过此值的 HDR 色度使用右端点。1× 保持不变；在工作色域内保持明度和色相。"
+          }
+        }
+      }
+    },
+    "Multiplies OKLCH chroma according to perceptual lightness, from 0 (black) to 1 (SDR white). HDR lightness above 1 uses the right endpoint. 1× is unchanged.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "根据感知明度（0 为黑色，1 为 SDR 白色）调整 OKLCH 色度倍率。HDR 明度超过 1 时使用右端点。1× 保持不变。"
+          }
+        }
+      }
+    },
     "No HDR pixel can be darker than its SDR counterpart in a gain map based file. PQ and other direct HDR formats are not affected. You may add a small amount of HDR Gain to fix this issue.": {
       "extractionState": "manual",
       "localizations": {
@@ -2126,6 +2317,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "关闭"
+          }
+        }
+      }
+    },
+    "Offset": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "偏移"
           }
         }
       }
@@ -3039,6 +3241,17 @@
         }
       }
     },
+    "Spread": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "扩散范围"
+          }
+        }
+      }
+    },
     "Step completed": {
       "extractionState": "manual",
       "localizations": {
@@ -3247,6 +3460,17 @@
         }
       }
     },
+    "Tone color wheel": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "色调色轮"
+          }
+        }
+      }
+    },
     "Tone indicates the range of luminance that is of the most interest, usually set to skin tones, or 50% grey. Its luminance is generally protected when adjusting Contrast.": {
       "extractionState": "manual",
       "localizations": {
@@ -3254,6 +3478,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "影调表示最关注的亮度范围，通常选在肤色或 50% 灰附近。调整对比度时，该范围的亮度通常会得到保留。"
+          }
+        }
+      }
+    },
+    "Tone node": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "色调节点"
           }
         }
       }
@@ -3338,6 +3573,17 @@
           "stringUnit": {
             "state": "translated",
             "value": "无法创建光晕处理内核。"
+          }
+        }
+      }
+    },
+    "Unable to create the Vignette processing kernel.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法创建暗角处理内核。"
           }
         }
       }
@@ -3435,6 +3681,39 @@
           "stringUnit": {
             "state": "translated",
             "value": "版本"
+          }
+        }
+      }
+    },
+    "Vignette": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暗角"
+          }
+        }
+      }
+    },
+    "Vignette amount": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暗角强度"
+          }
+        }
+      }
+    },
+    "Vignette spread": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暗角扩散范围"
           }
         }
       }
@@ -3593,68 +3872,24 @@
         }
       }
     },
-    "Vignette": {
+    "SDR white": {
       "extractionState": "manual",
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "暗角"
+            "value": "SDR 白色"
           }
         }
       }
     },
-    "Spread": {
+    "Tone strength": {
       "extractionState": "manual",
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "扩散范围"
-          }
-        }
-      }
-    },
-    "Vignette amount": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "暗角强度"
-          }
-        }
-      }
-    },
-    "Vignette spread": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "暗角扩散范围"
-          }
-        }
-      }
-    },
-    "%@ stops": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ 档"
-          }
-        }
-      }
-    },
-    "Unable to create the Vignette processing kernel.": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "无法创建暗角处理内核。"
+            "value": "色调强度"
           }
         }
       }

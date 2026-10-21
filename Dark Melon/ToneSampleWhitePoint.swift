@@ -2,14 +2,13 @@ import CoreGraphics
 import Foundation
 
 /// Fits the selected input shade in SDR while keeping its source luminance fixed.
-/// Automatic white-point changes rebase relative Tone instead of selecting a new shade.
+/// Tone is stored directly in source-linear luminance.
 nonisolated enum ToneSampleWhitePoint {
     static func automaticTones(mapping: ToneMapping, space: ProcessingColorSpace) -> ToneMapping {
         var result = mapping
         let input = mapping.peakPosition
         let shade = SIMD3<Double>(repeating: input)
         result.white = adjustedWhite(sample: shade, mapping: mapping, space: space)
-        result.tonePosition = min(1, max(0, (input - result.black) / max(ToneMapping.minimumRange, result.white - result.black)))
         return result
     }
 
@@ -19,10 +18,8 @@ nonisolated enum ToneSampleWhitePoint {
         let weights = space.luminance
 
         func level(_ white: Double) -> Double {
-            let span = max(ToneMapping.minimumRange, white - mapping.black)
             var candidate = mapping
             candidate.white = white
-            candidate.tonePosition = min(1, max(0, (input - mapping.black) / span))
             let curve = candidate.curve(hdr: false)
             let toned = [sample.x, sample.y, sample.z].map { CGFloat(curve.value(at: $0)) }
             guard let color = CGColor(colorSpace: space.linear, components: toned + [1]),

@@ -113,3 +113,47 @@ and SDR histograms see the adjusted input. Amount zero bypasses the kernel.
 Old recipes default to Off; Effects paste, compare, reset and undo include it.
 `Tests/VignetteChecks.swift` exercises GPU falloff, transformed geometry and recipes;
 preview detail and edit history checks include nonzero vignette settings.
+
+Offset (RAW panel after Shadow Bias, -0.02…0.02, default zero) adds the same linear RGB value
+before vignette and tone mapping. Negative RGB results are bounded to zero;
+values above one and alpha are preserved. It bypasses processing at zero,
+belongs to RAW copy/paste and Reset RAW, and is stored in recipes/undo.
+The original-source histogram remains unchanged. Sampling and locator masks
+use the adjusted input, as with vignette. Regression: `Tests/OffsetChecks.swift`.
+
+The two Color multiplier graphs now operate in OKLCH (OKLab polar chroma),
+using the post-white-balance pixel in the selected working gamut. Chroma → Chroma
+uses C=0…the selected SDR gamut maximum; Lightness → Chroma uses L=0…1 (SDR white), with higher values
+using the right endpoint. Both multipliers are evaluated on the input color and
+multiplied together. Scaling a/b preserves L and hue; a bounded chroma search
+fits out-of-gamut results without per-channel hue distortion. HDR values use
+absolute lightness/chroma, not a normalization by HDR Gain. Split Tone retains
+its existing SDR reference and follows these controls. The existing recipe keys
+are retained, so previously saved multipliers acquire the new OKLCH behavior.
+Conversion reference: https://bottosson.github.io/posts/oklab/
+Regression checks: `Tests/OKLCHChecks.swift`.
+
+Both chroma graphs now use four independent multiplier nodes connected by linear
+segments: zero, half the SDR endpoint, SDR endpoint, and HDR endpoint. SDR chroma
+ends at the working-gamut maximum; SDR lightness ends at 1. HDR endpoints multiply
+those by the cube root of the current HDR output ceiling. Beyond the endpoint,
+the last multiplier is held constant. HDR Off disables the last handle and uses
+the SDR endpoint. The UI reserves separate labeled SDR/HDR intervals for usable
+handle spacing, with numeric input values beneath each node. Old quadratic
+recipes migrate their midpoint value and repeat the SDR endpoint for HDR.
+
+Split Tone now uses a lightness gradient and OKLCH wheel nodes. Nodes store
+absolute OKLab lightness, hue, normalized gamut-relative chroma strength, and UUID.
+Clicking the bar adds/selects nodes; handles and a Lightness slider reposition them.
+The wheel selects a hue, then radial dragging changes strength along that ray.
+Right-click/Delete Node removes a node. Its center is no tint. One node extends
+across the entire range; multiple nodes linearly interpolate their a/b offsets
+with lightness, holding the outer nodes beyond their positions. Tint is added to
+existing a/b, retaining L; out-of-gamut results reduce chroma at the same L/hue.
+The bar spans SDR white when HDR is disabled, otherwise the cube root of the HDR
+output ceiling. The wheel rim is the selected gamut's maximum chroma at that node's
+L and hue within that ceiling. Pure black/maximum white have no chroma capacity.
+A 512-entry float lookup table feeds the GPU. Old hue/amount recipes are approximated
+with three nodes at lightness 0.2, 0.5, 0.8. New nodes participate in Color reset,
+Compare, clipboard, sidecars and undo via the existing Color settings container.
+Regression checks: `Tests/SplitToneGradientChecks.swift`.

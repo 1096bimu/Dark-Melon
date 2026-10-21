@@ -16,6 +16,7 @@ nonisolated struct SettingsPasteSelection {
 
     func applying(_ source: ToneMapping, to destination: ToneMapping) -> ToneMapping {
         var result = destination
+        if raw { result.offset = source.offset }
         if tone {
             result.black = source.black
             result.white = source.white

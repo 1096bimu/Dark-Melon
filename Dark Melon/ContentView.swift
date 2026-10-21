@@ -52,8 +52,6 @@ struct ContentView: View {
     @State private var exportWorker = RAWDeveloper()
     @State private var histogramBins = 1
     @State private var histogram: HistogramData?
-    @State private var pendingAutoContrast: AutoWhiteRequest?
-    @State private var pendingAutoWhite: AutoWhiteRequest?
     @State private var histogramError: String?
     @State private var exportSettings = HEIFSettings.restored()
     @State private var showingExportOptions = false
@@ -101,7 +99,6 @@ struct ContentView: View {
     }
 
     private func restoreHistory(_ recipe: DevelopmentRecipe) {
-        pendingAutoWhite = nil; pendingAutoContrast = nil
         let reload = colorSpace != recipe.colorSpace || rawSettings != (recipe.rawSettings ?? rawSettings)
             || mapping.rawWhiteBalance != recipe.mapping.rawWhiteBalance
         cropping = false
@@ -123,7 +120,7 @@ struct ContentView: View {
         return DetailPreviewRequest(sourceID: development?.id, mapping: previewMapping,
             counterpart: counterpart, comparing: comparing, hdr: hdrPreview,
             region: previewRegion, enabled: !loading && !cropping && !adjustingTone && !adjustingWhitePoint
-                && (!editHistory.interacting || comparing) && pendingAutoWhite == nil)
+                && (!editHistory.interacting || comparing))
     }
 
     private var visibleDetail: PreviewDetail? {
@@ -376,16 +373,17 @@ struct ContentView: View {
                                 resetRotation: { if !cropping { toggleTransform() }; cropTransform.rotation = 0 },
                                 resetAll: resetTransform)
                         } else if panel == .raw {
-                            RAWControls(settings: $rawSettings, isRAW: development?.isRAW == true, commit: {
+                            RAWControls(settings: $rawSettings, offset: $mapping.offset, isRAW: development?.isRAW == true, commit: {
                                 if let sourceURL { load(sourceURL, resetEdits: false) }
                             }, reset: {
                                 if let defaults = development?.rawDefaults, let sourceURL {
+                                    mapping.offset = 0
                                     rawSettings = defaults
                                     load(sourceURL, resetEdits: false)
                                 }
                             })
                         } else if panel == .color {
-                            ColorControls(settings: $mapping.color, comparing: $comparingColor, monochrome: mapping.blackAndWhite.isEnabled)
+                            ColorControls(settings: $mapping.color, comparing: $comparingColor, monochrome: mapping.blackAndWhite.isEnabled, hdrMax: mapping.hdrMax, colorSpace: colorSpace)
                         } else if panel == .hls {
                             HLSControls(adjustments: $mapping.hls, comparing: $comparingHLS, blackAndWhite: $mapping.blackAndWhite)
                         } else if panel == .effects {
@@ -458,7 +456,7 @@ struct ContentView: View {
                 } catch { errorMessage = error.localizedDescription }
             }
             .task(id: PreviewRequest(mapping: previewMapping,
-                                     sourceID: development?.id, loading: loading, waitingForAutoWhite: pendingAutoWhite != nil, canvas: previewCanvas)) {
+                                     sourceID: development?.id, loading: loading, canvas: previewCanvas)) {
                 guard let development, !loading else { return }
                 do {
                     let renderedMapping = previewMapping
@@ -471,22 +469,7 @@ struct ContentView: View {
                     self.renderedMapping = renderedMapping
                     renderedCanvas = canvas
                     previewRevision = UUID()
-                    if pendingAutoWhite == nil, let pending = pendingAutoContrast,
-                       pending.sourceID == development.id {
-                        pendingAutoContrast = nil
-                        guard pending.mapping == mapping, renderedMapping == mapping else { return }
-                        let worker = try GPUHistogram(colorSpace: colorSpace, encoded: true)
-                        let result = try await worker.calculate(image: CIImage(cgImage: images.sdr), sourceID: previewRevision, bins: 256)
-                        try Task.checkCancellation()
-                        guard mapping == renderedMapping, self.development?.id == development.id else { return }
-                        if let statistics = SDRStatistics(counts: result.sdrLuma),
-                           let contrast = AutoContrast.suggestion(median: statistics.median, mapping: mapping, space: colorSpace) {
-                            mapping.concentration = contrast
-                            mapping.setAutomaticHDRTarget()
-                            baselineRecipe = currentRecipe
-                            editHistory.seed(currentRecipe)
-                        }
-                    }
+
                 } catch is CancellationError {
                     // A newer drag position supersedes this render.
                 } catch { errorMessage = error.localizedDescription }
@@ -528,24 +511,10 @@ struct ContentView: View {
                 }
                 do {
                     try await Task.sleep(for: .milliseconds(180))
-                    let result = try await histogramWorker.buildHistogram(development.url,
-                        sourceID: development.id, bins: histogramBins)
+                    let result = try await histogramWorker.buildHistogram(development, bins: histogramBins)
                     try Task.checkCancellation()
                     histogram = result
-                    if let pending = pendingAutoWhite, pending.sourceID == development.id,
-                       (result.histogram.first?.count ?? 0) > 1 {
-                        pendingAutoWhite = nil
-                        // Do not overwrite edits made while the asynchronous histogram loaded.
-                        if mapping == pending.mapping, let white = result.overlapWhitePoint {
-                            mapping.white = min(1, max(mapping.black + ToneMapping.minimumRange, white))
-                            mapping.setAutomaticHDRTarget()
-                            baselineRecipe = currentRecipe
-                            editHistory.seed(currentRecipe)
-                            pendingAutoContrast = AutoWhiteRequest(sourceID: development.id, mapping: mapping)
-                        } else if mapping != pending.mapping {
-                            pendingAutoContrast = nil
-                        }
-                    }
+
                 } catch is CancellationError {
                 } catch { histogramError = error.localizedDescription }
             }
@@ -586,11 +555,14 @@ struct ContentView: View {
                         Button(exporting ? "Preparing Image…" : "Export…", systemImage: "square.and.arrow.up") {
                             showingExportOptions = true
                         }
+                        .labelStyle(.iconOnly)
+                        .help("Export…")
                         .keyboardShortcut("e", modifiers: [.command, .shift])
                         .disabled(development == nil || loading || exporting)
                         Button(savingRecipe ? "Saving Edits…" : savedRecipe == currentRecipe && !tutorialNeedsSave ? "Edits Saved" : "Save Edits", systemImage: "square.and.arrow.down") {
                             saveRecipe()
                         }
+                        .labelStyle(.iconOnly)
                         .keyboardShortcut("s", modifiers: .command)
                         .disabled(development == nil || loading || savingRecipe || (savedRecipe == currentRecipe && !tutorialNeedsSave))
                         .help("Save development settings beside the original image in an XMP sidecar")
@@ -604,6 +576,7 @@ struct ContentView: View {
                             }
                         }
                         .pickerStyle(.segmented)
+                        .controlSize(.regular)
                         .frame(width: 260)
                         .disabled(loading || exporting)
                         Button(hdrPreview ? "Preview: HDR" : "Preview: SDR") {
@@ -621,6 +594,7 @@ struct ContentView: View {
                         ForEach(EditorPanel.allCases) { panel in Text(LocalizedStringKey(panel.rawValue)).tag(panel) }
                     }
                     .pickerStyle(.segmented)
+                    .controlSize(.regular)
                     .frame(width: 420)
                 }
             }
@@ -703,8 +677,6 @@ struct ContentView: View {
         if resetEdits { rememberCurrentEdits() }
         if resetEdits { cropping = false; cropRatioPosition = 5; cropTransform = CropTransform(); cropPolygon = [CGPoint(x: 0, y: 0), CGPoint(x: 1, y: 0), CGPoint(x: 1, y: 1), CGPoint(x: 0, y: 1)] }
         sourceURL = url
-        pendingAutoWhite = nil
-        pendingAutoContrast = nil
         loading = true
         if resetEdits { mapping = ToneMapping(); savedRecipe = nil; recipeSourceURL = nil; baselineRecipe = nil }
         development = nil
@@ -762,7 +734,6 @@ struct ContentView: View {
                 }
                 if resetEdits {
                     if initializeEdits, !loaded.isRAW {
-                        mapping.concentration = 0
                         if loaded.sourceHeadroom <= 1 { mapping.hdrGain = 0 }
                     }
                     hdrPreview = mapping.hdrEnabled
@@ -773,10 +744,7 @@ struct ContentView: View {
                 }
                 recipeSourceURL = url
                 development = loaded
-                if initializeEdits, loaded.isRAW { pendingAutoContrast = AutoWhiteRequest(sourceID: loaded.id, mapping: mapping) }
-                if initializeEdits, loaded.isRAW {
-                    pendingAutoWhite = AutoWhiteRequest(sourceID: loaded.id, mapping: mapping)
-                }
+
                 filename = url.lastPathComponent
             } catch { errorMessage = error.localizedDescription }
         }
@@ -784,8 +752,6 @@ struct ContentView: View {
 
     private func resetTone() {
         guard let development, !loading, !resettingTone else { return }
-        pendingAutoWhite = nil
-        pendingAutoContrast = nil
         commitHistory()
         let original = mapping
         let worker = developer
@@ -799,7 +765,7 @@ struct ContentView: View {
                                                                   histogram: existingHistogram)
                 guard self.development?.id == development.id, mapping == original else { return }
                 mapping = SettingsPasteSelection(tone: true, whiteBalance: false, color: false,
-                                                 hls: false, effects: false).applying(automatic, to: mapping)
+                                                 hls: false, effects: false, raw: false).applying(automatic, to: mapping)
                 editHistory.observe(currentRecipe, name: String(localized: "Reset Tone"))
                 editHistory.flush()
             } catch { errorMessage = error.localizedDescription }
@@ -923,8 +889,6 @@ struct ContentView: View {
 
     private func applyAutoTones() {
         guard autoTones, development != nil, !loading else { return }
-        pendingAutoWhite = nil
-        pendingAutoContrast = nil
         mapping = ToneSampleWhitePoint.automaticTones(mapping: mapping, space: colorSpace)
         mapping.setAutomaticHDRTarget()
     }
@@ -1096,9 +1060,7 @@ struct ContentView: View {
                 baseline: draft?.baseline ?? target.recipe, saved: draft?.savedRecipe ?? target.savedRecipe)
         } else {
             guard development != nil else { return }
-            pendingAutoWhite = nil
-            pendingAutoContrast = nil
-            comparingColor = false
+                    comparingColor = false
             comparingHLS = false
             comparingEffects = false
             pickingWhiteBalance = false
@@ -1394,7 +1356,6 @@ private struct PreviewRequest: Equatable {
     let mapping: ToneMapping
     let sourceID: UUID?
     let loading: Bool
-    let waitingForAutoWhite: Bool
     let canvas: CGSize
 }
 
@@ -1415,11 +1376,6 @@ private struct HistogramRequest: Equatable {
     let loading: Bool
     let previewReady: Bool
     let bins: Int
-}
-
-private struct AutoWhiteRequest {
-    let sourceID: UUID
-    let mapping: ToneMapping
 }
 
 private struct SDRHistogramRequest: Equatable {

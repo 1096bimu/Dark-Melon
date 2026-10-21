@@ -40,6 +40,45 @@ nonisolated struct DevelopmentRecipe: Codable, Equatable, Sendable {
             mapping["halation"] = halation
             document["mapping"] = mapping
         }
+        // Preserve the source shade selected by older, crop-range-relative Tone recipes.
+        if var mapping = document["mapping"] as? [String: Any],
+           mapping["toneUsesSourceLuminance"] as? Bool != true {
+            if let tone = mapping["tonePosition"] as? Double {
+                let black = mapping["black"] as? Double ?? 0
+                let white = mapping["white"] as? Double ?? 1
+                mapping["tonePosition"] = black + tone * (white - black)
+            }
+            mapping["toneUsesSourceLuminance"] = true
+            document["mapping"] = mapping
+        }
+        if var mapping = document["mapping"] as? [String: Any],
+           var color = mapping["color"] as? [String: Any] {
+            for prefix in ["saturation", "luminanceSaturation"] {
+                let start = color[prefix + "Start"] as? Double ?? 1
+                let end = color[prefix + "End"] as? Double ?? 1
+                if color[prefix + "Mid"] == nil {
+                    let coefficient = color[prefix + "Curve"] as? Double ?? 0
+                    color[prefix + "Mid"] = BoundedQuadraticCurve.value(at: 0.5, start: start, end: end,
+                        coefficient: coefficient, outputRange: 0...2, curvatureScale: 1)
+                }
+                if color[prefix + "HDR"] == nil { color[prefix + "HDR"] = end }
+            }
+            if var split = color["splitTone"] as? [String: Any], split["nodes"] == nil {
+                // Approximate the former hue/amount curve with three perceptual nodes.
+                let legacy = try JSONDecoder().decode(SplitToneSettings.self, from: JSONSerialization.data(withJSONObject: split))
+                let nodes: [SplitToneNode] = legacy.isIdentity ? [] : [0.0,0.5,1.0].map { t in
+                    let point=legacy.huePoint(at:t)
+                    let hue=(atan2(point.y,point.x)*180 / .pi+360).truncatingRemainder(dividingBy:360)
+                    let amount=BoundedQuadraticCurve.value(at:t,start:legacy.shadowAmount,end:legacy.highlightAmount,
+                        coefficient:legacy.amountCurveA,outputRange:0...2,curvatureScale:1)
+                    return SplitToneNode(lightness:0.2+0.6*t,hue:hue,strength:min(1,amount/2))
+                }
+                split["nodes"] = try JSONSerialization.jsonObject(with: JSONEncoder().encode(nodes))
+                color["splitTone"] = split
+            }
+            mapping["color"] = color
+            document["mapping"] = mapping
+        }
         // Missing fields inherit current defaults; unknown fields are ignored by Codable.
         // This allows additive controls without invalidating existing recipes.
         let defaults = try JSONSerialization.jsonObject(with: Self(colorSpace: .sRGB, mapping: ToneMapping()).encoded()) as! [String: Any]
@@ -54,6 +93,7 @@ nonisolated struct DevelopmentRecipe: Codable, Equatable, Sendable {
         }
         var result = try JSONDecoder().decode(Self.self, from: JSONSerialization.data(withJSONObject: merged(defaults, document)))
         try result.validate()
+        result.mapping.offset = result.mapping.offset.clamped(to: -0.02...0.02)
         // Preserve older recipes while bringing their multiplier into the current range.
         result.mapping.hdrGain = result.mapping.hdrGain == 0 ? 0 : min(5, max(1, result.mapping.hdrGain))
         return result
@@ -67,12 +107,17 @@ nonisolated struct DevelopmentRecipe: Codable, Equatable, Sendable {
         }
         if let transform = mapping.transform, !transform.isValid { throw RecipeError.invalid }
         let m = mapping
+        if let nodes = m.color.splitTone.nodes {
+            guard nodes.count <= 6, Set(nodes.map(\.id)).count == nodes.count,
+                  nodes.allSatisfy({ $0.lightness.isFinite && (0...5).contains($0.lightness) &&
+                      $0.hue.isFinite && (0...360).contains($0.hue) && $0.strength.isFinite && (0...1).contains($0.strength) }) else { throw RecipeError.invalid }
+        }
         func within(_ value: Double, _ range: ClosedRange<Double>) -> Bool { value.isFinite && range.contains(value) }
         if let wb = m.rawWhiteBalance {
             guard within(Double(wb.temperature), 2000...50000), within(Double(wb.tint), -150...150) else { throw RecipeError.invalid }
         }
         guard m.hls.count == 6,
-              within(m.black, 0...1), within(m.white, 0...1), m.white - m.black >= ToneMapping.minimumRange * 0.999,
+              within(m.offset, -0.3...0.3), within(m.black, 0...1), within(m.white, 0...1), m.white - m.black >= ToneMapping.minimumRange * 0.999,
               within(m.tonePosition, 0...1), within(m.concentration, -1...1),
               within(m.hdrRolloff, 0...1), within(m.hdrTarget, 1...20), within(m.hdrGain, 0...20),
               within(m.clarity, -2...2), within(m.clarityRadius, 15...90),
@@ -83,8 +128,8 @@ nonisolated struct DevelopmentRecipe: Codable, Equatable, Sendable {
               [m.whiteBalance.red, m.whiteBalance.green, m.whiteBalance.blue].allSatisfy({ within($0, 0.000001...10000) }),
               (0..<5).allSatisfy({ within(m.blackAndWhite.value(at: $0), 0...2) }),
               m.hls.allSatisfy({ within($0.shadowHue, -30...30) && within($0.midtoneHue, -30...30) && within($0.highlightHue, -30...30) && within($0.saturation, 0...2) && within($0.lightness, -1...1) }),
-              [m.color.saturationStart, m.color.saturationEnd, m.color.luminanceSaturationStart, m.color.luminanceSaturationEnd].allSatisfy({ within($0, 0...2) }),
-              [m.color.saturationCurve, m.color.luminanceSaturationCurve, m.color.splitTone.amountCurveA].allSatisfy({ within($0, -8...8) }),
+              [m.color.saturationStart, m.color.saturationEnd, m.color.luminanceSaturationStart, m.color.luminanceSaturationEnd, m.color.saturationMid, m.color.saturationHDR, m.color.luminanceSaturationMid, m.color.luminanceSaturationHDR].allSatisfy({ within($0, 0...2) }),
+              [m.color.splitTone.amountCurveA].allSatisfy({ within($0, -8...8) }),
               within(m.color.splitTone.shadowHue, 0...360), within(m.color.splitTone.highlightHue, 0...360),
               within(m.color.splitTone.shadowAmount, 0...2), within(m.color.splitTone.highlightAmount, 0...2),
               m.color.splitTone.midpointRadius.map({ within($0, 0...1) }) ?? true

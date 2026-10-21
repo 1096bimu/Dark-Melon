@@ -87,6 +87,7 @@ nonisolated struct RAWSettings: Codable, Equatable, Sendable {
 
 struct RAWControls: View {
     @Binding var settings: RAWSettings
+    @Binding var offset: Double
     let isRAW: Bool
     let commit: () -> Void
     let reset: () -> Void
@@ -125,6 +126,21 @@ struct RAWControls: View {
                         .accessibilityLabel(LocalizedStringKey(control.rawValue))
                     }
                     .disabled(!settings.supported.contains(control))
+                    if control == .shadowBias {
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack {
+                                Text("Offset")
+                                Text(offset, format: .number.precision(.fractionLength(4)))
+                                    .monospacedDigit()
+                            }
+                            HStack {
+                                Image(systemName: "plusminus").frame(width: 22).accessibilityHidden(true)
+                                Slider(value: $offset, in: -0.02...0.02) { Text("Offset") }
+                                    .labelsHidden()
+                            }
+                            .help("Adds an equal offset to linear RGB before tone mapping. Negative values clip shadows; positive values lift black.")
+                        }
+                    }
                 }
             } else {
                 Text("Open a RAW image to adjust decoder settings.").foregroundStyle(.secondary)

@@ -132,6 +132,20 @@ struct HEIFExportOptions: View {
         heightText = String(outputHeight)
     }
 
+    private func finishDimensionEditing() {
+        commitDimension(editingDimension)
+        editingDimension = nil
+    }
+
+    private func useSliderScale(_ scale: Double) {
+        // The slider becomes authoritative. Refresh both drafts before focus-loss
+        // callbacks can commit the previously selected field over this value.
+        editingDimension = nil
+        settings.scale = (scale * 20).rounded() / 20
+        widthText = String(outputWidth)
+        heightText = String(outputHeight)
+    }
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
@@ -150,7 +164,7 @@ struct HEIFExportOptions: View {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save…") { commitDimension(editingDimension); dismiss(); save() }
+                    Button("Save…") { finishDimensionEditing(); dismiss(); save() }
                 }
             }
         }
@@ -193,8 +207,11 @@ struct HEIFExportOptions: View {
         Form {
             LabeledContent("Linear size", value: settings.scale.formatted(.percent.precision(.fractionLength(0))))
             Slider(value: Binding(get: { min(1, max(0.25, (settings.scale * 20).rounded() / 20)) },
-                                  set: { settings.scale = ($0 * 20).rounded() / 20 }),
+                                  set: { useSliderScale($0) }),
                    in: 0.25...1, step: 0.05) { Text("Linear size") }
+                onEditingChanged: { editing in
+                    if editing { finishDimensionEditing() }
+                }
             if percentageOnly {
                 LabeledContent("First image", value: "\(outputWidth) × \(outputHeight) px")
                     .monospacedDigit().foregroundStyle(.secondary)
@@ -204,14 +221,14 @@ struct HEIFExportOptions: View {
                     widthText = $0; updateDimension($0, dimension: .width)
                 }))
                     .focused($editingDimension, equals: .width)
-                    .onSubmit { commitDimension(.width) }
+                    .onSubmit { finishDimensionEditing() }
                     .accessibilityLabel("Export width in pixels")
                 Text("×").foregroundStyle(.secondary)
                 TextField("Height", text: Binding(get: { heightText }, set: {
                     heightText = $0; updateDimension($0, dimension: .height)
                 }))
                     .focused($editingDimension, equals: .height)
-                    .onSubmit { commitDimension(.height) }
+                    .onSubmit { finishDimensionEditing() }
                     .accessibilityLabel("Export height in pixels")
                 Text("px").foregroundStyle(.secondary)
                 Spacer(minLength: 8)

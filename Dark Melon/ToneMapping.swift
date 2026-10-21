@@ -14,10 +14,12 @@ nonisolated struct ToneMapping: Codable, Equatable, Sendable {
     var grain = FilmGrainSettings()
     var halation = HalationSettings()
     var vignette = VignetteSettings()
+    var offset = 0.0
     var black = 0.0
     var white = 1.0
-    var tonePosition = 0.0
-    var peakPosition: Double { black + tonePosition * (white - black) }
+    var tonePosition = 0.183
+    var toneUsesSourceLuminance = true
+    var peakPosition: Double { tonePosition }
     var concentration = 0.2
     var hdrTarget = 4.0
     var hdrGain = 1.01

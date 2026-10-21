@@ -7,25 +7,65 @@ nonisolated enum ColorPixelKernel {
         vec3 p = abs(mod(vec3(hue) + vec3(0.0, 4.0, 2.0), 6.0) - 3.0);
         return clamp(p - 1.0, 0.0, 1.0);
     }
-    kernel vec4 colorAdjust(__sample pixel, __sample toneReference, float ceiling, vec3 saturationCurve, vec3 luminanceSaturationCurve,
+    // Björn Ottosson's OKLab transform; RGB is linear sRGB, D65.
+    vec3 toOKLab(vec3 c) {
+        vec3 lms = vec3(dot(c, vec3(0.4122214708,0.5363325363,0.0514459929)),
+                        dot(c, vec3(0.2119034982,0.6806995451,0.1073969566)),
+                        dot(c, vec3(0.0883024619,0.2817188376,0.6299787005)));
+        lms = sign(lms) * pow(abs(lms), vec3(1.0/3.0));
+        return vec3(dot(lms,vec3(0.2104542553,0.7936177850,-0.0040720468)),
+                    dot(lms,vec3(1.9779984951,-2.4285922050,0.4505937099)),
+                    dot(lms,vec3(0.0259040371,0.7827717662,-0.8086757660)));
+    }
+    vec3 fromOKLab(vec3 c) {
+        vec3 lms = vec3(c.x+0.3963377774*c.y+0.2158037573*c.z,
+                        c.x-0.1055613458*c.y-0.0638541728*c.z,
+                        c.x-0.0894841775*c.y-1.2914855480*c.z);
+        lms = lms*lms*lms;
+        return vec3(dot(lms,vec3(4.0767416621,-3.3077115913,0.2309699292)),
+                    dot(lms,vec3(-1.2684380046,2.6097574011,-0.3413193965)),
+                    dot(lms,vec3(-0.0041960863,-0.7034186147,1.7076147010)));
+    }
+    vec3 convertRGB(vec3 c, vec3 row0, vec3 row1, vec3 row2) {
+        return vec3(dot(row0,c),dot(row1,c),dot(row2,c));
+    }
+    float chromaMultiplier(float x, vec4 points, float hdrEnd) {
+        if (x <= 0.5) { return mix(points.x,points.y,clamp(x*2.0,0.0,1.0)); }
+        if (x <= 1.0) { return mix(points.y,points.z,(x-0.5)*2.0); }
+        if (hdrEnd <= 1.000001) { return points.z; }
+        return mix(points.z,points.w,clamp((x-1.0)/(hdrEnd-1.0),0.0,1.0));
+    }
+    kernel vec4 colorAdjust(__sample pixel, __sample toneReference, float ceiling, vec4 saturationCurve, vec4 luminanceSaturationCurve,
                            vec4 endpoints, vec2 midpoint, float rimWeight,
-                           vec3 amounts, vec3 luminanceWeights) {
+                           vec3 amounts, vec3 luminanceWeights, float maximumChroma, float hdrEnd,
+                           vec3 to0, vec3 to1, vec3 to2, vec3 from0, vec3 from1, vec3 from2) {
         vec4 un = unpremultiply(pixel);
         vec3 rgb = clamp(un.rgb / ceiling, 0.0, 1.0);
-        float hi = max(rgb.r, max(rgb.g, rgb.b));
-        float lo = min(rgb.r, min(rgb.g, rgb.b));
-        float delta = hi - lo;
-        float lightness = (hi + lo) * 0.5;
-        if (delta > 0.000001) {
-            float saturation = delta / max(0.000001, 1.0 - abs(2.0 * lightness - 1.0));
-            float multiplier = mix(saturationCurve.x, saturationCurve.y, saturation)
-                + saturationCurve.z * saturation * (1.0 - saturation);
-            // Linear SDR luminance anchors this axis to the selected black/white range.
-            float y = clamp(dot(unpremultiply(toneReference).rgb, luminanceWeights), 0.0, 1.0);
-            float luminanceMultiplier = mix(luminanceSaturationCurve.x, luminanceSaturationCurve.y, y)
-                + luminanceSaturationCurve.z * y * (1.0 - y);
-            float mapped = clamp(saturation * multiplier * luminanceMultiplier, 0.0, 1.0);
-            rgb = vec3(lightness) + (rgb - vec3(lightness)) * (mapped / max(saturation, 0.000001));
+        // Work in absolute OKLCH units: SDR white L=1, graph endpoint is the working gamut maximum.
+        // Scaling a/b together changes chroma without computing or wrapping hue.
+        if (saturationCurve.x != 1.0 || saturationCurve.y != 1.0 || saturationCurve.z != 1.0 || saturationCurve.w != 1.0 ||
+            luminanceSaturationCurve.x != 1.0 || luminanceSaturationCurve.y != 1.0 || luminanceSaturationCurve.z != 1.0 || luminanceSaturationCurve.w != 1.0) {
+            vec3 lab = toOKLab(convertRGB(rgb * ceiling, to0, to1, to2));
+            float c = length(lab.yz) / maximumChroma;
+            float l = lab.x;
+            float multiplier = chromaMultiplier(c,saturationCurve,hdrEnd)
+                * chromaMultiplier(l,luminanceSaturationCurve,hdrEnd);
+            vec3 target = vec3(lab.x, lab.yz * max(0.0, multiplier));
+            vec3 adjusted = convertRGB(fromOKLab(target), from0, from1, from2) / ceiling;
+            // Fit chroma to the working gamut at fixed lightness and hue.
+            if (min(adjusted.r,min(adjusted.g,adjusted.b)) < -0.000001 ||
+                max(adjusted.r,max(adjusted.g,adjusted.b)) > 1.000001) {
+                float low = 0.0; float high = 1.0;
+                for (int i=0; i<12; i++) {
+                    float t = (low+high)*0.5;
+                    vec3 candidate = convertRGB(fromOKLab(vec3(target.x,target.yz*t)),from0,from1,from2)/ceiling;
+                    if (min(candidate.r,min(candidate.g,candidate.b)) >= 0.0 &&
+                        max(candidate.r,max(candidate.g,candidate.b)) <= 1.0) { low=t; }
+                    else { high=t; }
+                }
+                adjusted = convertRGB(fromOKLab(vec3(target.x,target.yz*low)),from0,from1,from2)/ceiling;
+            }
+            rgb = adjusted;
         }
         if (amounts.x != 0.0 || amounts.y != 0.0 || amounts.z != 0.0) {
             float luminance = dot(rgb, luminanceWeights);

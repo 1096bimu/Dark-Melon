@@ -9,6 +9,9 @@ import SwiftUI
             ContentView()
         }
         #if os(macOS)
+        // Keep one consistent title/toolbar row above all editor columns.
+        .windowStyle(.titleBar)
+        .windowToolbarStyle(.unified)
         .commands { EditorCommands() }
         #endif
         #if os(macOS)

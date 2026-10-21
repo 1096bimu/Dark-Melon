@@ -3,13 +3,15 @@ import Foundation
 nonisolated struct ColorAdjustments: Codable, Equatable, Sendable {
     var saturationStart = 1.0
     var saturationEnd = 1.0
-    var saturationCurve = 0.0
+    var saturationMid = 1.0
+    var saturationHDR = 1.0
     var luminanceSaturationStart = 1.0
     var luminanceSaturationEnd = 1.0
-    var luminanceSaturationCurve = 0.0
-    var isLuminanceSaturationIdentity: Bool { luminanceSaturationStart == 1 && luminanceSaturationEnd == 1 && luminanceSaturationCurve == 0 }
+    var luminanceSaturationMid = 1.0
+    var luminanceSaturationHDR = 1.0
+    var isLuminanceSaturationIdentity: Bool { luminanceSaturationStart == 1 && luminanceSaturationEnd == 1 && luminanceSaturationMid == 1 && luminanceSaturationHDR == 1 }
     var splitTone = SplitToneSettings()
-    var isIdentity: Bool { saturationStart == 1 && saturationEnd == 1 && saturationCurve == 0 && isLuminanceSaturationIdentity && splitTone.isIdentity }
+    var isIdentity: Bool { saturationStart == 1 && saturationEnd == 1 && saturationMid == 1 && saturationHDR == 1 && isLuminanceSaturationIdentity && splitTone.isIdentity }
 }
 
 nonisolated enum BoundedQuadraticCurve {
@@ -66,6 +68,7 @@ nonisolated enum BoundedQuadraticCurve {
 }
 
 nonisolated struct SplitToneSettings: Codable, Equatable, Sendable {
+    var nodes: [SplitToneNode]? = []
     static let maximumAmount = 2.0
     var shadowHue: Double = 220
     var highlightHue: Double = 40
@@ -76,7 +79,8 @@ nonisolated struct SplitToneSettings: Codable, Equatable, Sendable {
     var amountCurveA: Double = 0
 
     var isIdentity: Bool {
-        shadowAmount == 0 && highlightAmount == 0 && amountCurveA == 0
+        if let nodes { return nodes.allSatisfy { $0.strength == 0 } }
+        return shadowAmount == 0 && highlightAmount == 0 && amountCurveA == 0
     }
 
     private func endpoint(_ hue: Double) -> SIMD2<Double> {

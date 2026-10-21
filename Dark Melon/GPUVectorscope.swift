@@ -38,7 +38,11 @@ actor GPUVectorscope {
         }
         let scale = min(1, 512.0 / Double(max(source.width, source.height)))
         let reduced = CIImage(cgImage: source).transformed(by: CGAffineTransform(scaleX: scale, y: scale))
-        let image = try await developer!.mappedImage(reduced, mapping: mapping, hdr: false)
+        let mapped = try await developer!.mappedImage(reduced, mapping: mapping, hdr: false)
+        // Crop/perspective output can expand beyond the reduced input. Bound the
+        // actual analysis texture as well, preserving the complete field of view.
+        let outputScale = min(1, 512 / max(mapped.extent.width, mapped.extent.height))
+        let image = mapped.transformed(by: CGAffineTransform(scaleX: outputScale, y: outputScale))
         try Task.checkCancellation()
         let width = max(1, Int(image.extent.width)), height = max(1, Int(image.extent.height))
         if input?.width != width || input?.height != height {

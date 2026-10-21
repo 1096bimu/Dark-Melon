@@ -118,6 +118,7 @@ import AppKit
         if a.hls != b.hls || a.blackAndWhite != b.blackAndWhite { return String(localized: "HLS") }
         if a.vignette != b.vignette || a.clarity != b.clarity || a.hdf != b.hdf || a.grain != b.grain || a.halation != b.halation || a.clarityRadius != b.clarityRadius || a.hdfRadius != b.hdfRadius { return String(localized: "Effects") }
         if a.tonePosition != b.tonePosition { return String(localized: "Tone") }
+        if a.offset != b.offset { return String(localized: "Offset") }
         if a.concentration != b.concentration { return String(localized: "Contrast") }
         if a.white != b.white { return String(localized: "White point") }
         if a.black != b.black { return String(localized: "Black point") }

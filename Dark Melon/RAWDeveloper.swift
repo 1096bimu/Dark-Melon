@@ -1,4 +1,5 @@
 import CoreImage
+import simd
 import Foundation
 import ImageIO
 import CoreVideo
@@ -101,6 +102,7 @@ actor RAWDeveloper {
         }
         """)
 
+    private lazy var splitToneGradient = SplitToneGradient()
     private lazy var monochromeKernel = CIColorKernel(source: MonochromeKernel.source)
 
     private lazy var hlsKernel = CIColorKernel(source: HLSPixelKernel.source)
@@ -230,33 +232,13 @@ actor RAWDeveloper {
     func automaticMapping(for development: RAWDevelopment, bins: Int,
                           histogram: HistogramData? = nil) async throws -> ToneMapping {
         var automatic = ToneMapping()
-        guard development.isRAW else {
-            automatic.concentration = 0
-            if development.sourceHeadroom <= 1 { automatic.hdrGain = 0 }
-            return automatic
-        }
-        let sourceHistogram: HistogramData
-        if let histogram { sourceHistogram = histogram }
-        else {
-            sourceHistogram = try await buildHistogram(development.url, sourceID: development.id, bins: bins)
-        }
-        if let white = sourceHistogram.overlapWhitePoint {
-            automatic.white = min(1, max(automatic.black + ToneMapping.minimumRange, white))
-        }
-        let image = try preview(development.preview, mapping: automatic, hdr: false)
-        let gpu = try GPUHistogram(colorSpace: colorSpace, encoded: true)
-        let result = try await gpu.calculate(image: CIImage(cgImage: image), sourceID: UUID(), bins: 256)
-        try Task.checkCancellation()
-        if let statistics = SDRStatistics(counts: result.sdrLuma),
-           let contrast = AutoContrast.suggestion(median: statistics.median, mapping: automatic, space: colorSpace) {
-            automatic.concentration = contrast
-        }
+        if !development.isRAW, development.sourceHeadroom <= 1 { automatic.hdrGain = 0 }
         automatic.setAutomaticHDRTarget()
         return automatic
     }
 
     func sampleWhiteBalance(_ source: CGImage, center: CGPoint, radius: CGFloat, mapping: ToneMapping) throws -> WhiteBalance {
-        let input = try vignette.apply(to: CIImage(cgImage: source), settings: mapping.vignette, transform: mapping.transform)
+        let input = try adjustedInput(CIImage(cgImage: source), mapping: mapping)
         let toned = try applyTone(input, curve: mapping.curve(hdr: false))
         let effected = try applyEffects(toned, source: input, mapping: mapping, hdr: false)
         let mean = try sampleMean(effected, center: center, radius: radius)
@@ -302,7 +284,7 @@ actor RAWDeveloper {
     /// One GPU composite over the cached preview; never enters the export or analysis pipeline.
     func toneLocator(_ source: CGImage, preview: CGImage, mapping: ToneMapping, hdr: Bool, clipping: Bool = false) throws -> CGImage {
         try Task.checkCancellation()
-        let input = try vignette.apply(to: CIImage(cgImage: source), settings: mapping.vignette, transform: mapping.transform)
+        let input = try adjustedInput(CIImage(cgImage: source), mapping: mapping)
         let weights = colorSpace.luminance
         guard let image = toneLocatorKernel?.apply(extent: input.extent, arguments: [
             input, CIImage(cgImage: preview),
@@ -318,15 +300,34 @@ actor RAWDeveloper {
         return try mapping.transform?.apply(to: developed) ?? developed
     }
 
+    private lazy var offsetKernel = CIColorKernel(source: """
+        kernel vec4 inputOffset(__sample pixel, float offset) {
+            // Equal linear-light addition. Bound negative RGB, retain HDR values.
+            return vec4(max(pixel.rgb + vec3(offset * pixel.a), vec3(0.0)), pixel.a);
+        }
+        """)
+
+    private func adjustedInput(_ source: CIImage, mapping: ToneMapping) throws -> CIImage {
+        var image = source
+        if mapping.offset != 0 {
+            guard let adjusted = offsetKernel?.apply(extent: source.extent,
+                                                     arguments: [source, mapping.offset]) else {
+                throw DevelopmentError.decode
+            }
+            image = adjusted
+        }
+        return try vignette.apply(to: image, settings: mapping.vignette, transform: mapping.transform)
+    }
+
     private func developedImage(_ source: CIImage, mapping: ToneMapping, hdr: Bool) throws -> CIImage {
         try Task.checkCancellation()
-        let image = try vignette.apply(to: source, settings: mapping.vignette, transform: mapping.transform)
+        let image = try adjustedInput(source, mapping: mapping)
         var color = mapping.color
         if mapping.blackAndWhite.isEnabled {
-            color.saturationStart = 1; color.saturationEnd = 1; color.saturationCurve = 0
-            color.luminanceSaturationStart = 1; color.luminanceSaturationEnd = 1; color.luminanceSaturationCurve = 0
+            color.saturationStart = 1; color.saturationEnd = 1; color.saturationMid = 1; color.saturationHDR = 1
+            color.luminanceSaturationStart = 1; color.luminanceSaturationEnd = 1; color.luminanceSaturationMid = 1; color.luminanceSaturationHDR = 1
         }
-        // Shared by preview and export: vignette → tone → effects → RGB WB/monochrome → Color → HLS.
+        // Shared by preview and export: offset → vignette → tone → effects → RGB WB/monochrome → Color → HLS.
         // RAW decoder white balance is already part of the decoded source.
         let toned = try applyTone(image, curve: mapping.curve(hdr: hdr))
         let effected = try applyEffects(toned, source: image, mapping: mapping, hdr: hdr)
@@ -334,8 +335,8 @@ actor RAWDeveloper {
         try Task.checkCancellation()
         let split = color.splitTone
         let hasHLS = !mapping.blackAndWhite.isEnabled && !mapping.hls.allSatisfy(\.isIdentity)
-        // All tonal color controls share the SDR black/white points and tone curve.
-        let reference = hdr && mapping.hdrEnabled && (!split.isIdentity || hasHLS || !color.isLuminanceSaturationIdentity)
+        // Split Tone and HLS keep their SDR tonal reference; OKLCH graphs use the actual pixel.
+        let reference = hdr && mapping.hdrEnabled && (!split.isIdentity || hasHLS)
             ? try applyTone(image, curve: mapping.curve(hdr: false)) : toned
         let mapped = balanced
         guard !color.isIdentity else { return try applyHLS(mapped, reference: reference, mapping: mapping, hdr: hdr) }
@@ -347,24 +348,27 @@ actor RAWDeveloper {
             ? (radius - naturalRadius) / (1 - naturalRadius) : 0
         let amountLimits = BoundedQuadraticCurve.coefficientRange(start: split.shadowAmount, end: split.highlightAmount,
                                                                 outputRange: 0...SplitToneSettings.maximumAmount, curvatureScale: 1)
-        let saturationLimits = BoundedQuadraticCurve.coefficientRange(
-            start: color.saturationStart, end: color.saturationEnd,
-            outputRange: 0...2, curvatureScale: 1)
-        let luminanceSaturationLimits = BoundedQuadraticCurve.coefficientRange(
-            start: color.luminanceSaturationStart, end: color.luminanceSaturationEnd,
-            outputRange: 0...2, curvatureScale: 1)
+        // D50 adaptation in the shared matrices cancels, yielding linear RGB→RGB.
+        let toSRGB = ScopeProjection.matrix(.sRGB).inverse * ScopeProjection.matrix(colorSpace)
+        let fromSRGB = toSRGB.inverse
+        func row(_ m: simd_double3x3, _ i: Int) -> CIVector {
+            CIVector(x: m[0][i], y: m[1][i], z: m[2][i])
+        }
         guard let colored = colorKernel?.apply(extent: mapped.extent, arguments: [
             mapped, reference, hdr && mapping.hdrEnabled ? mapping.hdrMax : 1,
-            CIVector(x: color.saturationStart, y: color.saturationEnd,
-                     z: color.saturationCurve.clamped(to: saturationLimits)),
-            CIVector(x: color.luminanceSaturationStart, y: color.luminanceSaturationEnd,
-                     z: color.luminanceSaturationCurve.clamped(to: luminanceSaturationLimits)),
+            CIVector(x: color.saturationStart, y: color.saturationMid, z: color.saturationEnd, w: color.saturationHDR),
+            CIVector(x: color.luminanceSaturationStart, y: color.luminanceSaturationMid, z: color.luminanceSaturationEnd, w: color.luminanceSaturationHDR),
             CIVector(x: start.x, y: start.y, z: end.x, w: end.y),
             CIVector(x: middle.x, y: middle.y), rimWeight,
-            CIVector(x: split.shadowAmount, y: split.highlightAmount, z: split.amountCurveA.clamped(to: amountLimits)),
-            CIVector(x: colorSpace.luminance.x, y: colorSpace.luminance.y, z: colorSpace.luminance.z)
+            CIVector(x: split.nodes == nil ? split.shadowAmount : 0, y: split.nodes == nil ? split.highlightAmount : 0, z: split.nodes == nil ? split.amountCurveA.clamped(to: amountLimits) : 0),
+            CIVector(x: colorSpace.luminance.x, y: colorSpace.luminance.y, z: colorSpace.luminance.z),
+            OKLCHGamut.maxima[colorSpace]!, cbrt(mapping.hdrMax),
+            row(toSRGB, 0), row(toSRGB, 1), row(toSRGB, 2),
+            row(fromSRGB, 0), row(fromSRGB, 1), row(fromSRGB, 2)
         ]) else { throw DevelopmentError.decode }
-        return try applyHLS(colored, reference: reference, mapping: mapping, hdr: hdr)
+        let tinted = try splitToneGradient.apply(colored, settings: split, space: colorSpace,
+            ceiling: hdr && mapping.hdrEnabled ? mapping.hdrMax : 1, domainCeiling: mapping.hdrMax)
+        return try applyHLS(tinted, reference: reference, mapping: mapping, hdr: hdr)
     }
 
     private func applyHLS(_ image: CIImage, reference: CIImage, mapping: ToneMapping, hdr: Bool) throws -> CIImage {
@@ -742,19 +746,12 @@ actor RAWDeveloper {
     }
 
     private var gpuHistogram: GPUHistogram?
-    private var histogramImage: CIImage?
-    private var histogramSourceID: UUID?
-
-    func buildHistogram(_ url: URL, sourceID: UUID, bins: Int) async throws -> HistogramData {
-        let accessed = url.startAccessingSecurityScopedResource()
-        defer { if accessed { url.stopAccessingSecurityScopedResource() } }
-        if histogramSourceID != sourceID {
-            histogramImage = try sourceImage(url).image
-            histogramSourceID = sourceID
-        }
-        guard let image = histogramImage else { throw DevelopmentError.decode }
+    /// Analyze the cached, unmodified linear preview. Never decode a second
+    /// full-resolution source or allocate a source-sized histogram texture.
+    func buildHistogram(_ development: RAWDevelopment, bins: Int) async throws -> HistogramData {
         if gpuHistogram == nil { gpuHistogram = try GPUHistogram(colorSpace: colorSpace) }
-        return try await gpuHistogram!.calculate(image: image, sourceID: sourceID, bins: bins)
+        return try await gpuHistogram!.calculate(image: CIImage(cgImage: development.preview),
+                                                  sourceID: development.id, bins: bins)
     }
 
 }

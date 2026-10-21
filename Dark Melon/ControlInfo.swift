@@ -13,8 +13,8 @@ struct ControlInfo: View {
             case .hdrGain: String(localized: "HDR Gain")
             case .hdrRolloff: String(localized: "HDR Rolloff")
             case .autoTones: String(localized: "Auto Tones")
-            case .saturation: String(localized: "Saturation → Saturation")
-            case .luminanceSaturation: String(localized: "Luminance → Saturation")
+            case .saturation: String(localized: "Chroma → Chroma")
+            case .luminanceSaturation: String(localized: "Lightness → Chroma")
             }
         }
         var explanation: String {
@@ -32,9 +32,9 @@ struct ControlInfo: View {
             case .autoTones:
                 String(localized: "Auto Tones attempts to adjust the other settings based on a user-selected shade of interest, usually set to skin tones. Select shadows for lighter skin tones and highlights for darker skin tones.")
             case .saturation:
-                String(localized: "This lets you set multipliers to saturation for different levels of input saturation. A traditional “vibrance” slider is equivalent to moving the midpoint in this graph. And a traditional “Saturation” slider is equivalent to moving the right end point of this graph.")
+                String(localized: "Four chroma multipliers joined by straight lines: zero, SDR midpoint, SDR gamut maximum, and HDR gamut maximum. The HDR endpoint follows the current HDR output ceiling. 1× is unchanged.")
             case .luminanceSaturation:
-                String(localized: "Commonly used in video production, this graph lets you modify the saturation of pixels based on their luminance. For example the midpoint tends to control the saturation of skin tones.")
+                String(localized: "Four chroma multipliers joined by straight lines at OKLCH lightness 0, 0.5, 1 (SDR white), and the cube root of the HDR output ceiling. The SDR and HDR intervals are displayed separately. 1× is unchanged.")
             }
         }
     }
