@@ -59,7 +59,7 @@ nonisolated final class Halation {
                 .cropped(to: image.extent)
             : halo
         guard let output = composite?.apply(extent: image.extent,
-            arguments: [image, halo, greenHalo, min(1, max(0, hdrBrightness) / 5), min(0.5, max(0, settings.transmission)), ceiling]) else { throw HalationError.kernel }
+            arguments: [image, halo, greenHalo, min(1, max(0, hdrBrightness) / 20), min(0.5, max(0, settings.transmission)), ceiling]) else { throw HalationError.kernel }
         return output
     }
 }

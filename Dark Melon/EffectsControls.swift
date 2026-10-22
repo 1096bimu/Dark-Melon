@@ -24,8 +24,8 @@ struct EffectsControls: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
                     Text("Clarity")
-                    Text(clarity, format: .number.precision(.fractionLength(3)))
-                        .monospacedDigit().foregroundStyle(.secondary)
+                    AdjustmentField(title: "Clarity", value: $clarity, range: -2...2, digits: 3, scale: 1, unit: "")
+
                 }
                 HStack {
                     Image(systemName: "dial.medium")
@@ -36,8 +36,8 @@ struct EffectsControls: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
                     Text("Radius")
-                    Text("\(radius / 30, format: .number.precision(.fractionLength(2)))×")
-                        .monospacedDigit().foregroundStyle(.secondary)
+                    AdjustmentField(title: "Radius", value: Binding(get: { radius / 30 }, set: { radius = $0 * 30 }), range: 0.5...3, digits: 2, scale: 1, unit: "×")
+
                 }
                 HStack {
                     Image(systemName: "circle.dashed")
@@ -49,8 +49,8 @@ struct EffectsControls: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
                     Text("HDF")
-                    Text(hdf, format: .number.precision(.fractionLength(3)))
-                        .monospacedDigit().foregroundStyle(.secondary)
+                    AdjustmentField(title: "HDF", value: $hdf, range: 0...0.2, digits: 3, scale: 1, unit: "")
+
                 }
                 HStack {
                     Image(systemName: "aqi.low")
@@ -61,8 +61,8 @@ struct EffectsControls: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
                     Text("Radius")
-                    Text("\(hdfRadius / 100, format: .number.precision(.fractionLength(2)))×")
-                        .monospacedDigit().foregroundStyle(.secondary)
+                    AdjustmentField(title: "HDF radius", value: Binding(get: { hdfRadius / 100 }, set: { hdfRadius = $0 * 100 }), range: 0.5...2, digits: 2, scale: 1, unit: "×")
+
                 }
                 HStack {
                     Image(systemName: "circle.dashed")
@@ -76,8 +76,8 @@ struct EffectsControls: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
                     Text("Halation")
-                    Text(halation.inputCurve, format: .number.precision(.fractionLength(3)))
-                        .monospacedDigit().foregroundStyle(.secondary)
+                    AdjustmentField(title: "Halation", value: $halation.inputCurve, range: 0...1, digits: 3, scale: 1, unit: "")
+
                 }
                 HStack {
                     Image(systemName: "sun.haze")
@@ -85,8 +85,8 @@ struct EffectsControls: View {
                 }
                 HStack {
                     Text("Radius")
-                    Text("\(halation.radius, format: .number.precision(.fractionLength(2)))×")
-                        .monospacedDigit().foregroundStyle(.secondary)
+                    AdjustmentField(title: "Halation radius", value: $halation.radius, range: 0.5...3, digits: 2, scale: 1, unit: "×")
+
                 }
                 HStack {
                     Image(systemName: "circle.dashed")
@@ -94,8 +94,8 @@ struct EffectsControls: View {
                 }
                 HStack {
                     Text("Transmission")
-                    Text(halation.transmission, format: .number.precision(.fractionLength(2)))
-                        .monospacedDigit().foregroundStyle(.secondary)
+                    AdjustmentField(title: "Transmission", value: $halation.transmission, range: 0...0.5, digits: 2, scale: 1, unit: "")
+
                 }
                 Slider(value: $halation.transmission, in: 0...0.5) { Text("Transmission") }.labelsHidden()
             }
@@ -108,14 +108,14 @@ struct EffectsControls: View {
                 Text("Vignette").font(.headline)
                 HStack {
                     Text("Amount")
-                    Text("\(vignette.amount, format: .number.precision(.fractionLength(2))) stops")
-                        .monospacedDigit().foregroundStyle(.secondary)
+                    AdjustmentField(title: "Vignette amount", value: $vignette.amount, range: 0...4, digits: 2, scale: 1, unit: "stops")
+
                 }
                 Slider(value: $vignette.amount, in: 0...4) { Text("Vignette amount") }.labelsHidden()
                 HStack {
                     Text("Spread")
-                    Text(vignette.spread, format: .percent.precision(.fractionLength(0)))
-                        .monospacedDigit().foregroundStyle(.secondary)
+                    AdjustmentField(title: "Vignette spread", value: $vignette.spread, range: 0...1, digits: 0, scale: 100, unit: "%")
+
                 }
                 Slider(value: $vignette.spread, in: 0...1) { Text("Vignette spread") }.labelsHidden()
             }

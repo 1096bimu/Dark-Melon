@@ -538,7 +538,9 @@ actor RAWDeveloper {
                 options: [CIImageRepresentationOption(rawValue: kCGImageDestinationLossyCompressionQuality as String): settings.quality])
         }
         let sdr = resized(try mappedImage(source, mapping: mapping, hdr: false))
-        guard mapping.hdrEnabled else { return try encodeSDR(sdr, settings: settings) }
+        guard mapping.hdrEnabled,
+              !(settings.format == .heif && settings.heifHDRMode == .off)
+        else { return try encodeSDR(sdr, settings: settings) }
         let hdr = resized(try mappedImage(source, mapping: mapping, hdr: true))
             .settingContentHeadroom(Float(mapping.hdrMax))
         return try encodeHEIF(sdr: sdr, hdr: hdr, settings: settings)

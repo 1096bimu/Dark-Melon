@@ -5,7 +5,7 @@ import AppKit
 import UIKit
 #endif
 
-nonisolated struct SettingsPasteSelection {
+nonisolated struct SettingsPasteSelection: Codable, Sendable {
     var tone = true
     var whiteBalance = true
     var color = true
@@ -93,6 +93,8 @@ nonisolated struct CopiedSettings {
 
 struct SettingsPasteOptions: View {
     let apply: (SettingsPasteSelection) -> Void
+    var title: LocalizedStringKey = "Paste Settings"
+    var actionTitle: LocalizedStringKey = "Paste"
     @Environment(\.dismiss) private var dismiss
     @AppStorage("pasteSettings.tone") private var tone = true
     @AppStorage("pasteSettings.whiteBalance") private var whiteBalance = true
@@ -113,13 +115,13 @@ struct SettingsPasteOptions: View {
                 Toggle("RAW", isOn: $raw)
             }
             .formStyle(.grouped)
-            .navigationTitle("Paste Settings")
+            .navigationTitle(title)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Paste") { apply(selection); dismiss() }
+                    Button(actionTitle) { apply(selection); dismiss() }
                         .disabled(selection.isEmpty)
                 }
             }

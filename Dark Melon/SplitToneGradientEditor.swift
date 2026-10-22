@@ -23,7 +23,11 @@ struct SplitToneGradientEditor: View {
                 let width=max(1,proxy.size.width-20)
                 ZStack(alignment: .leading) {
                     LinearGradient(colors:(0...32).map{Color(white:Double($0)/32)},startPoint:.leading,endPoint:.trailing)
-                        .frame(height:30).padding(.horizontal,10)
+                        .frame(height:30)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(.primary.opacity(0.25), lineWidth: EditorGraphStyle.rim))
+                        .overlay(RoundedRectangle(cornerRadius: 8).fill(LinearGradient(colors: [.white.opacity(0.18), .clear, .black.opacity(0.12)], startPoint: .top, endPoint: .bottom)).allowsHitTesting(false))
+                        .padding(.horizontal,10)
                         .contentShape(Rectangle())
                         .gesture(SpatialTapGesture().onEnded { tap in
                             let lightness=((tap.location.x-10)/width).clamped(to:0...1)*maximum
@@ -38,16 +42,14 @@ struct SplitToneGradientEditor: View {
                         let x=10+width/maximum
                         path.move(to:CGPoint(x:x,y:0))
                         path.addLine(to:CGPoint(x:x,y:40))
-                    }.stroke(.white,style:StrokeStyle(lineWidth:1,dash:[3,2]))
+                    }.stroke(.white,style:EditorGraphStyle.guide)
                         .allowsHitTesting(false)
                     Text("SDR white")
                         .font(.caption2).foregroundStyle(.secondary)
                         .position(x:min(proxy.size.width-32,max(32,10+width/maximum)),y:49)
                         .allowsHitTesting(false)
                     ForEach(nodes) { node in
-                        Circle().fill(node.id==selection ? Color.accentColor : .white)
-                            .overlay(Circle().stroke(.black,lineWidth:2)).frame(width:16,height:16)
-                            .frame(width:24,height:40).contentShape(Rectangle())
+                        EditorGraphHandle(color: nodeTint(node), selected: node.id==selection)
                             .position(x:10+min(1,node.lightness/maximum)*width,y:20)
                             .onTapGesture { selection=node.id }
                             .gesture(DragGesture(minimumDistance:3,coordinateSpace:.named("toneGradient")).onChanged { value in
@@ -70,22 +72,33 @@ struct SplitToneGradientEditor: View {
                 HStack {
                     Text("Lightness")
                     Slider(value:Binding(get:{selected?.lightness ?? 0},set:{new in update{$0.lightness=new}}),in:0...maximum)
-                    Text(node.lightness,format:.number.precision(.fractionLength(3))).monospacedDigit()
+                    AdjustmentField(title: "Lightness", value: Binding(get: { selected?.lightness ?? 0 }, set: { v in update { $0.lightness=v } }), range: 0...maximum, digits: 3)
                 }
                 wheel(node).frame(height:230)
                 HStack {
                     Text("Hue")
-                    Text(node.hue,format:.number.precision(.fractionLength(0)))
+                    AdjustmentField(title: "Hue", value: Binding(get: { selected?.hue ?? 0 }, set: { v in update { $0.hue=v } }), range: 0...360, digits: 0, unit: "°")
                     Spacer()
-                    Text(node.strength,format:.percent.precision(.fractionLength(0)))
-                    Button("Delete Node",role:.destructive) { remove(node.id) }
-                }.font(.caption)
+                    Text("Strength")
+                    AdjustmentField(title: "Strength", value: Binding(get: { selected?.strength ?? 0 }, set: { v in update { $0.strength=v } }), range: 0...1, digits: 0, scale: 100, unit: "%")
+                }
+                Button("Delete Node",role:.destructive) { remove(node.id) }
             } else {
                 Text("Click the gradient to add a tone node.").font(.caption).foregroundStyle(.secondary)
             }
         }
         .onAppear { if selection==nil { selection=nodes.first?.id } }
     }
+    private func nodeTint(_ node: SplitToneNode) -> Color {
+        // A fixed mid-lightness, full-chroma swatch keeps every hue identifiable,
+        // even for zero-strength nodes and nodes at black or white.
+        let l=0.7
+        let c=OKLabColor.maximumChroma(lightness:l,hue:node.hue,ceiling:1,space:.sRGB)
+        let angle=node.hue * .pi/180
+        let rgb=OKLabColor.linear(SIMD3(l,c*cos(angle),c*sin(angle)),space:.sRGB)
+        return Color(.sRGBLinear,red:rgb.x.clamped(to:0...1),green:rgb.y.clamped(to:0...1),blue:rgb.z.clamped(to:0...1))
+    }
+
     private func wheel(_ node:SplitToneNode)->some View {
         GeometryReader { proxy in
             let size=min(proxy.size.width,proxy.size.height)
@@ -105,24 +118,30 @@ struct SplitToneGradientEditor: View {
                         let rgb=OKLabColor.linear(SIMD3(node.lightness,maxC*cos(radians),maxC*sin(radians)),space:.sRGB)/ceiling
                         let color=Color(.sRGBLinear,red:max(0,min(1,rgb.x)),green:max(0,min(1,rgb.y)),blue:max(0,min(1,rgb.z)),opacity:1)
                         var path=Path()
-                        path.addArc(center:center,radius:radius,startAngle:.degrees(-hue-3),endAngle:.degrees(-hue),clockwise:false)
-                        path.addArc(center:center,radius:innerRadius,startAngle:.degrees(-hue),endAngle:.degrees(-hue-3),clockwise:true)
+                        path.addArc(center:center,radius:radius,startAngle:.degrees(-hue-3.5),endAngle:.degrees(-hue+0.5),clockwise:false)
+                        path.addArc(center:center,radius:innerRadius,startAngle:.degrees(-hue+0.5),endAngle:.degrees(-hue-3.5),clockwise:true)
                         path.closeSubpath();context.fill(path,with:.color(color))
                     }
                     var line=Path();line.move(to:center)
                     line.addLine(to:CGPoint(x:center.x+strengthRadius*cos(angle),y:center.y-strengthRadius*sin(angle)))
-                    context.stroke(line,with:.color(.secondary),lineWidth:2)
+                    context.stroke(line,with:.color(.secondary),lineWidth:EditorGraphStyle.line)
+                    for r in [radius, innerRadius] {
+                        let rim=Path(ellipseIn:CGRect(x:center.x-r,y:center.y-r,width:2*r,height:2*r))
+                        context.stroke(rim,with:.color(.primary.opacity(0.3)),lineWidth:EditorGraphStyle.rim)
+                    }
                 }
-                Circle().fill(.white).overlay(Circle().stroke(.black,lineWidth:2))
-                    .frame(width:16,height:16)
+                Circle()
+                    .stroke(LinearGradient(colors: [.white.opacity(0.22), .clear, .black.opacity(0.18)], startPoint: .top, endPoint: .bottom), lineWidth: 18)
+                    .frame(width:2*hueRadius,height:2*hueRadius)
+                    .allowsHitTesting(false)
+                EditorGraphHandle(color: nodeTint(node), selected: rotatingHue == true)
                     .position(x:center.x+hueRadius*cos(angle),y:center.y-hueRadius*sin(angle))
                     .accessibilityLabel("Hue")
                     .accessibilityValue(node.hue.formatted())
                     .accessibilityAdjustableAction { direction in
                         update { $0.hue=($0.hue+(direction == .increment ? 1 : 359)).truncatingRemainder(dividingBy:360) }
                     }
-                Circle().fill(.white).overlay(Circle().stroke(.black,lineWidth:2))
-                    .frame(width:12,height:12)
+                EditorGraphHandle(selected: rotatingHue == false)
                     .position(x:center.x+strengthRadius*node.strength*cos(angle),y:center.y-strengthRadius*node.strength*sin(angle))
                     .accessibilityLabel("Tone strength")
                     .accessibilityValue(node.strength.formatted(.percent))

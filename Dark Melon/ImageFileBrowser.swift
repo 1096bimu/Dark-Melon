@@ -7,6 +7,14 @@ import ImageIO
 import AppKit
 #endif
 
+enum BrowserGridLayout {
+    static let thumbnailMinimum: CGFloat = 80
+    static let spacing: CGFloat = 8
+    static let padding: CGFloat = 8
+    // Stay one point below the width at which a third thumbnail fits.
+    static let twoColumnWidth = 3 * thumbnailMinimum + 2 * spacing + 2 * padding - 1
+}
+
 nonisolated struct BrowserEntry: Identifiable, Sendable {
     let url: URL
     let isFolder: Bool
@@ -243,7 +251,7 @@ struct ImageFileBrowser: View {
                                     .accessibilityValue(rank.map { "Recently visited folder, \($0 + 1) of \(recent.count)" } ?? "")
                                 }
                             }
-                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 80), spacing: 8)], spacing: 8) {
+                            LazyVGrid(columns: [GridItem(.adaptive(minimum: BrowserGridLayout.thumbnailMinimum), spacing: BrowserGridLayout.spacing)], spacing: BrowserGridLayout.spacing) {
                                 ForEach(files) { entry in
                                     Button {
                                         selectFile(entry.url, ordered: files.map(\.url))
@@ -288,7 +296,7 @@ struct ImageFileBrowser: View {
                                 }
                             }
                         }
-                        .padding(8)
+                        .padding(BrowserGridLayout.padding)
                         .frame(maxWidth: .infinity)
                     }
                     .task(id: listingRevision) {

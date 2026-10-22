@@ -8,20 +8,20 @@ struct FilmGrainControls: View {
             Label("Film Grain", systemImage: "film").font(.headline)
             HStack {
                 Text("Size")
-                Text(settings.size, format: .number.precision(.fractionLength(2)))
-                    .monospacedDigit().foregroundStyle(.secondary)
+                AdjustmentField(title: "Size", value: $settings.size, range: 0.2...3, digits: 2, scale: 1)
+
             }
             Slider(value: $settings.size, in: 0.2...3) { Text("Grain size") }.labelsHidden()
             HStack {
                 Text("Strength")
-                Text(settings.strength, format: .number.precision(.fractionLength(2)))
-                    .monospacedDigit().foregroundStyle(.secondary)
+                AdjustmentField(title: "Strength", value: $settings.strength, range: 0...5, digits: 2, scale: 1)
+
             }
             Slider(value: $settings.strength, in: 0...5) { Text("Grain strength") }.labelsHidden()
             HStack {
                 Text("Distribution")
-                Text(settings.distribution, format: .percent.precision(.fractionLength(0)))
-                    .monospacedDigit().foregroundStyle(.secondary)
+                AdjustmentField(title: "Distribution", value: $settings.distribution, range: 0...1, digits: 0, scale: 100, unit: "%")
+
             }
             Canvas { context, size in
                 var path = Path()
@@ -30,7 +30,7 @@ struct FilmGrainControls: View {
                     let point = CGPoint(x: x * size.width, y: (1 - settings.weight(at: x)) * (size.height - 4) + 2)
                     if i == 0 { path.move(to: point) } else { path.addLine(to: point) }
                 }
-                context.stroke(path, with: .color(.secondary), lineWidth: 1.5)
+                context.stroke(path, with: .color(.secondary), lineWidth: EditorGraphStyle.line)
             }
             .frame(height: 48)
             .accessibilityLabel("Grain distribution from shadows to highlights")

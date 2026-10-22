@@ -77,7 +77,9 @@ struct SlopeEditor: View {
                 HStack {
                     Text("Tone")
                     ControlInfo(.tone)
-                    Text(mapping.tonePosition, format: .number.precision(.fractionLength(3)))
+                    AdjustmentField(title: "Tone", value: Binding(get: { mapping.tonePosition }, set: {
+                        mapping.tonePosition=$0; mapping.setAutomaticHDRTarget(); onToneChanged()
+                    }), range: 0...1, digits: 3, commit: { onToneEditingChanged(false) })
                     Spacer()
                     Toggle("Auto Tones", isOn: $autoTones)
                         #if os(macOS)
@@ -114,7 +116,9 @@ struct SlopeEditor: View {
                 HStack {
                     Text("Contrast")
                     ControlInfo(.contrast)
-                    Text(mapping.concentration, format: .percent.precision(.fractionLength(0)))
+                    AdjustmentField(title: "Contrast", value: Binding(get: { mapping.concentration }, set: {
+                        mapping.concentration=$0; mapping.setAutomaticHDRTarget(); onContrastChanged(); onContrastAdjustment()
+                    }), range: -1...1, digits: 0, scale: 100, unit: "%")
                 }
                 HStack {
                     Image(systemName: "circle.lefthalf.striped.horizontal")
@@ -150,17 +154,10 @@ struct SlopeEditor: View {
                 HStack {
                     Text("HDR Gain")
                     ControlInfo(.hdrGain)
+                    AdjustmentField(title: "HDR Gain", value: Binding(get: { mapping.hdrGain }, set: {
+                        mapping.hdrGain = $0 == 0 ? 0 : max(1,$0); onHDRGainAdjustment()
+                    }), range: 0...5, unit: "×")
                     if !mapping.hdrEnabled { Text("Off").foregroundStyle(.secondary) }
-                    else { TextField("HDR Gain", value: Binding(get: { mapping.hdrGain }, set: { value in
-                              mapping.hdrGain = value.isFinite ? min(5, max(1, value)) : 1.01
-                              onHDRGainAdjustment()
-                          }),
-                              format: .number.precision(.fractionLength(2)))
-                        .labelsHidden()
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 70)
-                        Text("×").foregroundStyle(.secondary)
-                    }
                 }
                 HStack {
                     Image(systemName: "sun.max")
@@ -176,7 +173,9 @@ struct SlopeEditor: View {
                 HStack {
                     Text("HDR Rolloff")
                     ControlInfo(.hdrRolloff)
-                    Text(mapping.hdrRolloff, format: .percent.precision(.fractionLength(0)))
+                    AdjustmentField(title: "HDR Rolloff", value: Binding(get: { mapping.hdrRolloff }, set: {
+                        mapping.hdrRolloff=$0; onHDRGainAdjustment()
+                    }), range: 0...1, digits: 0, scale: 100, unit: "%")
                 }
                 HStack {
                     Image(systemName: "line.diagonal").frame(width: 22).accessibilityHidden(true)

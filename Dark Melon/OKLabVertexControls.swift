@@ -41,6 +41,10 @@ struct OKLabVertexControls: View {
             HStack {
                 Text("OKLab Vertices").font(.headline)
                 Spacer()
+                Button("Monochrome") {
+                    for index in controls.indices { controls[index].chroma = 0 }
+                }
+                .disabled(controls.allSatisfy { $0.chroma == 0 })
                 Button("Reset") { controls=Array(repeating:OKLabVertexAdjustment(),count:6) }
                     .disabled(controls.allSatisfy(\.isIdentity))
             }
@@ -52,9 +56,9 @@ struct OKLabVertexControls: View {
                         var axes=Path()
                         axes.move(to:CGPoint(x:12,y:center.y));axes.addLine(to:CGPoint(x:size.width-12,y:center.y))
                         axes.move(to:CGPoint(x:center.x,y:12));axes.addLine(to:CGPoint(x:center.x,y:size.height-12))
-                        context.stroke(axes,with:.color(.secondary.opacity(0.2)))
+                        context.stroke(axes,with:.color(EditorGraphStyle.guideColor),style:EditorGraphStyle.guide)
                         let ring=Path(ellipseIn:CGRect(x:center.x-36,y:center.y-36,width:72,height:72))
-                        context.stroke(ring,with:.color(.secondary.opacity(0.5)),style:StrokeStyle(lineWidth:1,dash:[3,3]))
+                        context.stroke(ring,with:.color(EditorGraphStyle.guideColor),style:EditorGraphStyle.guide)
                         if let selected {
                             let inner=36.0,outer=max(inner+1,min(size.width,size.height)/2-20)
                             let v=vertices[selected], radius=inner+(outer-inner)*hypot(v.y,v.z)/OKLCHGamut.maxima[space]!
@@ -79,7 +83,7 @@ struct OKLabVertexControls: View {
                             }
                             sector.closeSubpath()
                             context.fill(sector,with:.color(colors[selected].opacity(0.12)))
-                            context.stroke(sector,with:.color(colors[selected].opacity(0.4)))
+                            context.stroke(sector,with:.color(colors[selected].opacity(0.4)),lineWidth:EditorGraphStyle.rim)
                         }
                         var polygon=Path()
                         for index in 0..<6 {
@@ -87,16 +91,13 @@ struct OKLabVertexControls: View {
                             if index==0 { polygon.move(to:p) } else { polygon.addLine(to:p) }
                         }
                         polygon.closeSubpath()
-                        context.stroke(polygon,with:.color(.secondary.opacity(0.5)))
+                        context.stroke(polygon,with:.color(.secondary.opacity(0.5)),lineWidth:EditorGraphStyle.line)
                         context.draw(Text("0").font(.caption).foregroundStyle(.secondary),at:center)
                         context.draw(Text("a").font(.caption).foregroundStyle(.secondary),at:CGPoint(x:size.width-8,y:center.y+12))
                         context.draw(Text("b").font(.caption).foregroundStyle(.secondary),at:CGPoint(x:center.x+12,y:8))
                     }
                     ForEach(0..<6) { index in
-                        Circle().fill(colors[index])
-                            .overlay(Circle().strokeBorder(selected==index ? Color.primary:Color.black.opacity(0.6),lineWidth:selected==index ? 3:1))
-                            .frame(width:18,height:18)
-                            .frame(width:28,height:28).contentShape(Circle())
+                        EditorGraphHandle(color:colors[index], selected:selected==index)
                             .position(point(index,size:size))
                             .accessibilityLabel(Text(LocalizedStringKey(names[index])))
                             .accessibilityAddTraits(.isButton)
@@ -115,18 +116,40 @@ struct OKLabVertexControls: View {
                         if let dragging, hypot(value.translation.width,value.translation.height)>2 { move(dragging,to:value.location,size:size) }
                     }.onEnded { _ in dragging=nil })
             }.aspectRatio(1,contentMode:.fit)
-            if let selected {
+            .overlay {
+                if let selected {
+                    VStack {
                 HStack {
                     Label { Text(LocalizedStringKey(names[selected])).fontWeight(.medium) }
                         icon: { Circle().fill(colors[selected]).frame(width:10,height:10) }
                     Spacer()
-                    Button("Reset") { controls[selected]=OKLabVertexAdjustment() }
-                        .disabled(controls[selected].isIdentity)
                 }
+                        Spacer()
+                        HStack(alignment: .bottom) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Chroma")
+                    AdjustmentField(title: "Chroma", value: $controls[selected].chroma, range: 0...2, unit: "×")
+                }
+                Spacer()
+                VStack(alignment: .trailing, spacing: 3) {
+                    Text("Hue")
+                    AdjustmentField(title: "Hue", value: Binding(get: {
+                        OKLabVertexWarp.rotationAngle(index:selected,amount:controls[selected].rotation,space:space)*180 / .pi
+                    }, set: { degrees in
+                        let limit=abs(OKLabVertexWarp.rotationAngle(index:selected,amount:degrees<0 ? -1:1,space:space))*180 / .pi
+                        controls[selected].rotation=(degrees/limit).clamped(to: -1...1)
+                    }), range: (OKLabVertexWarp.rotationAngle(index:selected,amount:-1,space:space)*180 / .pi)...(OKLabVertexWarp.rotationAngle(index:selected,amount:1,space:space)*180 / .pi), digits: 1, unit: "°")
+                }
+                        }
+                    }.padding(4)
+                }
+            }
+
+            if let selected {
                 HStack {
                     Text("Lightness")
                     Spacer()
-                    Text(controls[selected].lightness,format:.number.precision(.fractionLength(3))).monospacedDigit()
+                    AdjustmentField(title: "Lightness", value: $controls[selected].lightness, range: -0.25...0.25, digits: 3)
                 }
                 Slider(value:$controls[selected].lightness,in: -0.25...0.25) { Text("Lightness") }.labelsHidden()
             }

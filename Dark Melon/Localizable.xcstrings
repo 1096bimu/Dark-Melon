@@ -241,6 +241,27 @@
         }
       }
     },
+    "Add": {},
+    "Add Edit": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加预设"
+          }
+        }
+      }
+    },
+    "Add Folder": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加文件夹"
+          }
+        }
+      }
+    },
     "Adds an equal offset to linear RGB before tone mapping. Negative values clip shadows; positive values lift black.": {
       "extractionState": "manual",
       "localizations": {
@@ -427,6 +448,7 @@
         }
       }
     },
+    "Back": {},
     "Batch Export": {
       "extractionState": "manual",
       "localizations": {
@@ -511,6 +533,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "蓝色"
+          }
+        }
+      }
+    },
+    "Blue gain": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "蓝色增益"
           }
         }
       }
@@ -826,6 +858,17 @@
         }
       }
     },
+    "Compare Original": {
+      "extractionState": "stale",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "对比原图"
+          }
+        }
+      }
+    },
     "Compare SDR and HDR": {
       "extractionState": "manual",
       "localizations": {
@@ -1082,6 +1125,7 @@
         }
       }
     },
+    "Delete": {},
     "Delete Edit": {
       "extractionState": "manual",
       "localizations": {
@@ -1133,6 +1177,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "删除节点"
+          }
+        }
+      }
+    },
+    "Delete this library item and any edits inside it?": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除此预设库项目及其中的所有预设？"
           }
         }
       }
@@ -1447,6 +1501,16 @@
         }
       }
     },
+    "Folder": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件夹"
+          }
+        }
+      }
+    },
     "Format": {
       "extractionState": "manual",
       "localizations": {
@@ -1490,6 +1554,7 @@
         }
       }
     },
+    "G": {},
     "Gain map": {
       "extractionState": "manual",
       "localizations": {
@@ -1574,6 +1639,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "绿色"
+          }
+        }
+      }
+    },
+    "Green gain": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "绿色增益"
           }
         }
       }
@@ -1791,6 +1866,26 @@
         }
       }
     },
+    "Hide Left Panel": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "隐藏左侧面板"
+          }
+        }
+      }
+    },
+    "Hide left panel (F)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "隐藏左侧面板（F）"
+          }
+        }
+      }
+    },
     "High luminance": {
       "extractionState": "manual",
       "localizations": {
@@ -1871,6 +1966,37 @@
     "HLS": {
       "shouldTranslate": false
     },
+    "Hold C": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按住 C"
+          }
+        }
+      }
+    },
+    "Hold to compare with default development settings. Hold C for the same preview.": {
+      "extractionState": "stale",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按住以使用默认显影设置预览。按住 C 键也可进行对比。"
+          }
+        }
+      }
+    },
+    "Hold to preview Original in SDR with default tone settings and the current transform. Hold C for the same preview.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按住以 SDR 预览原图，使用默认影调设置并保留当前变换。按住 C 键也可进行对比。"
+          }
+        }
+      }
+    },
     "Hold to preview without this panel’s effects. Release to restore them.": {
       "extractionState": "manual",
       "localizations": {
@@ -1940,6 +2066,16 @@
         }
       }
     },
+    "Left Panel": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "左侧面板"
+          }
+        }
+      }
+    },
     "Lens Correction": {
       "extractionState": "manual",
       "localizations": {
@@ -1947,6 +2083,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "镜头校正"
+          }
+        }
+      }
+    },
+    "Library": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "预设库"
           }
         }
       }
@@ -2247,6 +2393,16 @@
         }
       }
     },
+    "Monochrome": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "单色"
+          }
+        }
+      }
+    },
     "Monochrome gain map": {
       "extractionState": "manual",
       "localizations": {
@@ -2254,6 +2410,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "单通道增益图"
+          }
+        }
+      }
+    },
+    "Move to": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移动到"
           }
         }
       }
@@ -2287,6 +2453,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "根据感知明度（0 为黑色，1 为 SDR 白色）调整 OKLCH 色度倍率。HDR 明度超过 1 时使用右端点。1× 保持不变。"
+          }
+        }
+      }
+    },
+    "Name": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "名称"
+          }
+        }
+      }
+    },
+    "Next": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下一步"
           }
         }
       }
@@ -2430,6 +2616,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "打开 RAW、SDR 或 HDR 图像，在线性 RGB 空间中显影。"
+          }
+        }
+      }
+    },
+    "Original": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "原图"
           }
         }
       }
@@ -2631,9 +2827,7 @@
         }
       }
     },
-    "R %@  G %@  B %@": {
-      "shouldTranslate": false
-    },
+    "R": {},
     "Radius": {
       "extractionState": "manual",
       "localizations": {
@@ -2677,6 +2871,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "红色"
+          }
+        }
+      }
+    },
+    "Red gain": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "红色增益"
           }
         }
       }
@@ -3233,6 +3437,26 @@
         }
       }
     },
+    "Show Left Panel": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示左侧面板"
+          }
+        }
+      }
+    },
+    "Show left panel (F)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示左侧面板（F）"
+          }
+        }
+      }
+    },
     "Shown": {
       "extractionState": "manual",
       "localizations": {
@@ -3459,6 +3683,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "切换 HDR 预览"
+          }
+        }
+      }
+    },
+    "Toggle left panel": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "切换左侧面板"
           }
         }
       }
@@ -3930,32 +4164,12 @@
         }
       }
     },
-    "Compare Original": {
+    "PQ HDR": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "对比原图"
-          }
-        }
-      }
-    },
-    "Hold C": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "按住 C"
-          }
-        }
-      }
-    },
-    "Hold to compare with default development settings. Hold C for the same preview.": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "按住以使用默认显影设置预览。按住 C 键也可进行对比。"
+            "value": "PQ HDR"
           }
         }
       }

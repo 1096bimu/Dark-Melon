@@ -43,8 +43,14 @@ struct VectorscopeView: View {
     }()
 
     private var gainValues: some View {
-        Text("R \(balance.red, format: .number.precision(.fractionLength(3)))  G \(balance.green, format: .number.precision(.fractionLength(3)))  B \(balance.blue, format: .number.precision(.fractionLength(3)))")
-            .monospacedDigit()
+        HStack(spacing: 6) {
+            Text("R")
+            AdjustmentField(title: "Red gain", value: $mapping.whiteBalance.red, range: 0.000001...256, digits: 3, width: 60)
+            Text("G")
+            AdjustmentField(title: "Green gain", value: $mapping.whiteBalance.green, range: 0.000001...256, digits: 3, width: 60)
+            Text("B")
+            AdjustmentField(title: "Blue gain", value: $mapping.whiteBalance.blue, range: 0.000001...256, digits: 3, width: 60)
+        }
     }
 
     private func commitWBField() {
@@ -194,15 +200,13 @@ struct VectorscopeView: View {
             if let errorMessage { Text(errorMessage).foregroundStyle(.secondary) }
             if mapping.rawWhiteBalance != nil {
                 VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text("White Balance").fontWeight(.medium)
-                        Spacer()
-                        VStack(alignment: .trailing, spacing: 6) {
-                            gainValues
-                            if let convertWhiteBalance {
-                                Button("Convert to WB", action: convertWhiteBalance)
-                                    .disabled(balance == WhiteBalance())
-                            }
+                    Text("White Balance").fontWeight(.medium)
+                    gainValues
+                    if let convertWhiteBalance {
+                        HStack {
+                            Spacer()
+                            Button("Convert to WB", action: convertWhiteBalance)
+                                .disabled(balance == WhiteBalance())
                         }
                     }
                     HStack {
@@ -212,7 +216,7 @@ struct VectorscopeView: View {
                             mapping.rawWhiteBalance?.temperature = Float(min(10000, max(2000, $0)))
                             editedWBField = true
                         }), format: .number.precision(.fractionLength(0)))
-                            .labelsHidden().textFieldStyle(.roundedBorder).frame(width: 80)
+                            .labelsHidden().textFieldStyle(.roundedBorder).font(.body.monospacedDigit()).multilineTextAlignment(.trailing).frame(width: 72)
                             .focused($focusedWBField, equals: 0)
                             .onSubmit { commitWBField() }
                         Text("K")
@@ -229,7 +233,7 @@ struct VectorscopeView: View {
                             mapping.rawWhiteBalance?.tint = Float(min(50, max(-50, $0)))
                             editedWBField = true
                         }), format: .number.precision(.fractionLength(2)))
-                            .labelsHidden().textFieldStyle(.roundedBorder).frame(width: 80)
+                            .labelsHidden().textFieldStyle(.roundedBorder).font(.body.monospacedDigit()).multilineTextAlignment(.trailing).frame(width: 72)
                             .focused($focusedWBField, equals: 1)
                             .onSubmit { commitWBField() }
                     }

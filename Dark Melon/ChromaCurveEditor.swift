@@ -33,17 +33,15 @@ struct ChromaCurveEditor: View {
                         }
                         path.move(to: CGPoint(x: 14,y: 14+height/2))
                         path.addLine(to: CGPoint(x: 14+width,y: 14+height/2))
-                    }.stroke(.secondary.opacity(0.35), style: StrokeStyle(lineWidth: 1, dash: [4,3]))
+                    }.stroke(EditorGraphStyle.guideColor, style: EditorGraphStyle.guide)
                     Path { path in
                         for i in 0..<4 {
                             let p = CGPoint(x: 14+CGFloat(i)/3*width,y: 14+(1-values[i]/2)*height)
                             if i == 0 { path.move(to: p) } else { path.addLine(to: p) }
                         }
-                    }.stroke(.tint,lineWidth: 2)
+                    }.stroke(.tint,lineWidth: EditorGraphStyle.line)
                     ForEach(0..<4) { index in
-                        Circle().fill(.primary).frame(width: 14,height: 14)
-                            .overlay(Circle().stroke(.background,lineWidth: 2))
-                            .frame(width: 28,height: 28).contentShape(Circle())
+                        EditorGraphHandle()
                             .position(x: 14+CGFloat(index)/3*width,y: 14+(1-values[index]/2)*height)
                             .gesture(DragGesture(minimumDistance: 0,coordinateSpace: .named(title)).onChanged {
                                 controls[index].wrappedValue = (2*(1-($0.location.y-14)/height)).clamped(to: 0...2)
@@ -63,7 +61,8 @@ struct ChromaCurveEditor: View {
                     VStack(spacing: 2) {
                         Text(labels[index])
                         Text(levels[index],format: .number.precision(.fractionLength(3)))
-                        Text("\(controls[index].wrappedValue, format: .number.precision(.fractionLength(2)))×")
+                        AdjustmentField(title: "Chroma", value: controls[index], range: 0...2, unit: "×", width: 52)
+                            .disabled(index == 3 && hdrMax <= 1)
                     }.frame(maxWidth: .infinity)
                 }
             }.font(.caption).monospacedDigit().foregroundStyle(.secondary)

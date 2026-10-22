@@ -24,7 +24,7 @@ struct ContentView: View {
     @State private var pendingTransition: (() -> Void)?
     @State private var confirmingDiscard = false
     @State private var showingPasteSettings = false
-    @State private var browserPaste: BrowserFileDevelopment?
+    @State private var browserPaste: BrowserRecipeTarget?
     @State private var browserExport: BrowserFileDevelopment?
     @State private var fileActionBusy = false
     @State private var deleteEditURLs: [URL] = []
@@ -33,6 +33,8 @@ struct ContentView: View {
     @State private var resettingTone = false
     @State private var browserModel = ImageBrowserModel()
     @State private var showingFileBrowser = true
+    @State private var leftPanelWidth: CGFloat = BrowserGridLayout.twoColumnWidth
+    @AppStorage("leftPanel.library") private var showingLibrary = false
     #if os(macOS)
     @State private var showingBatchExport = false
     #endif
@@ -71,7 +73,7 @@ struct ContentView: View {
     @State private var hoveredPreviewPixel: CGPoint?
     @State private var displayMode = PreviewHistogramMode.hdrLinear
     private var hdrPreview: Bool {
-        get { displayMode.hdr }
+        get { !comparingOriginal && displayMode.hdr }
         nonmutating set { displayMode.hdr = newValue }
     }
     @State private var previewImages: PreviewImages?
@@ -118,6 +120,7 @@ struct ContentView: View {
     private var originalMapping: ToneMapping {
         var result = ToneMapping.fresh(isRAW: development?.isRAW == true,
                                        sourceHeadroom: development?.sourceHeadroom ?? 1)
+        result.hdrGain = 0 // Original comparison always uses the SDR rendition.
         result.rawWhiteBalance = mapping.rawWhiteBalance
         result.transform = mapping.transform
         return result
@@ -220,11 +223,26 @@ struct ContentView: View {
         NavigationStack {
             EditorColumns {
                 if showingFileBrowser {
+                    Group {
+                        if showingLibrary {
+                            EditLibraryView(current: development == nil || loading ? nil : currentRecipe, filename: filename) { recipe, selection in
+                                pastedSettings = CopiedSettings(mapping: recipe.mapping, rawSettings: recipe.rawSettings)
+                                applyPastedSettings(selection, target: nil)
+                            }
+                        } else {
                     ImageFileBrowser(selectedURL: sourceURL, open: { load($0, resetEdits: true) }, model: browserModel, changeDirectory: changeDirectory,
                                      fileAction: performFileAction, multipleFileAction: performMultipleFileAction, hasPendingEdit: hasPendingEdit)
-                        .frame(minWidth: 180, idealWidth: 220, maxWidth: 320)
                         .disabled(loading || fileActionBusy)
                         .overlay { if fileActionBusy { ProgressView("Preparing…").padding().background(.regularMaterial) } }
+                        }
+                    }
+                    .frame(minWidth: 180, idealWidth: leftPanelWidth, maxWidth: 320)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
+                        if showingFileBrowser, (180...320).contains(width) {
+                            leftPanelWidth = width
+                        }
+                    }
+
                 }
             VStack(spacing: 0) {
                 ZStack {
@@ -402,7 +420,7 @@ struct ContentView: View {
                     }
                     .disabled(loading || development == nil)
                 }
-                .frame(minWidth: 320, idealWidth: 360, maxWidth: 480)
+                .frame(minWidth: 320, idealWidth: 320, maxWidth: 480)
             }
             .task {
                 editHistory.restore = restoreHistory
@@ -535,6 +553,7 @@ struct ContentView: View {
             }))
             .background(OriginalCompareShortcut(active: $comparingOriginalKey,
                 enabled: development != nil && !loading && !cropping))
+            .background(fileBrowserToggle.opacity(0).frame(width: 0, height: 0).accessibilityHidden(true))
             .navigationTitle(filename)
             .focusedSceneValue(\.editorUndo, undoActions)
             .focusedSceneValue(\.editorPanel, $panel)
@@ -548,9 +567,9 @@ struct ContentView: View {
             #endif
             .toolbar {
                 #if os(macOS)
-                ToolbarItem(placement: .navigation) { fileBrowserToggle }
+                ToolbarItem(placement: .navigation) { leftPanelPicker }
                 #else
-                ToolbarItem(placement: .topBarLeading) { fileBrowserToggle }
+                ToolbarItem(placement: .topBarLeading) { leftPanelPicker }
                 #endif
                 #if !os(macOS)
                 ToolbarItemGroup(placement: .topBarTrailing) {
@@ -734,6 +753,9 @@ struct ContentView: View {
                         savedRecipe = saved
                     }
                 }
+                if initializeEdits {
+                    mapping = ToneMapping.fresh(isRAW: loaded.isRAW, sourceHeadroom: loaded.sourceHeadroom)
+                }
                 if loaded.isRAW, mapping.rawWhiteBalance == nil, let reference = loaded.whitePoint {
                     mapping.rawWhiteBalance = RAWWhiteBalance(reference)
                     if var saved = savedRecipe {
@@ -742,9 +764,6 @@ struct ContentView: View {
                     }
                 }
                 if resetEdits {
-                    if initializeEdits, !loaded.isRAW {
-                        if loaded.sourceHeadroom <= 1 { mapping.hdrGain = 0 }
-                    }
                     hdrPreview = mapping.hdrEnabled
                 }
                 if resetEdits {
@@ -984,13 +1003,22 @@ struct ContentView: View {
         pickingWhiteBalance.toggle()
     }
 
+    private var leftPanelPicker: some View {
+        Picker("Left Panel", selection: Binding(get: { showingLibrary }, set: {
+            showingLibrary = $0; showingFileBrowser = true
+        })) {
+            Text("Folder").tag(false)
+            Text("Library").tag(true)
+        }.pickerStyle(.segmented).labelsHidden().fixedSize()
+    }
+
     private var fileBrowserToggle: some View {
-        Button(showingFileBrowser ? "Hide File Browser" : "Show File Browser", systemImage: "sidebar.left") {
+        Button(showingFileBrowser ? "Hide Left Panel" : "Show Left Panel", systemImage: "sidebar.left") {
             showingFileBrowser.toggle()
         }
         .labelStyle(.iconOnly)
         .keyboardShortcut("f", modifiers: [])
-        .help(showingFileBrowser ? "Hide file browser (F)" : "Show file browser (F)")
+        .help(showingFileBrowser ? "Hide left panel (F)" : "Show left panel (F)")
         .accessibilityValue(showingFileBrowser ? "Shown" : "Hidden")
     }
 
@@ -998,6 +1026,7 @@ struct ContentView: View {
         tutorialPresented = true
         tutorial.start()
         showingFileBrowser = true
+        showingLibrary = false
         panel = .tone
         hdrPreview = false
     }
@@ -1030,7 +1059,16 @@ struct ContentView: View {
         Task {
             defer { fileActionBusy = false }
             do {
-                let copied = action == .pasteEdit ? try SettingsClipboard.read() : nil
+                if action == .pasteEdit {
+                    pastedSettings = try SettingsClipboard.read()
+                    if url.standardizedFileURL == recipeSourceURL?.standardizedFileURL {
+                        browserPaste = nil
+                    } else {
+                        browserPaste = try await BrowserRecipeTarget.load(url, override: pendingEdits.entry(for: url)?.recipe)
+                    }
+                    showingPasteSettings = true
+                    return
+                }
                 let target: BrowserFileDevelopment
                 if action != .export, let development,
                    development.url.standardizedFileURL == url.standardizedFileURL {
@@ -1043,10 +1081,7 @@ struct ContentView: View {
                 switch action {
                 case .copyEdit:
                     try SettingsClipboard.copy(target.recipe, reference: target.development.whitePoint, source: target.development.url)
-                case .pasteEdit:
-                    pastedSettings = copied
-                    browserPaste = target
-                    showingPasteSettings = true
+                case .pasteEdit: break
                 case .export:
                     browserExport = target
                     showingExportOptions = true
@@ -1056,18 +1091,20 @@ struct ContentView: View {
         }
     }
 
-    private func applyPastedSettings(_ selection: SettingsPasteSelection, target: BrowserFileDevelopment?) {
+    private func applyPastedSettings(_ selection: SettingsPasteSelection, target: BrowserRecipeTarget?) {
         guard let pastedSettings, !loading else { return }
         commitHistory()
-        if let target, target.development.url.standardizedFileURL != recipeSourceURL?.standardizedFileURL {
-            let url = target.development.url
+        if let target, target.url.standardizedFileURL != recipeSourceURL?.standardizedFileURL {
+            let url = target.url
             let draft = pendingEdits.entry(for: url)
             let destination = draft?.recipe ?? target.recipe
-            let updated = pastedSettings.applying(selection, to: destination.mapping,
-                                                  reference: target.development.whitePoint, space: destination.colorSpace)
+            var updated = selection.applying(pastedSettings.mapping, to: destination.mapping)
+            if selection.whiteBalance, target.isRAW, let wb = pastedSettings.mapping.rawWhiteBalance {
+                updated.rawWhiteBalance = wb
+            }
             let updatedRecipe = DevelopmentRecipe(colorSpace: destination.colorSpace, mapping: updated,
-                rawSettings: selection.raw && target.development.isRAW
-                    ? (pastedSettings.rawSettings?.resolved(using: target.development.rawDefaults ?? RAWSettings()) ?? destination.rawSettings)
+                rawSettings: selection.raw && target.isRAW
+                    ? (pastedSettings.rawSettings ?? destination.rawSettings)
                     : destination.rawSettings)
             editHistory.record(url, from: destination, to: updatedRecipe, name: String(localized: "Paste Edits"))
             pendingEdits.remember(url: url, recipe: updatedRecipe,
@@ -1108,8 +1145,8 @@ struct ContentView: View {
             // Apply the current image last: RAW changes may start an editor reload.
             for url in urls where url.standardizedFileURL != recipeSourceURL?.standardizedFileURL {
                 do {
-                    let target = try await BrowserFileDevelopment.load(url,
-                        override: pendingEdits.entry(for: url)?.recipe, bins: histogramBins)
+                    let target = try await BrowserRecipeTarget.load(url,
+                        override: pendingEdits.entry(for: url)?.recipe)
                     applyPastedSettings(selection, target: target)
                 } catch { failures.append("\(url.lastPathComponent): \(error.localizedDescription)") }
             }
@@ -1225,9 +1262,9 @@ private struct LinearHistogram: View {
                     .fontWeight(.medium)
                     .help("Toggle the linear source histogram and the developed SDR preview histogram. Black and white points can only be adjusted in Linear RGB.")
                 Spacer()
-                HoldCompareButton(comparing: $comparingOriginal, title: "Compare Original")
+                HoldCompareButton(comparing: $comparingOriginal, title: "Original")
                     .disabled(development == nil)
-                    .help("Hold to compare with default development settings. Hold C for the same preview.")
+                    .help("Hold to preview Original in SDR with default tone settings and the current transform. Hold C for the same preview.")
             }
             HStack {
                 if !showingSDR {

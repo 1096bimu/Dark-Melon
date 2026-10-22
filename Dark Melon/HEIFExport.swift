@@ -14,9 +14,17 @@ nonisolated enum ExportFormat: String, Codable, CaseIterable, Identifiable {
 }
 
 nonisolated enum HEIFHDRMode: String, Codable, CaseIterable, Identifiable {
+    case off = "Off"
     case gainMap = "Gain map"
-    case direct = "Direct HDR"
+    case direct = "Direct HDR" // Keep the persisted value compatible with existing preferences.
     var id: Self { self }
+    var label: LocalizedStringKey {
+        switch self {
+        case .off: "Off"
+        case .gainMap: "Gain map"
+        case .direct: "PQ HDR"
+        }
+    }
 }
 
 nonisolated struct HEIFSettings: Codable, Equatable, Sendable {
@@ -267,7 +275,7 @@ struct HEIFExportOptions: View {
             if hdrEnabled && format == .heif {
                 Picker("HDR encoding", selection: $settings.heifHDRMode) {
                     ForEach(HEIFHDRMode.allCases) { mode in
-                        Text(LocalizedStringKey(mode.rawValue)).tag(mode)
+                        Text(mode.label).tag(mode)
                     }
                 }.pickerStyle(.segmented)
                 if settings.heifHDRMode == .direct {
