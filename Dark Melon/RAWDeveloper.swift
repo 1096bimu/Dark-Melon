@@ -283,7 +283,7 @@ actor RAWDeveloper {
         guard let image = toneLocatorKernel?.apply(extent: input.extent, arguments: [
             input, CIImage(cgImage: preview),
             CIVector(x: weights.x, y: weights.y, z: weights.z),
-            clipping ? mapping.white : mapping.peakPosition, max(0.0001, (mapping.white - mapping.black) * 0.025),
+            clipping ? mapping.white : mapping.peakPosition, max(0.0001, mapping.white * 0.025),
             clipping ? 1.0 : 0.0
         ]) else { throw DevelopmentError.decode }
         return try displayPreview(try mapping.transform?.apply(to: image) ?? image, hdr: hdr, headroom: mapping.hdrMax)

@@ -3,61 +3,46 @@ import SwiftUI
 struct HistogramPoints: View {
     @Binding var mapping: ToneMapping
     var onWhitePointEditingChanged: (Bool) -> Void = { _ in }
-    @State private var draggingBlack: Bool?
+    @State private var dragging = false
 
     var body: some View {
         GeometryReader { geometry in
+            let x = min(geometry.size.width - 1, max(1, geometry.size.width * mapping.white))
             ZStack {
-                ForEach([true, false], id: \.self) { isBlack in
-                    let point = isBlack ? mapping.black : mapping.white
-                    let x = min(geometry.size.width - 1, max(1, geometry.size.width * point))
-                    Path { path in
-                        path.move(to: CGPoint(x: x, y: 0))
-                        path.addLine(to: CGPoint(x: x, y: geometry.size.height))
+                Path { path in
+                    path.move(to: CGPoint(x: x, y: 0))
+                    path.addLine(to: CGPoint(x: x, y: geometry.size.height))
+                }.stroke(.black, lineWidth: 4)
+                Path { path in
+                    path.move(to: CGPoint(x: x, y: 0))
+                    path.addLine(to: CGPoint(x: x, y: geometry.size.height))
+                }.stroke(.white, lineWidth: 2)
+                Text("W")
+                    .font(.caption2.bold()).foregroundStyle(.black).padding(4)
+                    .background(Color.white, in: RoundedRectangle(cornerRadius: 3))
+                    .position(x: min(geometry.size.width - 10, max(10, x)), y: 32)
+                    .accessibilityLabel("White point")
+                    .accessibilityValue(mapping.white.formatted(.number.precision(.fractionLength(4))))
+                    .accessibilityAdjustableAction { direction in
+                        update(mapping.white + (direction == .increment ? 0.005 : -0.005))
                     }
-                    .stroke(isBlack ? .white : .black, lineWidth: 4)
-                    Path { path in
-                        path.move(to: CGPoint(x: x, y: 0))
-                        path.addLine(to: CGPoint(x: x, y: geometry.size.height))
-                    }
-                    .stroke(isBlack ? .black : .white, lineWidth: 2)
-                    Text(isBlack ? "B" : "W")
-                        .font(.caption2.bold())
-                        .foregroundStyle(isBlack ? .white : .black)
-                        .padding(4)
-                        .background(isBlack ? Color.black : Color.white, in: RoundedRectangle(cornerRadius: 3))
-                        .position(x: min(geometry.size.width - 10, max(10, x)), y: isBlack ? 12 : 32)
-                        .accessibilityLabel(isBlack ? "Black point" : "White point")
-                        .accessibilityValue(point.formatted(.number.precision(.fractionLength(4))))
-                        .accessibilityAdjustableAction { direction in
-                            update(point + (direction == .increment ? 0.005 : -0.005), black: isBlack)
-                        }
-                }
             }
             .contentShape(Rectangle())
             .gesture(DragGesture(minimumDistance: 0).onChanged { value in
-                let width = max(1, geometry.size.width)
-                if draggingBlack == nil {
-                    let start = value.startLocation.x / width
-                    draggingBlack = abs(start - mapping.black) < abs(start - mapping.white)
-                    if draggingBlack == false { onWhitePointEditingChanged(true) }
-                }
-                update(value.location.x / width, black: draggingBlack == true)
+                if !dragging { dragging = true; onWhitePointEditingChanged(true) }
+                update(value.location.x / max(1, geometry.size.width))
             }.onEnded { _ in
                 onWhitePointEditingChanged(false)
-                draggingBlack = nil
+                dragging = false
             })
             .onDisappear { onWhitePointEditingChanged(false) }
         }
     }
 
-    private func update(_ value: Double, black: Bool) {
-        if black {
-            mapping.black = max(0, min(mapping.white - ToneMapping.minimumRange, value))
-        } else {
-            mapping.white = min(1, max(mapping.black + ToneMapping.minimumRange, value))
-            mapping.setAutomaticHDRTarget()
-        }
+    private func update(_ value: Double) {
+        mapping.white = min(1, max(ToneMapping.minimumRange, value))
+        mapping.tonePosition = min(mapping.tonePosition, mapping.white)
+        mapping.setAutomaticHDRTarget()
     }
 }
 
@@ -78,8 +63,8 @@ struct SlopeEditor: View {
                     Text("Tone")
                     ControlInfo(.tone)
                     AdjustmentField(title: "Tone", value: Binding(get: { mapping.tonePosition }, set: {
-                        mapping.tonePosition=$0; mapping.setAutomaticHDRTarget(); onToneChanged()
-                    }), range: 0...1, digits: 3, commit: { onToneEditingChanged(false) })
+                        mapping.tonePosition=min($0, mapping.white); mapping.setAutomaticHDRTarget(); onToneChanged()
+                    }), range: 0...mapping.white, digits: 3, commit: { onToneEditingChanged(false) })
                     Spacer()
                     Toggle("Auto Tones", isOn: $autoTones)
                         #if os(macOS)
@@ -91,14 +76,15 @@ struct SlopeEditor: View {
                 HStack {
                     Image(systemName: "swirl.circle.righthalf.filled")
                         .frame(width: 22).accessibilityHidden(true)
-                Slider(value: Binding(get: { 1 - mapping.tonePosition },
+                Slider(value: Binding(get: { 1 - min(mapping.tonePosition, mapping.white) },
                                       set: {
-                                          if mapping.tonePosition != 1 - $0 { onToneChanged() }
-                                          mapping.tonePosition = 1 - $0
+                                          let tone = min(1 - $0, mapping.white)
+                                          if mapping.tonePosition != tone { onToneChanged() }
+                                          mapping.tonePosition = tone
                                           mapping.setAutomaticHDRTarget()
                                           showLowContrastTip = abs(mapping.concentration) <= 0.1
                                       }),
-                       in: 0...1) {
+                       in: (1 - mapping.white)...1) {
                     Text("Tone")
                 } onEditingChanged: { editing in
                     onToneEditingChanged(editing)

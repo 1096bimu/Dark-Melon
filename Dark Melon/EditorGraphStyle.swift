@@ -2,6 +2,8 @@ import SwiftUI
 
 /// Shared visual vocabulary for interactive color graphs.
 enum EditorGraphStyle {
+    static let colorNames = ["R", "Y", "G", "C", "B", "M"]
+    static let colorLabels: [Color] = [.red, .yellow, .green, .cyan, .blue, .pink]
     static let line: CGFloat = 2
     static let guide = StrokeStyle(lineWidth: 1, dash: [4, 3])
     static let guideColor = Color.secondary.opacity(0.35)

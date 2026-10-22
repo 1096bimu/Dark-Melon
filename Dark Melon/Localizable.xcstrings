@@ -361,6 +361,28 @@
         }
       }
     },
+    "Ambition": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Special"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "特別"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "特别"
+          }
+        }
+      }
+    },
     "Amount": {
       "extractionState": "manual",
       "localizations": {
@@ -389,6 +411,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "所有明度下的色域外轮廓近似投影。轮廓外表示超出色域；由于示波器未显示明度，轮廓内不一定属于该色域。"
+          }
+        }
+      }
+    },
+    "Aqua": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jellyfish"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "クラゲ"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "水母"
           }
         }
       }
@@ -825,6 +869,16 @@
         }
       }
     },
+    "Color Scope": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "色彩示波器"
+          }
+        }
+      }
+    },
     "Color space": {
       "extractionState": "manual",
       "localizations": {
@@ -1191,6 +1245,16 @@
         }
       }
     },
+    "Density gradient": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "密度渐变"
+          }
+        }
+      }
+    },
     "Deselect All": {
       "extractionState": "manual",
       "localizations": {
@@ -1264,6 +1328,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "向某个色相拖动以增加图像中的该颜色。"
+          }
+        }
+      }
+    },
+    "Echo": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "響く"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "回响"
           }
         }
       }
@@ -1511,6 +1591,22 @@
         }
       }
     },
+    "For life": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一生"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一辈子"
+          }
+        }
+      }
+    },
     "Format": {
       "extractionState": "manual",
       "localizations": {
@@ -1540,6 +1636,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "四个色度倍率控制点以直线连接：零、SDR 中点、SDR 色域最大值及 HDR 色域最大值。HDR 端点随当前 HDR 输出上限变化。1× 保持不变。"
+          }
+        }
+      }
+    },
+    "Freyja": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spirit"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "リンゴ"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "苹果"
           }
         }
       }
@@ -1833,6 +1951,22 @@
         }
       }
     },
+    "Hero": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ヒーロー"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "英雄"
+          }
+        }
+      }
+    },
     "Hidden": {
       "extractionState": "manual",
       "localizations": {
@@ -1882,6 +2016,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "隐藏左侧面板（F）"
+          }
+        }
+      }
+    },
+    "High density": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "高密度"
           }
         }
       }
@@ -2052,6 +2196,22 @@
         }
       }
     },
+    "Inferno": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "インフェルノ"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "炽热"
+          }
+        }
+      }
+    },
     "K": {
       "shouldTranslate": false
     },
@@ -2062,6 +2222,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "键盘快捷键"
+          }
+        }
+      }
+    },
+    "Kisaragi": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "如月"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "如月"
           }
         }
       }
@@ -2174,6 +2350,22 @@
         }
       }
     },
+    "Liz": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "リズ"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "利兹"
+          }
+        }
+      }
+    },
     "Loading image…": {
       "extractionState": "manual",
       "localizations": {
@@ -2192,6 +2384,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "局部边缘对比度"
+          }
+        }
+      }
+    },
+    "Low density": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "低密度"
           }
         }
       }
@@ -2323,6 +2525,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "中位数：%lld"
+          }
+        }
+      }
+    },
+    "Melon": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メロン"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "青瓜"
           }
         }
       }
@@ -2565,6 +2783,16 @@
         }
       }
     },
+    "OKLCH": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OKLCH"
+          }
+        }
+      }
+    },
     "Open a photo with skin tones from the file browser to begin. The guide will wait while the image loads.": {
       "extractionState": "manual",
       "localizations": {
@@ -2739,6 +2967,26 @@
         }
       }
     },
+    "Pixel density by OKLCH hue and chroma. Outlines show the selected gamut’s maximum chroma across all lightness values. Neutral pixels have no hue and are omitted.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按 OKLCH 色相和彩度显示像素密度。轮廓表示所选色域在所有明度下的最大彩度。中性像素没有色相，因此不显示。"
+          }
+        }
+      }
+    },
+    "PQ HDR": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PQ HDR"
+          }
+        }
+      }
+    },
     "Preparing concurrent exports…": {
       "extractionState": "manual",
       "localizations": {
@@ -2835,6 +3083,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "半径"
+          }
+        }
+      }
+    },
+    "Ranka": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cinderella"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "シンデレラ"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "灰姑娘"
           }
         }
       }
@@ -3316,6 +3586,16 @@
         }
       }
     },
+    "Settings": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "设置"
+          }
+        }
+      }
+    },
     "Settings section": {
       "extractionState": "manual",
       "localizations": {
@@ -3389,6 +3669,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "锐度"
+          }
+        }
+      }
+    },
+    "Sheryl": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Songstress"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "妖精"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "妖精"
           }
         }
       }
@@ -4164,12 +4466,12 @@
         }
       }
     },
-    "PQ HDR": {
+    "Orange": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "PQ HDR"
+            "value": "橙色"
           }
         }
       }

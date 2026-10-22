@@ -17,7 +17,6 @@ nonisolated struct SettingsPasteSelection: Codable, Sendable {
         var result = destination
         if raw { result.offset = source.offset }
         if tone {
-            result.black = source.black
             result.white = source.white
             result.tonePosition = source.tonePosition
             result.concentration = source.concentration

@@ -7,9 +7,9 @@ nonisolated final class OKLabColorPipeline {
     private var tintCache: (SplitToneSettings, ProcessingColorSpace, Double, CIImage)?
     private var fieldCache: ([OKLabVertexAdjustment], ProcessingColorSpace, OKLabVertexWarp.Field)?
     private let kernel: CIKernel? = {
-        let parameters=(0..<6).map { "vec4 v\($0),vec2 h\($0)" }.joined(separator:",")
-        let sectors=(0..<6).map { i in
-            let j=(i+1)%6
+        let parameters=(0..<OKLabVertexWarp.count).map { "vec4 v\($0),vec2 h\($0)" }.joined(separator:",")
+        let sectors=(0..<OKLabVertexWarp.count).map { i in
+            let j=(i+1)%OKLabVertexWarp.count
             return """
             if (h>=h\(i).x && h<=h\(i).y) {
                 float t=(h-h\(i).x)/(h\(i).y-h\(i).x);
@@ -49,17 +49,20 @@ nonisolated final class OKLabColorPipeline {
                 lab.yz += sample(tintTable,vec2(clamp(lab.x/domain,0.0,1.0)*511.0+0.5,0.5)).xy;
             }
             // Gamut handling is deferred until every OKLab operation is complete.
-            // Retain lightness, reducing chroma only where the final color cannot fit.
+            // Fit along a straight line toward neutral in linear working RGB.
+            // The RGB cube is convex, unlike fixed-L OKLab chroma slices near
+            // deep blue: this intersection is unique and continuous, with no
+            // branch-search jumps. In-gamut colors remain unchanged. Out-of-gamut
+            // colors may change perceptual lightness/hue slightly while fitting.
             vec3 rgb=convertRGB(fromOKLab(lab),from0,from1,from2);
-            if (min(rgb.r,min(rgb.g,rgb.b)) < -0.00001 || max(rgb.r,max(rgb.g,rgb.b)) > ceiling+0.00001) {
-                float low=0.0; float high=1.0;
-                for (int i=0;i<14;i++) {
-                    float t=(low+high)*0.5;
-                    vec3 candidate=convertRGB(fromOKLab(vec3(lab.x,lab.yz*t)),from0,from1,from2);
-                    if (min(candidate.r,min(candidate.g,candidate.b))>=0.0 && max(candidate.r,max(candidate.g,candidate.b))<=ceiling) { low=t; } else { high=t; }
-                }
-                rgb=convertRGB(fromOKLab(vec3(lab.x,lab.yz*low)),from0,from1,from2);
-            }
+            float gray=clamp(lab.x*lab.x*lab.x,0.0,ceiling);
+            vec3 delta=rgb-vec3(gray);
+            float fit=1.0;
+            float lowest=min(rgb.r,min(rgb.g,rgb.b));
+            float highest=max(rgb.r,max(rgb.g,rgb.b));
+            if (lowest<0.0) { fit=min(fit,gray/(gray-lowest)); }
+            if (highest>ceiling) { fit=min(fit,(ceiling-gray)/(highest-gray)); }
+            rgb=clamp(vec3(gray)+delta*fit,0.0,ceiling);
             return premultiply(vec4(rgb,pixel.a));
         }
         """)
@@ -83,10 +86,10 @@ nonisolated final class OKLabColorPipeline {
             CIVector(x:color.luminanceSaturationStart,y:color.luminanceSaturationMid,z:color.luminanceSaturationEnd,w:color.luminanceSaturationHDR),
             color.splitTone.isIdentity ? 0.0:1.0,hasWarp ? 1.0:0.0]
         for m in [to,from] { for i in 0..<3 { args.append(vector(SIMD3(m[0][i],m[1][i],m[2][i]))) } }
-        for i in 0..<6 {
+        for i in 0..<OKLabVertexWarp.count {
             let v=field.adjustments[i], p=field.centers[i]
             args.append(CIVector(x:v.x,y:v.y,z:v.z,w:hypot(p.y,p.z)))
-            args.append(CIVector(x:field.hues[i],y:i==5 ? field.hues[0]+2 * .pi:field.hues[i+1]))
+            args.append(CIVector(x:field.hues[i],y:i==OKLabVertexWarp.count-1 ? field.hues[0]+2 * .pi:field.hues[i+1]))
         }
         guard let output=kernel?.apply(extent:image.extent,roiCallback:{index,rect in index==1 ? table.extent:rect},arguments:args) else { throw CocoaError(.coderInvalidValue) }
         return output

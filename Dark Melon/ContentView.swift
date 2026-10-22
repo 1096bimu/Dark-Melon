@@ -203,7 +203,7 @@ struct ContentView: View {
         var result = mapping
         if panel == .color {
             result.color = ColorAdjustments()
-            result.vertexWarp = Array(repeating: OKLabVertexAdjustment(), count: 6)
+            result.vertexWarp = OKLabVertexWarp.defaults
             result.hls = Array(repeating: HLSAdjustment(), count: 6)
             result.blackAndWhite = BlackAndWhiteSettings()
             result.blackAndWhite.isEnabled = mapping.blackAndWhite.isEnabled
@@ -389,6 +389,12 @@ struct ContentView: View {
                             histogramView
                             Divider()
                         }
+                        if panel == .color {
+                            HueChromaScope(source: hdrPreview ? previewImages?.hdr : previewImages?.sdr,
+                                revision: previewRevision, space: colorSpace,
+                                headroom: previewMapping.hdrMax, hdr: hdrPreview)
+                            Divider()
+                        }
                         if panel == .transform {
                             TransformControls(cropping: cropping, image: previewImages?.fullSDR,
                                 polygon: cropping ? cropPolygon : mapping.transform?.points ?? cropPolygon,
@@ -466,7 +472,11 @@ struct ContentView: View {
                 comparingColor = false
                 comparingEffects = false
             }
-            .onChange(of: mapping.white) { _, _ in
+            .onChange(of: mapping.white) { _, white in
+                if mapping.tonePosition > white {
+                    mapping.tonePosition = white
+                    mapping.setAutomaticHDRTarget()
+                }
                 if !loading { hdrPreview = false }
             }
             .task(id: ToneLocatorRequest(active: adjustingTone || adjustingWhitePoint, clipping: adjustingWhitePoint, mapping: previewMapping,

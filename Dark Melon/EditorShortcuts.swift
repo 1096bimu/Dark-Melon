@@ -103,18 +103,41 @@ struct EditorCommands: Commands {
 }
 
 struct EditorSettingsView: View {
-    @State private var licenses = false
+    @State private var section = 0
+    @AppStorage(ScopeGradient.preferenceKey) private var gradient = ScopeGradient.inferno
     var body: some View {
         VStack(spacing: 0) {
-            Picker("Settings section", selection: $licenses) {
-                Text("Shortcuts").tag(false)
-                Text("Licenses").tag(true)
+            Picker("Settings section", selection: $section) {
+                Text("Settings").tag(0)
+                Text("Shortcuts").tag(1)
+                Text("Licenses").tag(2)
             }
             .pickerStyle(.segmented)
             .padding()
-            if licenses { licenseView } else { shortcutsView }
+            if section == 0 { preferencesView }
+            else if section == 1 { shortcutsView }
+            else { licenseView }
         }
         .frame(width: 460, height: 600)
+    }
+
+    private var preferencesView: some View {
+        Form {
+            Section("Color Scope") {
+                Picker("Density gradient", selection: $gradient) {
+                    ForEach(ScopeGradient.allCases) { item in
+                        Text(item.displayName).tag(item)
+                    }
+                }
+                LinearGradient(gradient: gradient.legendGradient, startPoint: .leading, endPoint: .trailing)
+                    .frame(height: 16).clipShape(RoundedRectangle(cornerRadius: 4))
+                HStack {
+                    Text("Low density")
+                    Spacer()
+                    Text("High density")
+                }.font(.caption).foregroundStyle(.secondary)
+            }
+        }.formStyle(.grouped)
     }
 
     private var shortcutsView: some View {

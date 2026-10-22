@@ -26,14 +26,13 @@ struct VectorscopeView: View {
     }
     @State private var zoom = 2.0
     @GestureState private var pinch = 1.0
-    @State private var boundaries: [ScopeGamutBoundary.Boundary] = []
+    @AppStorage(ScopeGradient.preferenceKey) private var gradient = ScopeGradient.inferno
     private var magnification: Double { min(16, max(1, zoom * pinch)) }
     @State private var worker: GPUVectorscope?
     @State private var scope: ScopeTexture?
     @State private var errorMessage: String?
     @State private var lastTranslation = CGSize.zero
 
-    private static let gamutColors: [Color] = [.cyan, .pink, .orange]
     private static let warmDirection: CGPoint = {
         let warm = ScopeProjection.lab(TemperatureLocus.referenceRGB(4500, space: .sRGB), space: .sRGB)
         let cool = ScopeProjection.lab(TemperatureLocus.referenceRGB(7500, space: .sRGB), space: .sRGB)
@@ -91,7 +90,7 @@ struct VectorscopeView: View {
                 ZStack {
                     Color.black
                     if let scope {
-                        ScopeMetalView(frame: scope)
+                        ScopeMetalView(frame: scope, gradient: gradient)
                             .frame(width: diameter, height: diameter)
                             .clipShape(Circle())
                     }
@@ -107,21 +106,8 @@ struct VectorscopeView: View {
                         context.draw(Text("\(128.0 / magnification, format: .number.precision(.fractionLength(0)))")
                             .font(.caption2).foregroundStyle(.secondary),
                             at: CGPoint(x: center.x, y: center.y + radius - 8))
-                        var clipped = context
-                        clipped.clip(to: Path(ellipseIn: CGRect(x: center.x - radius, y: center.y - radius,
-                                                               width: diameter, height: diameter)))
-                        for (index, boundary) in boundaries.enumerated() {
-                            var path = Path()
-                            for (i, p) in boundary.points.enumerated() {
-                                let point = CGPoint(x: center.x + p.x * radius * magnification,
-                                                    y: center.y + p.y * radius * magnification)
-                                if i == 0 { path.move(to: point) } else { path.addLine(to: point) }
-                            }
-                            path.closeSubpath()
-                            clipped.stroke(path, with: .color(Self.gamutColors[index]), lineWidth: 1)
-                        }
-                        let names = ["R", "Y", "G", "C", "B", "M"]
-                        let colors: [Color] = [.red, .yellow, .green, .cyan, .blue, .pink]
+                        let names = EditorGraphStyle.colorNames
+                        let colors = EditorGraphStyle.colorLabels
                         let primaries: [(Double, Double, Double)] = [(1,0,0), (1,1,0), (0,1,0), (0,1,1), (0,0,1), (1,0,1)]
                         for index in 0..<6 {
                             let rgb = primaries[index]
@@ -189,14 +175,6 @@ struct VectorscopeView: View {
                 .accessibilityHint("Drag toward a hue to increase that color in the image.")
             }
             .aspectRatio(1, contentMode: .fit)
-            if !boundaries.isEmpty {
-                HStack {
-                    ForEach(Array(boundaries.enumerated()), id: \.offset) { index, boundary in
-                        Text(boundary.name).foregroundStyle(Self.gamutColors[index])
-                    }
-                }
-                .help("Approximate outer gamut projections across all lightness levels. Outside indicates out of gamut; inside does not guarantee membership because this scope omits lightness.")
-            }
             if let errorMessage { Text(errorMessage).foregroundStyle(.secondary) }
             if mapping.rawWhiteBalance != nil {
                 VStack(alignment: .leading, spacing: 8) {
@@ -266,12 +244,6 @@ struct VectorscopeView: View {
                 sampledRevision = hoverRevision
             } catch is CancellationError {
             } catch { hoveredPoint = nil }
-        }
-        .task(id: colorSpace) {
-            let space = colorSpace
-            let result = await Task.detached(priority: .userInitiated) { ScopeGamutBoundary.boundaries(in: space) }.value
-            guard !Task.isCancelled else { return }
-            boundaries = result
         }
         .task(id: ScopeRequest(revision: source == nil ? nil : revision, mapping: mapping, zoom: magnification, space: colorSpace)) {
             guard let source else { scope = nil; return }

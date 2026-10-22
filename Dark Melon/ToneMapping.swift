@@ -6,7 +6,7 @@ nonisolated struct ToneMapping: Codable, Equatable, Sendable {
     var rawWhiteBalance: RAWWhiteBalance?
     var blackAndWhite = BlackAndWhiteSettings()
     var color = ColorAdjustments()
-    var vertexWarp = [OKLabVertexAdjustment](repeating: OKLabVertexAdjustment(), count: 6)
+    var vertexWarp = OKLabVertexWarp.defaults
     var hls = [HLSAdjustment](repeating: HLSAdjustment(), count: 6)
     var clarity = 0.0
     var clarityRadius = 30.0
@@ -16,7 +16,6 @@ nonisolated struct ToneMapping: Codable, Equatable, Sendable {
     var halation = HalationSettings()
     var vignette = VignetteSettings()
     var offset = 0.0
-    var black = 0.0
     var white = 1.0
     var tonePosition = 0.183
     var toneUsesSourceLuminance = true
@@ -62,10 +61,10 @@ nonisolated struct ToneMapping: Codable, Equatable, Sendable {
     private func sdrSlope(at join: Double, curve sdr: ToneCurve) -> Double {
         // Use the actual sampled SDR segment's slope, including its left-hand
         // slope at white (the clipped segment to its right is not the tangent).
-        let position = min(1, max(0, (join - black) / (white - black)))
+        let position = min(1, max(0, join / white))
         let index = min(sdr.values.count - 2, Int(position * Double(sdr.values.count - 1)))
         return (sdr.values[index + 1] - sdr.values[index])
-            * Double(sdr.values.count - 1) / (white - black)
+            * Double(sdr.values.count - 1) / white
     }
 
     private func hdrCurve() -> ToneCurve {
@@ -75,7 +74,7 @@ nonisolated struct ToneMapping: Codable, Equatable, Sendable {
         let width = 1 - join
         let count = 2000
         let values = (0...count).map { index -> Double in
-            let input = black + (1 - black) * Double(index) / Double(count)
+            let input = Double(index) / Double(count)
             let base: Double
             if input <= join || width <= 1e-12 {
                 base = sdr.value(at: input)
@@ -86,22 +85,22 @@ nonisolated struct ToneMapping: Codable, Equatable, Sendable {
             }
             return base * hdrGain
         }
-        return ToneCurve(values: values, black: black, white: 1)
+        return ToneCurve(values: values, black: 0, white: 1)
     }
 
     func curve(hdr: Bool) -> ToneCurve {
         if hdr && hdrEnabled { return hdrCurve() }
         let upperInput = white
         let outputMax = 1.0
-        let span = max(Self.minimumRange, upperInput - black)
+        let span = max(Self.minimumRange, upperInput)
         let count = 2000
         let effectiveConcentration = concentration
         guard effectiveConcentration != 0 else {
             return ToneCurve(values: (0...count).map { Double($0) / Double(count) * outputMax },
-                             black: black, white: upperInput)
+                             black: 0, white: upperInput)
         }
-        let sharedPeak = min(white, max(black, peakPosition))
-        let peak = min(1, max(0, (sharedPeak - black) / span))
+        let sharedPeak = min(white, max(0, peakPosition))
+        let peak = min(1, max(0, sharedPeak / span))
         // Beta(alpha = 1 + k*p, beta = 1 + k*(1-p)). Its mode is p.
         // Exponential slider spacing gives finer control near the linear end.
         // Negative contrast subtracts a broad beta-shaped slope profile.
@@ -125,7 +124,7 @@ nonisolated struct ToneMapping: Codable, Equatable, Sendable {
             values[i + 1] = values[i] + (density(x0) + density(x1)) / (2 * Double(count))
         }
         let scale = outputMax / values[count]
-        return ToneCurve(values: values.map { $0 * scale }, black: black, white: upperInput)
+        return ToneCurve(values: values.map { $0 * scale }, black: 0, white: upperInput)
     }
 }
 

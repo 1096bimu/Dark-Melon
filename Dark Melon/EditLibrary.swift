@@ -21,6 +21,12 @@ struct LibraryEntry: Identifiable, Codable {
         do {
             if FileManager.default.fileExists(atPath: self.url.path) {
                 entries = try JSONDecoder().decode([LibraryEntry].self, from: Data(contentsOf: self.url))
+                for i in entries.indices {
+                    if var recipe = entries[i].recipe {
+                        recipe.mapping.vertexWarp = OKLabVertexWarp.expanded(recipe.mapping.vertexWarp, space: recipe.colorSpace)
+                        entries[i].recipe = recipe
+                    }
+                }
             }
         } catch { readable = false; self.error = error.localizedDescription }
     }

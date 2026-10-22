@@ -15,7 +15,7 @@ struct ColorControls: View {
                 Spacer()
                 HoldCompareButton(comparing: $comparing)
                     .disabled(settings.isIdentity && vertices.allSatisfy(\.isIdentity))
-                Button("Reset Color") { settings = ColorAdjustments(); vertices = Array(repeating: OKLabVertexAdjustment(), count: 6); comparing = false }
+                Button("Reset Color") { settings = ColorAdjustments(); vertices = OKLabVertexWarp.defaults; comparing = false }
                     .disabled(settings.isIdentity && vertices.allSatisfy(\.isIdentity))
             }
             ChromaCurveEditor(title: "Chroma → Chroma", start: $settings.saturationStart,
@@ -37,7 +37,9 @@ struct ColorControls: View {
             }
             SplitToneGradientEditor(settings: $settings.splitTone, space: colorSpace, ceiling: hdrMax)
 
+
         }
         .padding(12)
     }
+
 }

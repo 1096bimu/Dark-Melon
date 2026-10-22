@@ -12,6 +12,23 @@ nonisolated struct ColorAdjustments: Codable, Equatable, Sendable {
     var isLuminanceSaturationIdentity: Bool { luminanceSaturationStart == 1 && luminanceSaturationEnd == 1 && luminanceSaturationMid == 1 && luminanceSaturationHDR == 1 }
     var splitTone = SplitToneSettings()
     var isIdentity: Bool { saturationStart == 1 && saturationEnd == 1 && saturationMid == 1 && saturationHDR == 1 && isLuminanceSaturationIdentity && splitTone.isIdentity }
+    init() {}
+    private enum CodingKeys: String, CodingKey {
+        case saturationStart, saturationEnd, saturationMid, saturationHDR, luminanceSaturationStart, luminanceSaturationEnd, luminanceSaturationMid, luminanceSaturationHDR, splitTone
+    }
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        saturationStart = try values.decodeIfPresent(Double.self, forKey: .saturationStart) ?? 1
+        saturationEnd = try values.decodeIfPresent(Double.self, forKey: .saturationEnd) ?? 1
+        saturationMid = try values.decodeIfPresent(Double.self, forKey: .saturationMid) ?? 1
+        saturationHDR = try values.decodeIfPresent(Double.self, forKey: .saturationHDR) ?? 1
+        luminanceSaturationStart = try values.decodeIfPresent(Double.self, forKey: .luminanceSaturationStart) ?? 1
+        luminanceSaturationEnd = try values.decodeIfPresent(Double.self, forKey: .luminanceSaturationEnd) ?? 1
+        luminanceSaturationMid = try values.decodeIfPresent(Double.self, forKey: .luminanceSaturationMid) ?? 1
+        luminanceSaturationHDR = try values.decodeIfPresent(Double.self, forKey: .luminanceSaturationHDR) ?? 1
+        splitTone = try values.decodeIfPresent(SplitToneSettings.self, forKey: .splitTone) ?? SplitToneSettings()
+    }
+
 }
 
 nonisolated enum BoundedQuadraticCurve {

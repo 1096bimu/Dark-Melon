@@ -92,6 +92,7 @@ nonisolated struct DevelopmentRecipe: Codable, Equatable, Sendable {
             return result
         }
         var result = try JSONDecoder().decode(Self.self, from: JSONSerialization.data(withJSONObject: merged(defaults, document)))
+        result.mapping.vertexWarp = OKLabVertexWarp.expanded(result.mapping.vertexWarp, space: result.colorSpace)
         try result.validate()
         result.mapping.offset = result.mapping.offset.clamped(to: -0.02...0.02)
         // Preserve older recipes while bringing their multiplier into the current range.
@@ -116,10 +117,10 @@ nonisolated struct DevelopmentRecipe: Codable, Equatable, Sendable {
         if let wb = m.rawWhiteBalance {
             guard within(Double(wb.temperature), 2000...50000), within(Double(wb.tint), -150...150) else { throw RecipeError.invalid }
         }
-        guard m.vertexWarp.count == 6,
-              m.vertexWarp.allSatisfy({ within($0.chroma, 0...2) && within($0.lightness, -0.25...0.25) && within($0.rotation, -1...1) }),
+        guard m.vertexWarp.count == OKLabVertexWarp.count,
+              m.vertexWarp.allSatisfy({ within($0.chroma, 0...2) && within($0.lightness, -0.25...0.25) && within($0.rotation, -1...1) && ($0.hueOffset.map { within($0, -Double.pi...Double.pi) } ?? true) }),
               m.hls.count == 6,
-              within(m.offset, -0.3...0.3), within(m.black, 0...1), within(m.white, 0...1), m.white - m.black >= ToneMapping.minimumRange * 0.999,
+              within(m.offset, -0.3...0.3), within(m.white, 0...1), m.white >= ToneMapping.minimumRange * 0.999,
               within(m.tonePosition, 0...1), within(m.concentration, -1...1),
               within(m.hdrRolloff, 0...1), within(m.hdrTarget, 1...20), within(m.hdrGain, 0...20),
               within(m.clarity, -2...2), within(m.clarityRadius, 15...90),

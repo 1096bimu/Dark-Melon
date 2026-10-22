@@ -10,12 +10,12 @@ import simd
    let matrix=ScopeProjection.matrix(.sRGB).inverse * ScopeProjection.matrix(space)
    let context=CIContext(options:[.workingColorSpace:space.linear,.workingFormat:CIFormat.RGBAf])
    // Each edited vertex has exactly zero influence outside its two neighboring faces.
-   for index in 0..<6 {
-    var controls=Array(repeating:OKLabVertexAdjustment(),count:6)
+   for index in 0..<7 {
+    var controls=Array(repeating:OKLabVertexAdjustment(),count:7)
     controls[index]=OKLabVertexAdjustment(chroma:0,lightness:0.25,rotation:1)
     let field=OKLabVertexWarp.field(controls:controls,space:space)
-    let lo=index==0 ? field.hues[5]-2 * .pi:field.hues[index-1]
-    let hi=index==5 ? field.hues[0]+2 * .pi:field.hues[index+1]
+    let lo=index==0 ? field.hues[6]-2 * .pi:field.hues[index-1]
+    let hi=index==6 ? field.hues[0]+2 * .pi:field.hues[index+1]
     for step in 0..<720 {
      var hue=Double(step)/720*2 * .pi
      while hue<lo { hue += 2 * .pi }
@@ -36,7 +36,7 @@ import simd
     }
    }
    for amount in [0.0,0.5,1.0] {
-    let controls=Array(repeating:OKLabVertexAdjustment(chroma:amount),count:6)
+    let controls=Array(repeating:OKLabVertexAdjustment(chroma:amount),count:7)
     let field=OKLabVertexWarp.field(controls:controls,space:space)
     var pixels=[Float]()
     for r in 0...10 { for g in 0...10 { for b in 0...10 {
@@ -59,7 +59,7 @@ import simd
      }
     }
    }
-   var controls=Array(repeating:OKLabVertexAdjustment(),count:6)
+   var controls=Array(repeating:OKLabVertexAdjustment(),count:7)
    controls[0]=OKLabVertexAdjustment(chroma:0.7,lightness:0.03,rotation:0.6)
    let field=OKLabVertexWarp.field(controls:controls,space:space)
    for i in 0..<8 {
@@ -77,7 +77,7 @@ import simd
   if let image=CIImage(contentsOf:url) {
    let space=ProcessingColorSpace.sRGB
    let context=CIContext(options:[.workingColorSpace:space.linear,.workingFormat:CIFormat.RGBAf])
-   let output=try pipeline.apply(image,color:ColorAdjustments(),vertices:Array(repeating:OKLabVertexAdjustment(chroma:0),count:6),space:space,ceiling:1,domainCeiling:1)
+   let output=try pipeline.apply(image,color:ColorAdjustments(),vertices:Array(repeating:OKLabVertexAdjustment(chroma:0),count:7),space:space,ceiling:1,domainCeiling:1)
    let small=output.transformed(by:CGAffineTransform(scaleX:0.25,y:0.25))
    let width=Int(small.extent.width),height=Int(small.extent.height)
    var values=[Float](repeating:0,count:width*height*4)

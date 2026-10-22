@@ -4,12 +4,14 @@ import Foundation
  static func main() throws {
   var mapping=ToneMapping()
   assert(mapping.tonePosition==0.183 && mapping.white==1 && mapping.concentration==0.2)
-  mapping.black=0.1;mapping.white=0.7
+  mapping.white=0.7
   assert(mapping.peakPosition==0.183)
   let recipe=DevelopmentRecipe(colorSpace:.sRGB,mapping:mapping)
+  let saved = try JSONSerialization.jsonObject(with: recipe.encoded()) as! [String:Any]
+  assert((saved["mapping"] as! [String:Any])["black"] == nil)
   let decoded=try DevelopmentRecipe.decode(recipe.encoded());assert(decoded==recipe)
   var doc=try JSONSerialization.jsonObject(with:recipe.encoded()) as! [String:Any]
-  var old=doc["mapping"] as! [String:Any];old.removeValue(forKey:"toneUsesSourceLuminance");old["tonePosition"]=0.5;doc["mapping"]=old
+  var old=doc["mapping"] as! [String:Any];old.removeValue(forKey:"toneUsesSourceLuminance");old["black"]=0.1;old["tonePosition"]=0.5;doc["mapping"]=old
   let migrated=try DevelopmentRecipe.decode(JSONSerialization.data(withJSONObject:doc))
   assert(abs(migrated.mapping.peakPosition-0.4)<1e-12)
   let auto=ToneSampleWhitePoint.automaticTones(mapping:mapping,space:.sRGB)

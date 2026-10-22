@@ -30,7 +30,7 @@ nonisolated enum ToneSampleWhitePoint {
 
         let current = level(mapping.white)
         guard current.isFinite, current < 120 - 0.00001 || current > 140 + 0.00001 else { return mapping.white }
-        let minimum = min(1, max(input, mapping.black + ToneMapping.minimumRange))
+        let minimum = min(1, max(input, ToneMapping.minimumRange))
         let target = current < 120 ? 120.0 : 140.0
         let endpoint = current < 120 ? minimum : 1.0
         let endLevel = level(endpoint)
