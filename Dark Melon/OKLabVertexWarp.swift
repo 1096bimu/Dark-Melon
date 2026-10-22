@@ -7,18 +7,22 @@ nonisolated struct OKLabVertexAdjustment: Codable, Equatable, Sendable {
     var lightness = 0.0
     var rotation = 0.0
     var hueOffset: Double? = nil
+    var darkerHue = 0.0
+    var lighterHue = 0.0
     init(chroma: Double = 1, lightness: Double = 0, rotation: Double = 0) {
         self.chroma=chroma; self.lightness=lightness; self.rotation=rotation
     }
-    private enum CodingKeys: String, CodingKey { case chroma, lightness, rotation, hueOffset }
+    private enum CodingKeys: String, CodingKey { case chroma, lightness, rotation, hueOffset, darkerHue, lighterHue }
     init(from decoder: Decoder) throws {
         let values=try decoder.container(keyedBy:CodingKeys.self)
         chroma=try values.decodeIfPresent(Double.self,forKey:.chroma) ?? 1
         lightness=try values.decodeIfPresent(Double.self,forKey:.lightness) ?? 0
         rotation=try values.decodeIfPresent(Double.self,forKey:.rotation) ?? 0
         hueOffset=try values.decodeIfPresent(Double.self,forKey:.hueOffset)
+        darkerHue=try values.decodeIfPresent(Double.self,forKey:.darkerHue) ?? 0
+        lighterHue=try values.decodeIfPresent(Double.self,forKey:.lighterHue) ?? 0
     }
-    var isIdentity: Bool { chroma == 1 && lightness == 0 && (hueOffset ?? rotation) == 0 }
+    var isIdentity: Bool { chroma == 1 && lightness == 0 && (hueOffset ?? rotation) == 0 && darkerHue == 0 && lighterHue == 0 }
 }
 
 /// Compact hue-wedge deformation in OKLab. Neighboring hue faces bound influence.
@@ -81,6 +85,8 @@ nonisolated final class OKLabVertexWarp {
         let hues: [Double]
         // Chroma multiplier, lightness offset, rotation in radians.
         let adjustments: [SIMD3<Double>]
+        let bends: [SIMD2<Double>]
+        let slices: [ColorSliceGeometry.Slice]
 
         func mapped(_ p: SIMD3<Double>) -> SIMD3<Double> {
             let c=hypot(p.y,p.z)
@@ -94,7 +100,8 @@ nonisolated final class OKLabVertexWarp {
                     let t=(h-hues[i])/(end-hues[i]), w=t*t*(3-2*t)
                     for (index,weight) in [(i,1-w),(j,w)] {
                         let v=adjustments[index]
-                        multiplier += weight*v.x; angle += weight*v.z
+                        multiplier += weight*v.x
+                        angle += weight*(v.z + ColorSliceGeometry.bend(lightness:p.x,chroma:c,slice:slices[index],lower:bends[index].x,upper:bends[index].y))
                         let r=min(1,c/hypot(centers[index].y,centers[index].z))
                         offset += weight*v.y*r*r*(3-2*r)
                     }
@@ -108,11 +115,11 @@ nonisolated final class OKLabVertexWarp {
     static func field(controls: [OKLabVertexAdjustment], space: ProcessingColorSpace) -> Field {
         let controls = expanded(controls, space: space)
         precondition(controls.count==count)
-        let to=ScopeProjection.matrix(.sRGB).inverse * ScopeProjection.matrix(space)
-        return Field(centers:vertices.map { lab(to * $0) } + [.zero,SIMD3(1,0,0)],
+        let slices=ColorSliceGeometry.cache[space]!
+        return Field(centers:slices.map(\.apex) + [.zero,SIMD3(1,0,0)],
             hues:vertexHues[space]!, adjustments:controls.enumerated().map { i,c in
                 SIMD3(c.chroma,c.lightness,c.hueOffset ?? rotationAngle(index:i,amount:c.rotation,space:space))
-            })
+            }, bends:controls.map { SIMD2($0.darkerHue,$0.lighterHue) }, slices:slices)
     }
 
     // Standalone entry point used by focused checks; production combines all Color stages.

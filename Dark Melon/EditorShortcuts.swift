@@ -104,6 +104,7 @@ struct EditorCommands: Commands {
 
 struct EditorSettingsView: View {
     @State private var section = 0
+    @AppStorage("showHueTwister") private var showHueTwister = false
     @AppStorage(ScopeGradient.preferenceKey) private var gradient = ScopeGradient.inferno
     var body: some View {
         VStack(spacing: 0) {
@@ -124,6 +125,8 @@ struct EditorSettingsView: View {
     private var preferencesView: some View {
         Form {
             Section("Color Scope") {
+                Toggle("HUE Twister", isOn: $showHueTwister)
+                    .help("Show darker/lighter hue controls. Saved adjustments remain active when hidden.")
                 Picker("Density gradient", selection: $gradient) {
                     ForEach(ScopeGradient.allCases) { item in
                         Text(item.displayName).tag(item)

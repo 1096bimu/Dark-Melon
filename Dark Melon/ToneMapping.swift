@@ -21,6 +21,7 @@ nonisolated struct ToneMapping: Codable, Equatable, Sendable {
     var toneUsesSourceLuminance = true
     var peakPosition: Double { tonePosition }
     var concentration = 0.2
+    var channelContrast = [0.0, 0.0, 0.0]
     var hdrTarget = 4.0
     var hdrGain = 1.01
     var hdrRolloff = 0.0
@@ -28,6 +29,9 @@ nonisolated struct ToneMapping: Codable, Equatable, Sendable {
     /// Rendering headroom and effect ceilings must cover the multiplied curve.
     var hdrMax: Double {
         guard hdrEnabled else { return 1 }
+        if dyeContrastOffsets.contains(where: { $0 != 0 }) {
+            return (0..<3).map { channelMapping($0).hdrMax }.max()!
+        }
         let start = curve(hdr: false).value(at: peakPosition)
         let endpoint = hdrHasContinuationRoom
             ? start + (hdrTarget - start) * (1 - 0.5 * hdrRolloff) : 1
@@ -41,12 +45,48 @@ nonisolated struct ToneMapping: Codable, Equatable, Sendable {
         return result
     }
 
+    /// Remove the common component. Scale all deltas together near the contrast
+    /// limits so independent clipping cannot introduce a shared contrast offset.
+    var dyeContrastOffsets: [Double] {
+        let relative = channelContrast.map { $0 - channelContrast[0] }
+        let mean = relative.reduce(0, +) / 3
+        let deltas = relative.map { $0 - mean }
+        var scale = 1.0
+        for delta in deltas {
+            if delta > 0 { scale = min(scale, (1 - concentration) / delta) }
+            if delta < 0 { scale = min(scale, (-1 - concentration) / delta) }
+        }
+        return deltas.map { $0 * max(0, scale) }
+    }
+
+    /// Channel offsets share the same tone position and clipping point. Each
+    /// HDR continuation follows its own SDR tangent, before common gain/rolloff.
+    private func channelMapping(_ channel: Int) -> ToneMapping {
+        var result = self
+        result.channelContrast = [0, 0, 0]
+        let offset = dyeContrastOffsets[channel]
+        if offset != 0 {
+            result.concentration = min(1, max(-1, concentration + offset))
+            result.setAutomaticHDRTarget()
+        }
+        return result
+    }
+
+    func channelCurves(hdr: Bool) -> [ToneCurve] {
+        guard dyeContrastOffsets.contains(where: { $0 != 0 }) else {
+            return Array(repeating: curve(hdr: hdr), count: 3)
+        }
+        return (0..<3).map { channelMapping($0).curve(hdr: hdr) }
+    }
+
     static let minimumRange = 1.0 / 2048
 
     var hdrHasContinuationRoom: Bool { peakPosition < 1 - 1e-12 }
 
     var hdrFallsBelowSDR: Bool {
-        hdrEnabled && curve(hdr: true).fallsBelow(curve(hdr: false))
+        guard hdrEnabled else { return false }
+        let sdr = channelCurves(hdr: false), hdr = channelCurves(hdr: true)
+        return (0..<3).contains { hdr[$0].fallsBelow(sdr[$0]) }
     }
 
     /// Hidden endpoint of the unscaled HDR continuation.

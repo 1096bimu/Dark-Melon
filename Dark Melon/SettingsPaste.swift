@@ -32,6 +32,7 @@ nonisolated struct SettingsPasteSelection: Codable, Sendable {
         }
         if color { result.color = source.color; result.vertexWarp = source.vertexWarp; result.hls = source.hls; result.blackAndWhite = source.blackAndWhite }
         if effects {
+            result.channelContrast = source.channelContrast
             result.clarity = source.clarity
             result.clarityRadius = source.clarityRadius
             result.hdf = source.hdf

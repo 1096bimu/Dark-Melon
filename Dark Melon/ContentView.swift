@@ -40,6 +40,15 @@ struct ContentView: View {
     #endif
     @State private var pastedSettings: CopiedSettings?
     @State private var recipeSourceURL: URL?
+    @State private var namedSnapshots: [NamedSnapshot] = []
+    @State private var snapshotSessions: [URL: SnapshotSession] = [:]
+    @State private var snapshotAppliedRecipe: DevelopmentRecipe?
+    private var snapshotSession: SnapshotSession {
+        get { recipeSourceURL.flatMap { snapshotSessions[$0.standardizedFileURL] } ?? SnapshotSession() }
+        nonmutating set {
+            if let recipeSourceURL { snapshotSessions[recipeSourceURL.standardizedFileURL] = newValue }
+        }
+    }
     @State private var savedRecipe: DevelopmentRecipe?
     @State private var savingRecipe = false
     @State private var rawSettings = RAWSettings()
@@ -102,6 +111,8 @@ struct ContentView: View {
     }
 
     private func restoreHistory(_ recipe: DevelopmentRecipe) {
+        snapshotAppliedRecipe = recipe
+        namedSnapshots = recipe.snapshots
         let reload = colorSpace != recipe.colorSpace || rawSettings != (recipe.rawSettings ?? rawSettings)
             || mapping.rawWhiteBalance != recipe.mapping.rawWhiteBalance
         cropping = false
@@ -158,7 +169,7 @@ struct ContentView: View {
     private var currentRecipe: DevelopmentRecipe {
         var savedMapping = mapping
         if cropping, let transform = draftTransform { savedMapping.transform = transform }
-        return DevelopmentRecipe(colorSpace: colorSpace, mapping: savedMapping, rawSettings: mapping.rawWhiteBalance == nil ? nil : rawSettings)
+        return DevelopmentRecipe(colorSpace: colorSpace, mapping: savedMapping, rawSettings: mapping.rawWhiteBalance == nil ? nil : rawSettings, snapshots: namedSnapshots)
     }
 
     private var draftTransform: TransformSettings? {
@@ -208,7 +219,7 @@ struct ContentView: View {
             result.blackAndWhite = BlackAndWhiteSettings()
             result.blackAndWhite.isEnabled = mapping.blackAndWhite.isEnabled
         }
-        if panel == .effects { result.clarity = 0; result.hdf = 0; result.grain.strength = 0; result.halation.inputCurve = 0; result.vignette.amount = 0 }
+        if panel == .effects { result.channelContrast = [0, 0, 0]; result.clarity = 0; result.hdf = 0; result.grain.strength = 0; result.halation.inputCurve = 0; result.vignette.amount = 0 }
         return result
     }
 
@@ -225,9 +236,19 @@ struct ContentView: View {
                 if showingFileBrowser {
                     Group {
                         if showingLibrary {
-                            EditLibraryView(current: development == nil || loading ? nil : currentRecipe, filename: filename) { recipe, selection in
-                                pastedSettings = CopiedSettings(mapping: recipe.mapping, rawSettings: recipe.rawSettings)
-                                applyPastedSettings(selection, target: nil)
+                            GeometryReader { geometry in
+                                VStack(spacing: 0) {
+                                    EditLibraryView(current: development == nil || loading ? nil : currentRecipe, filename: filename) { recipe, selection in
+                                        pastedSettings = CopiedSettings(mapping: recipe.mapping, rawSettings: recipe.rawSettings)
+                                        applyPastedSettings(selection, target: nil)
+                                    }.frame(height: max(0, geometry.size.height / 2))
+                                    Divider()
+                                    EditSnapshotsView(saved: savedRecipe != nil, draft: snapshotSession.draft != nil,
+                                        snapshots: namedSnapshots, selected: snapshotSession.selected,
+                                        select: selectSnapshot, create: createSnapshot, delete: deleteSnapshot)
+                                        .disabled(development == nil || loading)
+                                        .frame(maxHeight: .infinity)
+                                }
                             }
                         } else {
                     ImageFileBrowser(selectedURL: sourceURL, open: { load($0, resetEdits: true) }, model: browserModel, changeDirectory: changeDirectory,
@@ -390,9 +411,9 @@ struct ContentView: View {
                             Divider()
                         }
                         if panel == .color {
-                            HueChromaScope(source: hdrPreview ? previewImages?.hdr : previewImages?.sdr,
+                            HueChromaScope(controls: $mapping.vertexWarp, source: hdrPreview ? previewImages?.hdr : previewImages?.sdr,
                                 revision: previewRevision, space: colorSpace,
-                                headroom: previewMapping.hdrMax, hdr: hdrPreview)
+                                headroom: previewMapping.hdrMax, hdr: hdrPreview, hoverPosition: hoveredPreviewPixel)
                             Divider()
                         }
                         if panel == .transform {
@@ -419,7 +440,7 @@ struct ContentView: View {
                         } else if panel == .color {
                             ColorControls(settings: $mapping.color, vertices: $mapping.vertexWarp, comparing: $comparingColor, monochrome: mapping.blackAndWhite.isEnabled, hdrMax: mapping.hdrMax, colorSpace: colorSpace)
                         } else if panel == .effects {
-                            EffectsControls(clarity: $mapping.clarity, radius: $mapping.clarityRadius, hdf: $mapping.hdf, hdfRadius: $mapping.hdfRadius, grain: $mapping.grain, halation: $mapping.halation, vignette: $mapping.vignette, hdrEnabled: mapping.hdrEnabled, comparing: $comparingEffects)
+                            EffectsControls(channelContrast: $mapping.channelContrast, clarity: $mapping.clarity, radius: $mapping.clarityRadius, hdf: $mapping.hdf, hdfRadius: $mapping.hdfRadius, grain: $mapping.grain, halation: $mapping.halation, vignette: $mapping.vignette, hdrEnabled: mapping.hdrEnabled, comparing: $comparingEffects)
                         } else {
                             tonePanel
                         }
@@ -430,6 +451,8 @@ struct ContentView: View {
             }
             .task {
                 editHistory.restore = restoreHistory
+                editHistory.captureSession = { snapshotSession }
+                editHistory.restoreSession = { snapshotSession = $0 }
                 if !tutorialPresented {
                     tutorialPresented = true
                     startTutorial()
@@ -437,7 +460,19 @@ struct ContentView: View {
             }
             .onChange(of: currentRecipe) { old, new in
                 guard !loading, development != nil, !cropping else { return }
+                if snapshotAppliedRecipe == new {
+                    snapshotAppliedRecipe = nil
+                    return
+                }
+                snapshotAppliedRecipe = nil
+                if SnapshotEdit(old) != SnapshotEdit(new) {
+                    var session = snapshotSession
+                    session.draft = baselineRecipe.map { SnapshotEdit($0) == SnapshotEdit(new) } == true ? nil : SnapshotEdit(new)
+                    session.selected = session.draft == nil ? "saved" : "unsaved"
+                    snapshotSession = session
+                }
                 editHistory.observe(new, name: EditHistory.actionName(from: old, to: new))
+                rememberCurrentEdits()
             }
             .onChange(of: recipeSourceURL) { _, _ in
                 if tutorial.active { tutorial.resetForImage() }
@@ -597,12 +632,12 @@ struct ContentView: View {
                     .help("Export…")
                     .keyboardShortcut("e", modifiers: [.command, .shift])
                     .disabled(development == nil || loading || exporting)
-                    Button(savingRecipe ? "Saving Edits…" : savedRecipe == currentRecipe && !tutorialNeedsSave ? "Edits Saved" : "Save Edits", systemImage: "square.and.arrow.down") {
+                    Button(savingRecipe ? "Saving Edits…" : savedRecipe == currentRecipe && snapshotSession.draft == nil && !tutorialNeedsSave ? "Edits Saved" : "Save Edits", systemImage: "square.and.arrow.down") {
                         saveRecipe()
                     }
                     .labelStyle(.iconOnly)
                     .keyboardShortcut("s", modifiers: .command)
-                    .disabled(development == nil || loading || savingRecipe || (savedRecipe == currentRecipe && !tutorialNeedsSave))
+                    .disabled(development == nil || loading || savingRecipe || (savedRecipe == currentRecipe && snapshotSession.draft == nil && !tutorialNeedsSave))
                     .help("Save development settings beside the original image in an XMP sidecar")
                     Picker("Color space", selection: Binding(get: { colorSpace }, set: { selected in
                         guard selected != colorSpace else { return }
@@ -716,7 +751,7 @@ struct ContentView: View {
         if resetEdits { cropping = false; cropRatioPosition = 5; cropTransform = CropTransform(); cropPolygon = [CGPoint(x: 0, y: 0), CGPoint(x: 1, y: 0), CGPoint(x: 1, y: 1), CGPoint(x: 0, y: 1)] }
         sourceURL = url
         loading = true
-        if resetEdits { mapping = ToneMapping(); savedRecipe = nil; recipeSourceURL = nil; baselineRecipe = nil }
+        if resetEdits { mapping = ToneMapping(); savedRecipe = nil; recipeSourceURL = nil; baselineRecipe = nil; namedSnapshots = [] }
         development = nil
         previewImages = nil
         previewDetails.removeAll()
@@ -748,6 +783,7 @@ struct ContentView: View {
                         colorSpace = try await developer.suggestedColorSpace(for: url)
                     }
                 }
+                if resetEdits { namedSnapshots = (draft?.recipe ?? restored)?.snapshots ?? [] }
                 let initializeEdits = resetEdits && restored == nil && draft == nil
                 let options: RAWSettings? = resetEdits ? (draft?.recipe ?? restored)?.rawSettings : rawSettings
                 developer = RAWDeveloper(colorSpace: colorSpace, rawSettings: options, rawWhiteBalance: mapping.rawWhiteBalance)
@@ -781,6 +817,10 @@ struct ContentView: View {
                     baselineRecipe = draft?.baseline ?? currentRecipe
                 }
                 recipeSourceURL = url
+                if resetEdits {
+                    snapshotSession = SnapshotSession(selected: draft == nil ? "saved" : "unsaved",
+                        draft: draft.map { SnapshotEdit($0.recipe) })
+                }
                 development = loaded
 
                 filename = url.lastPathComponent
@@ -810,9 +850,57 @@ struct ContentView: View {
         }
     }
 
+    private func selectSnapshot(_ key: String) {
+        guard !loading, key != snapshotSession.selected else { return }
+        commitHistory()
+        let edit: SnapshotEdit?
+        if key == "saved" { edit = savedRecipe.map(SnapshotEdit.init) }
+        else if key == "unsaved" { edit = snapshotSession.draft }
+        else { edit = namedSnapshots.first { $0.id.uuidString == key }?.edit }
+        guard let edit else { return }
+        var session = snapshotSession
+        session.selected = key
+        snapshotSession = session
+        var recipe = edit.recipe
+        recipe.snapshots = namedSnapshots
+        restoreHistory(recipe)
+        editHistory.observe(currentRecipe, name: String(localized: "Switch Snapshot"))
+        editHistory.flush()
+    }
+
+    private func createSnapshot(_ name: String) {
+        commitHistory()
+        let item = NamedSnapshot(name: name, edit: SnapshotEdit(currentRecipe))
+        namedSnapshots.append(item)
+        var session = snapshotSession
+        session.selected = item.id.uuidString
+        snapshotSession = session
+        snapshotAppliedRecipe = currentRecipe
+        editHistory.observe(currentRecipe, name: String(localized: "Create Snapshot"))
+        editHistory.flush()
+        rememberCurrentEdits()
+    }
+
+    private func deleteSnapshot(_ id: UUID) {
+        commitHistory()
+        namedSnapshots.removeAll { $0.id == id }
+        var session = snapshotSession
+        if session.selected == id.uuidString {
+            session.selected = "unsaved"
+            session.draft = SnapshotEdit(currentRecipe)
+        }
+        snapshotSession = session
+        snapshotAppliedRecipe = currentRecipe
+        editHistory.observe(currentRecipe, name: String(localized: "Delete Snapshot"))
+        editHistory.flush()
+        rememberCurrentEdits()
+    }
+
     private func rememberCurrentEdits() {
         guard let url = recipeSourceURL, let baselineRecipe else { return }
-        pendingEdits.remember(url: url, recipe: currentRecipe, baseline: baselineRecipe, saved: savedRecipe)
+        var recipe = snapshotSession.draft?.recipe ?? savedRecipe ?? baselineRecipe
+        recipe.snapshots = namedSnapshots
+        pendingEdits.remember(url: url, recipe: recipe, baseline: baselineRecipe, saved: savedRecipe)
     }
 
     private func savePendingEdits() throws {
@@ -826,13 +914,14 @@ struct ContentView: View {
             #endif
             let saved = try RecipeStore.shared.saveSynchronously(entry.recipe, for: entry.url)
             pendingEdits.remove(entry.url)
+            snapshotSessions.removeValue(forKey: entry.url)
             if entry.url == recipeSourceURL?.standardizedFileURL {
                 savedRecipe = saved
                 baselineRecipe = saved
-                if mapping != saved.mapping {
-                    mapping = saved.mapping
-                    load(entry.url, resetEdits: false)
-                }
+                snapshotSession = SnapshotSession()
+                namedSnapshots = saved.snapshots
+                restoreHistory(saved)
+                editHistory.seed(saved)
                 tutorial.record(.save)
             }
         }
@@ -849,6 +938,7 @@ struct ContentView: View {
         let action = pendingTransition
         pendingTransition = nil
         pendingEdits.clear()
+        snapshotSessions.removeAll()
         editHistory.clear()
         // Prevent load from stashing the deliberately discarded current edits again.
         baselineRecipe = currentRecipe
@@ -861,7 +951,7 @@ struct ContentView: View {
             return
         }
         requestDiscard {
-            sourceURL = nil; recipeSourceURL = nil; baselineRecipe = nil; savedRecipe = nil
+            sourceURL = nil; recipeSourceURL = nil; baselineRecipe = nil; savedRecipe = nil; namedSnapshots = []
             development = nil; previewImages = nil; histogram = nil
             filename = "Dark Melon"
             if choose { browserModel.choose(url) } else { browserModel.navigate(to: url) }
@@ -892,7 +982,8 @@ struct ContentView: View {
     private func saveRecipe() {
         commitHistory()
         guard let sourceURL, development != nil, !loading else { return }
-        let recipe = currentRecipe
+        var recipe = snapshotSession.draft?.recipe ?? currentRecipe
+        recipe.snapshots = namedSnapshots
         savingRecipe = true
         defer { savingRecipe = false }
         do {
@@ -902,10 +993,9 @@ struct ContentView: View {
             let saved = try RecipeStore.shared.saveSynchronously(recipe, for: sourceURL)
             savedRecipe = saved
             baselineRecipe = saved
-            if mapping != saved.mapping {
-                mapping = saved.mapping
-                load(sourceURL, resetEdits: false)
-            }
+            snapshotSession = SnapshotSession()
+            restoreHistory(saved)
+            editHistory.seed(saved)
             pendingEdits.remove(sourceURL)
             tutorial.record(.save)
         } catch { errorMessage = String(localized: "Could not save edits: \(error.localizedDescription) If folder access is denied, open the containing folder in the file browser and try again.") }
@@ -1051,7 +1141,7 @@ struct ContentView: View {
 
     private func hasPendingEdit(_ url: URL) -> Bool {
         if url.standardizedFileURL == recipeSourceURL?.standardizedFileURL {
-            return baselineRecipe != nil && currentRecipe != baselineRecipe
+            return snapshotSession.draft != nil || (baselineRecipe != nil && currentRecipe != baselineRecipe)
         }
         return pendingEdits.entry(for: url) != nil
     }

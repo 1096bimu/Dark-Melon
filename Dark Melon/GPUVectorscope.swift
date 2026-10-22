@@ -28,7 +28,7 @@ actor GPUVectorscope {
         imagePipeline = try device.makeComputePipelineState(function: library.makeFunction(name: "scopeImage")!)
     }
 
-    func render(source: CGImage, mapping: ToneMapping, space: ProcessingColorSpace, zoom: Double, hueChroma: Bool = false) async throws -> ScopeTexture {
+    func render(source: CGImage, mapping: ToneMapping, space: ProcessingColorSpace, zoom: Double, hueChroma: Bool = false, lightnessScale: Double = 0) async throws -> ScopeTexture {
         try Task.checkCancellation()
         if workingSpace != space {
             developer = RAWDeveloper(colorSpace: space)
@@ -73,6 +73,8 @@ actor GPUVectorscope {
         encoder.setTexture(input, index: 0)
         encoder.setBuffer(counts, offset: 0, index: 0)
         encoder.setBytes(&magnification, length: 4, index: 1)
+        var lightness = Float(lightnessScale)
+        encoder.setBytes(&lightness, length: 4, index: 3)
         let matrix = hueChroma ? ScopeProjection.matrix(.sRGB).inverse * ScopeProjection.matrix(space) : ScopeProjection.matrix(space)
         var columns = [SIMD4<Float>(Float(matrix.columns.0.x), Float(matrix.columns.0.y), Float(matrix.columns.0.z), 0),
                        SIMD4<Float>(Float(matrix.columns.1.x), Float(matrix.columns.1.y), Float(matrix.columns.1.z), 0),
@@ -106,6 +108,7 @@ actor GPUVectorscope {
                            device atomic_uint *counts [[buffer(0)]],
                            constant float &zoom [[buffer(1)]],
                            constant float4 *columns [[buffer(2)]],
+                           constant float &lightnessScale [[buffer(3)]],
                            uint2 p [[thread_position_in_grid]]) {
         if (p.x >= source.get_width() || p.y >= source.get_height()) return;
         float4 pixel=source.read(p);
@@ -124,7 +127,8 @@ actor GPUVectorscope {
             float hue=atan2(ab.y,ab.x);
             if (hue<0.0) hue+=6.28318530718;
             uint x=min(512u,uint(hue/6.28318530718*513.0));
-            uint y=uint(round((1.0-clamp(c*(-zoom),0.0,1.0))*512.0));
+            float ordinate=lightnessScale>0.0 ? dot(lms,float3(0.2104542553,0.7936177850,-0.0040720468))/lightnessScale : c*(-zoom);
+            uint y=uint(round((1.0-clamp(ordinate,0.0,1.0))*512.0));
             uint shard=(p.y*source.get_width()+p.x)%16;
             atomic_fetch_add_explicit(counts+shard*513*513+y*513+x,1u,memory_order_relaxed);
             return;

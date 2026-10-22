@@ -9,6 +9,8 @@ import AppKit
         let manager = UndoManager()
         var current: DevelopmentRecipe
         var before: DevelopmentRecipe?
+        var session = SnapshotSession()
+        var beforeSession: SnapshotSession?
         var name = "Edit"
         init(_ recipe: DevelopmentRecipe) {
             current = recipe
@@ -21,6 +23,8 @@ import AppKit
     private var settle: Task<Void, Never>?
     var interacting = false
     var restore: ((DevelopmentRecipe) -> Void)?
+    var captureSession: (() -> SnapshotSession)?
+    var restoreSession: ((SnapshotSession) -> Void)?
     private(set) var revision = 0
 
     var canUndo: Bool { active.flatMap { files[$0] }.map { $0.before != nil || $0.manager.canUndo } ?? false }
@@ -34,6 +38,7 @@ import AppKit
         if files[active!] == nil { files[active!] = FileHistory(recipe) }
         // Decode/default initialization is not a user edit.
         files[active!]?.current = recipe
+        files[active!]?.session = captureSession?() ?? SnapshotSession()
         revision += 1
     }
 
@@ -58,12 +63,16 @@ import AppKit
     func seed(_ recipe: DevelopmentRecipe) {
         guard let active, let file = files[active], file.before == nil else { return }
         file.current = recipe
+        file.session = captureSession?() ?? SnapshotSession()
     }
 
     func observe(_ recipe: DevelopmentRecipe, name: String? = nil) {
-        guard let active, let file = files[active], recipe != file.current else { return }
-        if file.before == nil { file.before = file.current; file.name = name ?? Self.actionName(from: file.current, to: recipe) }
+        guard let active, let file = files[active] else { return }
+        let session = captureSession?() ?? SnapshotSession()
+        guard recipe != file.current || session != file.session else { return }
+        if file.before == nil { file.beforeSession = file.session; file.before = file.current; file.name = name ?? Self.actionName(from: file.current, to: recipe) }
         file.current = recipe
+        file.session = session
         revision += 1
         settle?.cancel()
         settle = Task { [weak self] in
@@ -83,21 +92,25 @@ import AppKit
         settle?.cancel(); settle = nil
         guard let active, let file = files[active], let before = file.before else { return }
         file.before = nil
-        if before != file.current { register(before, file: file, url: active, name: file.name) }
+        let session = file.beforeSession ?? file.session
+        file.beforeSession = nil
+        if before != file.current || session != file.session { register(before, file: file, url: active, name: file.name, session: session) }
         revision += 1
     }
 
-    private func register(_ recipe: DevelopmentRecipe, file: FileHistory, url: URL, name: String) {
+    private func register(_ recipe: DevelopmentRecipe, file: FileHistory, url: URL, name: String, session: SnapshotSession? = nil) {
+        let savedSession = session ?? file.session
         let manager = file.manager
         let explicitGroup = !manager.isUndoing && !manager.isRedoing
         if explicitGroup { manager.beginUndoGrouping() }
         manager.registerUndo(withTarget: self) { [weak file] history in
             MainActor.assumeIsolated {
                 guard let file else { return }
-                history.register(file.current, file: file, url: url, name: name)
+                history.register(file.current, file: file, url: url, name: name, session: file.session)
                 file.current = recipe
+                file.session = savedSession
                 history.revision += 1
-                if history.active == url { history.restore?(recipe) }
+                if history.active == url { history.restoreSession?(savedSession); history.restore?(recipe) }
             }
         }
         manager.setActionName(name)
@@ -119,6 +132,7 @@ import AppKit
         if a.vignette != b.vignette || a.clarity != b.clarity || a.hdf != b.hdf || a.grain != b.grain || a.halation != b.halation || a.clarityRadius != b.clarityRadius || a.hdfRadius != b.hdfRadius { return String(localized: "Effects") }
         if a.tonePosition != b.tonePosition { return String(localized: "Tone") }
         if a.offset != b.offset { return String(localized: "Offset") }
+        if a.channelContrast != b.channelContrast { return String(localized: "Dye Response") }
         if a.concentration != b.concentration { return String(localized: "Contrast") }
         if a.white != b.white { return String(localized: "White point") }
         return String(localized: "Tone")

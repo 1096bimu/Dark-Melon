@@ -115,8 +115,8 @@ actor RAWDeveloper {
             vec3 u = clamp(t, 0.0, 1.0) * lastIndex + vec3(0.5);
             vec3 mapped = vec3(
                 sample(table, samplerTransform(table, vec2(u.r, 0.5))).r,
-                sample(table, samplerTransform(table, vec2(u.g, 0.5))).r,
-                sample(table, samplerTransform(table, vec2(u.b, 0.5))).r);
+                sample(table, samplerTransform(table, vec2(u.g, 0.5))).g,
+                sample(table, samplerTransform(table, vec2(u.b, 0.5))).b);
             return premultiply(vec4(mapped, pixel.a));
         }
         """)
@@ -234,7 +234,7 @@ actor RAWDeveloper {
 
     func sampleWhiteBalance(_ source: CGImage, center: CGPoint, radius: CGFloat, mapping: ToneMapping) throws -> WhiteBalance {
         let input = try adjustedInput(CIImage(cgImage: source), mapping: mapping)
-        let toned = try applyTone(input, curve: mapping.curve(hdr: false))
+        let toned = try applyTone(input, curves: mapping.channelCurves(hdr: false))
         let mean = try sampleMean(toned, center: center, radius: radius)
         guard min(mean.x, mean.y, mean.z) > 1e-6 else { throw DevelopmentError.decode }
         let inverse = SIMD3(1 / mean.x, 1 / mean.y, 1 / mean.z)
@@ -334,7 +334,7 @@ actor RAWDeveloper {
         }
         // Shared by preview/export: offset → HDF → vignette → halation → grain → tone → RGB WB → OKLab → clarity.
         // RAW decoder white balance is already part of the decoded source.
-        let toned = try applyTone(image, curve: mapping.curve(hdr: hdr))
+        let toned = try applyTone(image, curves: mapping.channelCurves(hdr: hdr))
         let balanced = try applyWhiteBalance(toned, mapping: mapping)
         try Task.checkCancellation()
         let colored = try colorPipeline.apply(balanced, color: color, vertices: mapping.vertexWarp,
@@ -372,8 +372,11 @@ actor RAWDeveloper {
         return result
     }
 
-    private func applyTone(_ image: CIImage, curve: ToneCurve) throws -> CIImage {
-        let pixels = curve.values.flatMap { [Float($0), Float($0), Float($0), Float(1)] }
+    private func applyTone(_ image: CIImage, curves: [ToneCurve]) throws -> CIImage {
+        let curve = curves[0]
+        let pixels = curve.values.indices.flatMap { i in
+            [Float(curves[0].values[i]), Float(curves[1].values[i]), Float(curves[2].values[i]), Float(1)]
+        }
         let data = pixels.withUnsafeBytes { Data($0) }
         let table = CIImage(bitmapData: data, bytesPerRow: pixels.count * 4,
                             size: CGSize(width: curve.values.count, height: 1),

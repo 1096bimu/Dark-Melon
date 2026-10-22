@@ -11,7 +11,7 @@ actor RecipeStore {
     static let shared = RecipeStore()
     nonisolated private let namespace = "urn:dark-melon:development:1.0/" as CFString
     nonisolated private let path = "darkmelon:Recipe" as CFString
-    nonisolated private let maximumSize = 512 * 1024
+    nonisolated private let maximumSize = 8 * 1024 * 1024
 
     nonisolated static func sidecarURL(for source: URL) -> URL {
         source.appendingPathExtension("darkmelon.xmp")

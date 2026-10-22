@@ -27,8 +27,6 @@ struct ColorControls: View {
                 hdr: $settings.luminanceSaturationHDR, sdrMaximum: 1, hdrMax: hdrMax, info: .luminanceSaturation)
                 .disabled(monochrome)
             Divider()
-            OKLabVertexControls(controls: $vertices, space: colorSpace)
-            Divider()
             HStack {
                 Text("Split Tone").font(.headline)
                 Spacer()

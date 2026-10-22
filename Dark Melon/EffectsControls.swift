@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct EffectsControls: View {
+    @Binding var channelContrast: [Double]
     @Binding var clarity: Double
     @Binding var radius: Double
     @Binding var hdf: Double
@@ -17,10 +18,30 @@ struct EffectsControls: View {
                 Text("Effects").font(.headline)
                 Spacer()
                 HoldCompareButton(comparing: $comparing)
-                    .disabled(clarity == 0 && hdf == 0 && grain.strength == 0 && vignette.amount == 0 && (!hdrEnabled || halation.inputCurve == 0))
-                Button("Reset Effects") { clarity = 0; radius = 30; hdf = 0; hdfRadius = 100; grain = FilmGrainSettings(); halation = HalationSettings(); vignette = VignetteSettings() }
-                    .disabled(clarity == 0 && radius == 30 && hdf == 0 && hdfRadius == 100 && grain == FilmGrainSettings() && halation == HalationSettings() && vignette == VignetteSettings())
+                    .disabled(channelContrast.dropFirst().allSatisfy { $0 == channelContrast[0] } && clarity == 0 && hdf == 0 && grain.strength == 0 && vignette.amount == 0 && (!hdrEnabled || halation.inputCurve == 0))
+                Button("Reset Effects") { channelContrast = [0, 0, 0]; clarity = 0; radius = 30; hdf = 0; hdfRadius = 100; grain = FilmGrainSettings(); halation = HalationSettings(); vignette = VignetteSettings() }
+                    .disabled(channelContrast.allSatisfy { $0 == 0 } && clarity == 0 && radius == 30 && hdf == 0 && hdfRadius == 100 && grain == FilmGrainSettings() && halation == HalationSettings() && vignette == VignetteSettings())
             }
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Dye Response").fontWeight(.medium)
+                ForEach(0..<3, id: \.self) { channel in
+                    let name = ["Red", "Green", "Blue"][channel]
+                    let value = Binding<Double>(get: { channelContrast[channel] }, set: {
+                        channelContrast[channel] = $0
+                    })
+                    HStack {
+                        Text(LocalizedStringKey(name))
+                            .foregroundStyle([Color.red, .green, .blue][channel])
+                            .frame(width: 44, alignment: .leading)
+                        Slider(value: value, in: -0.2...0.2)
+                            .accessibilityLabel(Text(LocalizedStringKey(name)))
+                        AdjustmentField(title: LocalizedStringKey(name), value: value, range: -0.2...0.2,
+                                        digits: 1, scale: 100, unit: "%")
+                    }
+                }
+            }
+            .help("Changes relative RGB contrast in the tone map. The shared average is ignored, so equal values have no effect.")
+            Divider()
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
                     Text("Clarity")

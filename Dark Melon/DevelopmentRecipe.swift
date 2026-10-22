@@ -7,6 +7,7 @@ nonisolated struct DevelopmentRecipe: Codable, Equatable, Sendable {
     var colorSpace: ProcessingColorSpace
     var mapping: ToneMapping
     var rawSettings: RAWSettings? = nil
+    var snapshots: [NamedSnapshot] = []
 
     func encoded() throws -> Data {
         let encoder = JSONEncoder()
@@ -15,11 +16,12 @@ nonisolated struct DevelopmentRecipe: Codable, Equatable, Sendable {
     }
 
     static func decode(_ data: Data) throws -> Self {
-        guard data.count <= 256 * 1024,
+        guard data.count <= 4 * 1024 * 1024,
               var document = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let version = document["version"] as? Int, version == 1 else {
             throw RecipeError.unsupported
         }
+        let snapshots = document.removeValue(forKey: "snapshots") as? [[String: Any]] ?? []
         // Old HDR Gain was an endpoint, not a multiplier. Keep that endpoint
         // and use neutral gain; preserve the old Off state.
         if var mapping = document["mapping"] as? [String: Any],
@@ -94,6 +96,16 @@ nonisolated struct DevelopmentRecipe: Codable, Equatable, Sendable {
         var result = try JSONDecoder().decode(Self.self, from: JSONSerialization.data(withJSONObject: merged(defaults, document)))
         result.mapping.vertexWarp = OKLabVertexWarp.expanded(result.mapping.vertexWarp, space: result.colorSpace)
         try result.validate()
+        result.snapshots = try snapshots.map { item in
+            guard let idString = item["id"] as? String, let id = UUID(uuidString: idString),
+                  let name = item["name"] as? String, !name.isEmpty,
+                  var edit = item["edit"] as? [String: Any] else { throw RecipeError.unsupported }
+            edit["version"] = 1
+            edit.removeValue(forKey: "snapshots")
+            let validated = try Self.decode(JSONSerialization.data(withJSONObject: edit))
+            return NamedSnapshot(id: id, name: name, edit: SnapshotEdit(validated))
+        }
+        guard Set(result.snapshots.map(\.id)).count == result.snapshots.count else { throw RecipeError.unsupported }
         result.mapping.offset = result.mapping.offset.clamped(to: -0.02...0.02)
         // Preserve older recipes while bringing their multiplier into the current range.
         result.mapping.hdrGain = result.mapping.hdrGain == 0 ? 0 : min(5, max(1, result.mapping.hdrGain))
@@ -118,10 +130,11 @@ nonisolated struct DevelopmentRecipe: Codable, Equatable, Sendable {
             guard within(Double(wb.temperature), 2000...50000), within(Double(wb.tint), -150...150) else { throw RecipeError.invalid }
         }
         guard m.vertexWarp.count == OKLabVertexWarp.count,
-              m.vertexWarp.allSatisfy({ within($0.chroma, 0...2) && within($0.lightness, -0.25...0.25) && within($0.rotation, -1...1) && ($0.hueOffset.map { within($0, -Double.pi...Double.pi) } ?? true) }),
+              m.vertexWarp.allSatisfy({ within($0.darkerHue, -Double.pi...Double.pi) && within($0.lighterHue, -Double.pi...Double.pi) && within($0.chroma, 0...2) && within($0.lightness, -0.25...0.25) && within($0.rotation, -1...1) && ($0.hueOffset.map { within($0, -Double.pi...Double.pi) } ?? true) }),
               m.hls.count == 6,
               within(m.offset, -0.3...0.3), within(m.white, 0...1), m.white >= ToneMapping.minimumRange * 0.999,
               within(m.tonePosition, 0...1), within(m.concentration, -1...1),
+              m.channelContrast.count == 3, m.channelContrast.allSatisfy({ within($0, -0.2...0.2) }),
               within(m.hdrRolloff, 0...1), within(m.hdrTarget, 1...20), within(m.hdrGain, 0...20),
               within(m.clarity, -2...2), within(m.clarityRadius, 15...90),
               within(m.hdf, 0...0.2), within(m.hdfRadius, 50...200),

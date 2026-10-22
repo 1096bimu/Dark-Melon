@@ -43,24 +43,45 @@ private actor HueChromaBoundary {
 }
 
 struct HueChromaScope: View {
+    @Binding var controls: [OKLabVertexAdjustment]
+    @State private var selected: Int?
     let source: CGImage?
     let revision: UUID
     let space: ProcessingColorSpace
     let headroom: Double
     let hdr: Bool
+    let hoverPosition: CGPoint?
+    @State private var sampler = ScopeHoverSampler()
+    @State private var hoveredLab: SIMD3<Double>?
+    @State private var lightnessTexture: ScopeTexture?
+    @AppStorage("showHueTwister") private var showHueTwister = false
     @AppStorage(ScopeGradient.preferenceKey) private var gradient = ScopeGradient.inferno
     @State private var worker: GPUVectorscope?
     @State private var texture: ScopeTexture?
     @State private var boundary: [Double] = []
     @State private var error: String?
     private var scale: Double { cbrt(hdr ? max(1, headroom) : 1) }
-    private var maximum: Double { OKLCHGamut.maxima[space]! * scale * 1.08 }
+    private var maximum: Double { OKLCHGamut.maxima[space]! * scale }
     private struct Request: Equatable {
         let revision: UUID
         let space: ProcessingColorSpace
         let maximum: Double
         let hdr: Bool
         let hasSource: Bool
+        let showHueTwister: Bool
+    }
+    private struct HoverRequest: Equatable {
+        let position: CGPoint?
+        let revision: UUID
+        let hdr: Bool
+        let space: ProcessingColorSpace
+    }
+    private func hoverPoint(lightness: Bool) -> CGPoint? {
+        guard let lab=hoveredLab else { return nil }
+        let chroma=hypot(lab.y,lab.z)
+        guard chroma>0.00001 else { return nil }
+        let hue=atan2(lab.z,lab.y)/(2 * .pi)
+        return CGPoint(x:hue-floor(hue),y:1-(lightness ? lab.x/scale : chroma/maximum))
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -105,6 +126,8 @@ struct HueChromaScope: View {
                     }
                     outline(scale, color: EditorGraphStyle.guideColor)
                 }.allowsHitTesting(false)
+                ScopePixelMarker(position:hoverPoint(lightness:false))
+                MountainRangeHandles(controls:$controls,selected:$selected,space:space,maximumChroma:maximum,scale:scale,boundary:boundary)
             }.aspectRatio(1.6, contentMode: .fit)
             Canvas { context, size in
                 for i in 0..<180 {
@@ -124,19 +147,59 @@ struct HueChromaScope: View {
                 Spacer()
                 Text(hdr ? "HDR" : "SDR").foregroundStyle(.secondary)
             }.font(.caption)
+            HStack {
+                Button("Monochrome") {
+                    for i in controls.indices { controls[i].chroma=0;controls[i].hueOffset=0;controls[i].rotation=0 }
+                }
+                Spacer()
+                Button("Reset") { controls=OKLabVertexWarp.defaults }
+            }
+            if let i=selected {
+                HStack {
+                    Text(LocalizedStringKey(MountainRangeHandles.names[i])).foregroundStyle(MountainRangeHandles.colors[i])
+                    Spacer()
+                }
+                HStack {
+                    Text("Chroma")
+                    AdjustmentField(title:"Chroma",value:$controls[i].chroma,range:0...2,unit:"×",width:52)
+                    Spacer()
+                    Text("Lightness")
+                    AdjustmentField(title:"Lightness",value:$controls[i].lightness,range: -0.25...0.25,digits:3,width:52)
+                }
+            }
+            if showHueTwister {
+                Divider()
+                LightnessHueControls(controls:$controls,selected:$selected,space:space,texture:lightnessTexture,hover:hoverPoint(lightness:true),gradient:gradient)
+            }
             if let error { Text(error).font(.caption).foregroundStyle(.secondary) }
         }
         .padding(12)
         .help("Pixel density by OKLCH hue and chroma. Outlines show the selected gamut’s maximum chroma across all lightness values. Neutral pixels have no hue and are omitted.")
+        .task(id: HoverRequest(position:hoverPosition,revision:revision,hdr:hdr,space:space)) {
+            hoveredLab=nil
+            guard let source,let hoverPosition else { return }
+            do {
+                guard let rgb=try await sampler.sampleRGB(source,revision:revision,position:hoverPosition,space:space) else { return }
+                try Task.checkCancellation()
+                let matrix=ScopeProjection.matrix(.sRGB).inverse * ScopeProjection.matrix(space)
+                hoveredLab=OKLabVertexWarp.lab(matrix*rgb)
+            } catch {}
+        }
         .task(id: space) { boundary = await HueChromaBoundary.shared.values(space) }
-        .task(id: Request(revision: revision, space: space, maximum: maximum, hdr: hdr, hasSource: source != nil)) {
-            guard let source else { texture = nil; return }
+        .task(id: Request(revision: revision, space: space, maximum: maximum, hdr: hdr, hasSource: source != nil, showHueTwister: showHueTwister)) {
+            guard let source else { texture = nil; lightnessTexture = nil; return }
             do {
                 if worker == nil { worker = try GPUVectorscope() }
                 let result = try await worker!.render(source: source, mapping: ToneMapping(),
                     space: space, zoom: -1/maximum, hueChroma: true)
                 try Task.checkCancellation()
                 texture = result
+                if showHueTwister {
+                    let lighter = try await worker!.render(source:source,mapping:ToneMapping(),
+                        space:space,zoom:-1/maximum,hueChroma:true,lightnessScale:scale)
+                    try Task.checkCancellation()
+                    lightnessTexture = lighter
+                } else { lightnessTexture = nil }
                 error = nil
             } catch is CancellationError {
             } catch { self.error = error.localizedDescription }

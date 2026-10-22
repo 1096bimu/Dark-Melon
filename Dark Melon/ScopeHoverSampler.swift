@@ -5,6 +5,7 @@ actor ScopeHoverSampler {
     private let context = CIContext(options: [.cacheIntermediates: false])
     private var revision: UUID?
     private var image: CIImage?
+    private var sourceImage: CGImage?
 
     func sample(_ source: CGImage, revision: UUID, position: CGPoint,
                 space: ProcessingColorSpace) throws -> CGPoint? {
@@ -17,7 +18,8 @@ actor ScopeHoverSampler {
     func sampleRGB(_ source: CGImage, revision: UUID, position: CGPoint,
                    space: ProcessingColorSpace, encoded: Bool = false) throws -> SIMD3<Double>? {
         try Task.checkCancellation()
-        if self.revision != revision {
+        if self.revision != revision || sourceImage !== source {
+            sourceImage = source
             image = CIImage(cgImage: source)
             self.revision = revision
         }
