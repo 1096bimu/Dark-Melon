@@ -35,6 +35,13 @@ nonisolated struct ToneMapping: Codable, Equatable, Sendable {
         return max(1, endpoint * hdrGain)
     }
 
+    static func fresh(isRAW: Bool, sourceHeadroom: Double) -> ToneMapping {
+        var result = ToneMapping()
+        if !isRAW && sourceHeadroom <= 1 { result.hdrGain = 0 }
+        result.setAutomaticHDRTarget()
+        return result
+    }
+
     static let minimumRange = 1.0 / 2048
 
     var hdrHasContinuationRoom: Bool { peakPosition < 1 - 1e-12 }

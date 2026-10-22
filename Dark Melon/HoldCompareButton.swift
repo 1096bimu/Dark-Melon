@@ -2,9 +2,10 @@ import SwiftUI
 
 struct HoldCompareButton: View {
     @Binding var comparing: Bool
+    var title: LocalizedStringKey = "Compare"
 
     var body: some View {
-        Button("Compare") {}
+        Button(title) {}
             .buttonStyle(HoldStyle(comparing: $comparing))
             .help("Hold to preview without this panel’s effects. Release to restore them.")
             .onDisappear { comparing = false }

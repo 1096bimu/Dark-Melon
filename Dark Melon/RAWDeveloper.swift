@@ -77,10 +77,10 @@ actor RAWDeveloper {
     private lazy var vignette = Vignette()
 
     private lazy var hdfKernel = CIColorKernel(source: """
-        kernel vec4 hdfAdd(__sample pixel, __sample blurred, float amount, float ceiling) {
+        kernel vec4 hdfAdd(__sample pixel, __sample blurred, float amount) {
             vec4 p = unpremultiply(pixel);
             vec3 glow = unpremultiply(blurred).rgb;
-            return premultiply(vec4(clamp(p.rgb + amount * glow, 0.0, ceiling), p.a));
+            return premultiply(vec4(max(p.rgb + amount * glow, vec3(0.0)), p.a));
         }
         """)
 
@@ -229,17 +229,13 @@ actor RAWDeveloper {
     /// Same defaults used by Reset Tone and file-browser exports without saved edits.
     func automaticMapping(for development: RAWDevelopment, bins: Int,
                           histogram: HistogramData? = nil) async throws -> ToneMapping {
-        var automatic = ToneMapping()
-        if !development.isRAW, development.sourceHeadroom <= 1 { automatic.hdrGain = 0 }
-        automatic.setAutomaticHDRTarget()
-        return automatic
+        ToneMapping.fresh(isRAW: development.isRAW, sourceHeadroom: development.sourceHeadroom)
     }
 
     func sampleWhiteBalance(_ source: CGImage, center: CGPoint, radius: CGFloat, mapping: ToneMapping) throws -> WhiteBalance {
         let input = try adjustedInput(CIImage(cgImage: source), mapping: mapping)
         let toned = try applyTone(input, curve: mapping.curve(hdr: false))
-        let effected = try applyEffects(toned, source: input, mapping: mapping, hdr: false)
-        let mean = try sampleMean(effected, center: center, radius: radius)
+        let mean = try sampleMean(toned, center: center, radius: radius)
         guard min(mean.x, mean.y, mean.z) > 1e-6 else { throw DevelopmentError.decode }
         let inverse = SIMD3(1 / mean.x, 1 / mean.y, 1 / mean.z)
         let weights = colorSpace.luminance
@@ -314,7 +310,18 @@ actor RAWDeveloper {
             }
             image = adjusted
         }
-        return try vignette.apply(to: image, settings: mapping.vignette, transform: mapping.transform)
+        image = try applyHDF(image, mapping: mapping)
+        image = try vignette.apply(to: image, settings: mapping.vignette, transform: mapping.transform)
+        if mapping.hdrEnabled && mapping.halation.inputCurve > 0 {
+            image = try halation.apply(to: image, source: image, settings: mapping.halation,
+                                       hdrBrightness: mapping.hdrMax, ceiling: 0)
+        }
+        if mapping.grain.strength > 0 {
+            if filmGrain == nil { filmGrain = try FilmGrain() }
+            image = try filmGrain!.apply(to: image, source: image, settings: mapping.grain,
+                                        weights: colorSpace.luminance, ceiling: 0)
+        }
+        return image
     }
 
     private func developedImage(_ source: CIImage, mapping: ToneMapping, hdr: Bool) throws -> CIImage {
@@ -325,41 +332,27 @@ actor RAWDeveloper {
             color.saturationStart = 1; color.saturationEnd = 1; color.saturationMid = 1; color.saturationHDR = 1
             color.luminanceSaturationStart = 1; color.luminanceSaturationEnd = 1; color.luminanceSaturationMid = 1; color.luminanceSaturationHDR = 1
         }
-        // Shared by preview and export: offset → vignette → tone → effects → RGB WB/monochrome → shared OKLab Color + vertex deformation.
+        // Shared by preview/export: offset → HDF → vignette → halation → grain → tone → RGB WB → OKLab → clarity.
         // RAW decoder white balance is already part of the decoded source.
         let toned = try applyTone(image, curve: mapping.curve(hdr: hdr))
-        let effected = try applyEffects(toned, source: image, mapping: mapping, hdr: hdr)
-        let balanced = try applyWhiteBalance(effected, mapping: mapping)
+        let balanced = try applyWhiteBalance(toned, mapping: mapping)
         try Task.checkCancellation()
-        return try colorPipeline.apply(balanced, color: color, vertices: mapping.vertexWarp,
+        let colored = try colorPipeline.apply(balanced, color: color, vertices: mapping.vertexWarp,
             space: colorSpace, ceiling: hdr && mapping.hdrEnabled ? mapping.hdrMax : 1,
             domainCeiling: mapping.hdrMax)
+        return try applyClarity(colored, mapping: mapping, hdr: hdr)
     }
 
-    private func applyEffects(_ image: CIImage, source: CIImage, mapping: ToneMapping, hdr: Bool) throws -> CIImage {
-        let clarified = try applyClarity(image, mapping: mapping, hdr: hdr)
-        var base = try applyHDF(clarified, source: source, mapping: mapping, hdr: hdr)
-        if mapping.hdrEnabled && mapping.halation.inputCurve > 0 {
-            base = try halation.apply(to: base, source: source, settings: mapping.halation,
-                                      hdrBrightness: mapping.hdrMax,
-                                      ceiling: hdr ? mapping.hdrMax : 1)
-        }
-        guard mapping.grain.strength > 0 else { return base }
-        if filmGrain == nil { filmGrain = try FilmGrain() }
-        return try filmGrain!.apply(to: base, source: source, settings: mapping.grain,
-                                   weights: colorSpace.luminance, ceiling: hdr && mapping.hdrEnabled ? mapping.hdrMax : 1)
-    }
-
-    private func applyHDF(_ base: CIImage, source: CIImage, mapping: ToneMapping, hdr: Bool) throws -> CIImage {
+    private func applyHDF(_ base: CIImage, mapping: ToneMapping) throws -> CIImage {
         guard mapping.hdf != 0 else { return base }
         let scale = EffectResolution.scale(shortSide: min(base.extent.width, base.extent.height))
         let radius = min(200, max(50, mapping.hdfRadius)) * scale
         // Preserve scene-linear highlight energy before either rendition clips or compresses it.
-        let blurred = source.clampedToExtent()
+        let blurred = base.clampedToExtent()
             .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: radius])
             .cropped(to: base.extent)
         guard let result = hdfKernel?.apply(extent: base.extent, arguments: [
-            base, blurred, min(0.2, max(0, mapping.hdf)), hdr && mapping.hdrEnabled ? mapping.hdrMax : 1
+            base, blurred, min(0.2, max(0, mapping.hdf))
         ]) else { throw DevelopmentError.decode }
         return result
     }

@@ -126,6 +126,7 @@ struct EditorSettingsView: View {
                 shortcut("Paste development settings…", "⌘V")
                 shortcut("Save development settings", "⌘S")
                 shortcut("Export…", "⇧⌘E")
+                shortcut("Compare Original", "Hold C")
                 shortcut("Toggle HDR preview", "H")
                 shortcut("Toggle file browser", "F")
                 shortcut("Toggle white balance picker", "W")

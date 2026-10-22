@@ -183,3 +183,18 @@ does not force an out-of-range lightness into the output range.
 Validation: `Tests/OKLabVolumeChecks.swift`, `Tests/VertexWarpChecks.swift`,
 `Tests/OKLCHChecks.swift`, `Tests/SplitToneGradientChecks.swift`, and
 `Tests/PreviewDetailChecks.swift`.
+
+### Scene-linear effect order
+
+Preview and export use this order: decoded source → Offset → HDF → Vignette →
+Halation → Film Grain (including its linked blur) → SDR/HDR tone mapping → RGB
+white balance → combined OKLab Color stage → Clarity → geometric transform.
+Vignette uses the committed crop coordinates even though resampling happens last.
+HDF blurs the offset-corrected input; halation reads the vignetted HDF result;
+grain's tonal envelope reads the halation result before its own linked blur.
+These pre-tone effects preserve values above 1 and do not depend on the selected
+SDR/HDR preview. Halation retains its existing HDR enable/strength controls.
+Tone/clipping visualization and white-balance sampling follow the adjusted input;
+the original-source histogram remains unchanged. This orders the existing effects
+by camera/film analogy; it does not turn the additive Offset into exposure gain or
+make the artistic glow/grain models a calibrated optical simulation.

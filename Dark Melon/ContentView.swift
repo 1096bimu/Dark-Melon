@@ -42,6 +42,8 @@ struct ContentView: View {
     @State private var savingRecipe = false
     @State private var rawSettings = RAWSettings()
     @State private var panel = EditorPanel.tone
+    @State private var comparingOriginalMouse = false
+    @State private var comparingOriginalKey = false
     @State private var comparingColor = false
     @State private var comparingEffects = false
     @State private var colorSpace = ProcessingColorSpace.sRGB
@@ -111,11 +113,19 @@ struct ContentView: View {
         rememberCurrentEdits()
     }
 
-    private var comparing: Bool { comparingColor || comparingEffects }
+    private var comparingOriginal: Bool { comparingOriginalMouse || comparingOriginalKey }
+    private var comparing: Bool { comparingOriginal || comparingColor || comparingEffects }
+    private var originalMapping: ToneMapping {
+        var result = ToneMapping.fresh(isRAW: development?.isRAW == true,
+                                       sourceHeadroom: development?.sourceHeadroom ?? 1)
+        result.rawWhiteBalance = mapping.rawWhiteBalance
+        result.transform = mapping.transform
+        return result
+    }
 
     private var detailRequest: DetailPreviewRequest {
-        let counterpart: ToneMapping? = [.color, .effects].contains(panel)
-            ? (comparing ? mapping : comparisonMapping(panel)) : nil
+        let counterpart: ToneMapping? = comparing ? mapping
+            : ([.color, .effects].contains(panel) ? comparisonMapping(panel) : originalMapping)
         return DetailPreviewRequest(sourceID: development?.id, mapping: previewMapping,
             counterpart: counterpart, comparing: comparing, hdr: hdrPreview,
             region: previewRegion, enabled: !loading && !cropping && !adjustingTone && !adjustingWhitePoint
@@ -135,7 +145,7 @@ struct ContentView: View {
 
     private var previewOutputSize: CGSize {
         let size = CGSize(width: development?.width ?? 1, height: development?.height ?? 1)
-        return cropping ? size : mapping.transform?.resolution(width: Int(size.width), height: Int(size.height), estimate: .maximum) ?? size
+        return cropping ? size : previewMapping.transform?.resolution(width: Int(size.width), height: Int(size.height), estimate: .maximum) ?? size
     }
 
     private var tutorialNeedsSave: Bool {
@@ -181,7 +191,7 @@ struct ContentView: View {
     }
 
     private func originalPreviewPoint(_ point: CGPoint) -> CGPoint {
-        guard !cropping, let transform = mapping.transform else { return point }
+        guard !cropping, let transform = previewMapping.transform else { return point }
         let source = transform.sourcePoint(CGPoint(x: point.x, y: 1 - point.y))
         return CGPoint(x: source.x, y: 1 - source.y)
     }
@@ -200,6 +210,7 @@ struct ContentView: View {
     }
 
     private var previewMapping: ToneMapping {
+        if comparingOriginal { return originalMapping }
         if comparingColor { return comparisonMapping(.color) }
         if comparingEffects { return comparisonMapping(.effects) }
         return mapping
@@ -227,7 +238,7 @@ struct ContentView: View {
                                         viewport: previewViewport,
                                         cropRatio: cropping ? CropGeometry.ratio(at: cropRatioPosition) : nil,
                                         cropTransform: $cropTransform,
-                                        savedTransform: mapping.transform,
+                                        savedTransform: previewMapping.transform,
                                         cropChanged: { cropPolygon = $0 },
                                         sampleTool: pickingWhiteBalance ? .whiteBalance : nil,
                                         hover: { hoveredPreviewPixel = $0 }) { center, radius in
@@ -251,7 +262,7 @@ struct ContentView: View {
                         #else
                         if cropping {
                             MobileCropPreview(image: hdrPreview ? previewImages.fullHDR : previewImages.fullSDR,
-                                              hdr: hdrPreview, ratio: CropGeometry.ratio(at: cropRatioPosition), transform: $cropTransform, savedTransform: mapping.transform, cropChanged: { cropPolygon = $0 })
+                                              hdr: hdrPreview, ratio: CropGeometry.ratio(at: cropRatioPosition), transform: $cropTransform, savedTransform: previewMapping.transform, cropChanged: { cropPolygon = $0 })
                         } else {
                         Image(decorative: ((adjustingTone || adjustingWhitePoint) ? toneLocatorImage : nil) ?? (cropping ? (hdrPreview ? previewImages.fullHDR : previewImages.fullSDR) : (hdrPreview ? previewImages.hdr : previewImages.sdr)), scale: 1)
                             .allowedDynamicRange(hdrPreview ? .high : .standard)
@@ -427,6 +438,8 @@ struct ContentView: View {
                 if panel == .tone, let requested { togglePicker(requested) }
             }
             .onChange(of: development?.id) { _, _ in
+                comparingOriginalMouse = false
+                comparingOriginalKey = false
                 pendingPicker = nil
                 pickingWhiteBalance = false
                 adjustingTone = false
@@ -520,6 +533,8 @@ struct ContentView: View {
                 editHistory.interacting = false
                 if !cropping { commitHistory() }
             }))
+            .background(OriginalCompareShortcut(active: $comparingOriginalKey,
+                enabled: development != nil && !loading && !cropping))
             .navigationTitle(filename)
             .focusedSceneValue(\.editorUndo, undoActions)
             .focusedSceneValue(\.editorPanel, $panel)
@@ -545,52 +560,51 @@ struct ContentView: View {
                         .disabled(!undoActions.canRedo)
                 }
                 #endif
-                ToolbarItem(placement: .principal) {
-                    HStack(spacing: 12) {
-                        Button(exporting ? "Preparing Image…" : "Export…", systemImage: "square.and.arrow.up") {
-                            showingExportOptions = true
-                        }
-                        .labelStyle(.iconOnly)
-                        .help("Export…")
-                        .keyboardShortcut("e", modifiers: [.command, .shift])
-                        .disabled(development == nil || loading || exporting)
-                        Button(savingRecipe ? "Saving Edits…" : savedRecipe == currentRecipe && !tutorialNeedsSave ? "Edits Saved" : "Save Edits", systemImage: "square.and.arrow.down") {
-                            saveRecipe()
-                        }
-                        .labelStyle(.iconOnly)
-                        .keyboardShortcut("s", modifiers: .command)
-                        .disabled(development == nil || loading || savingRecipe || (savedRecipe == currentRecipe && !tutorialNeedsSave))
-                        .help("Save development settings beside the original image in an XMP sidecar")
-                        Picker("Color space", selection: Binding(get: { colorSpace }, set: { selected in
-                            guard selected != colorSpace else { return }
-                            colorSpace = selected
-                            if let sourceURL { load(sourceURL, resetEdits: false) }
-                        })) {
-                            ForEach(ProcessingColorSpace.allCases) { space in
-                                Text(space.rawValue).tag(space)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-                        .controlSize(.regular)
-                        .frame(width: 260)
-                        .disabled(loading || exporting)
-                        Button(hdrPreview ? "Preview: HDR" : "Preview: SDR") {
-                            hdrPreview.toggle()
-                            tutorial.previewToggled(hdr: hdrPreview)
-                        }
-                            .keyboardShortcut("h", modifiers: [])
-                            .disabled(!mapping.hdrEnabled)
-                            .help("Toggle HDR or SDR display of the developed image")
-                            .accessibilityValue(hdrPreview ? "HDR" : "SDR")
+                ToolbarItemGroup(placement: .principal) {
+                    Button(exporting ? "Preparing Image…" : "Export…", systemImage: "square.and.arrow.up") {
+                        showingExportOptions = true
                     }
+                    .labelStyle(.iconOnly)
+                    .help("Export…")
+                    .keyboardShortcut("e", modifiers: [.command, .shift])
+                    .disabled(development == nil || loading || exporting)
+                    Button(savingRecipe ? "Saving Edits…" : savedRecipe == currentRecipe && !tutorialNeedsSave ? "Edits Saved" : "Save Edits", systemImage: "square.and.arrow.down") {
+                        saveRecipe()
+                    }
+                    .labelStyle(.iconOnly)
+                    .keyboardShortcut("s", modifiers: .command)
+                    .disabled(development == nil || loading || savingRecipe || (savedRecipe == currentRecipe && !tutorialNeedsSave))
+                    .help("Save development settings beside the original image in an XMP sidecar")
+                    Picker("Color space", selection: Binding(get: { colorSpace }, set: { selected in
+                        guard selected != colorSpace else { return }
+                        colorSpace = selected
+                        if let sourceURL { load(sourceURL, resetEdits: false) }
+                    })) {
+                        ForEach(ProcessingColorSpace.allCases) { space in
+                            Text(space.rawValue).tag(space)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .fixedSize()
+                    .disabled(loading || exporting)
+                    Toggle("HDR", isOn: Binding(get: { hdrPreview }, set: { enabled in
+                        hdrPreview = enabled
+                        tutorial.previewToggled(hdr: enabled)
+                    }))
+                        .toggleStyle(.button)
+                        .keyboardShortcut("h", modifiers: [])
+                        .disabled(!mapping.hdrEnabled)
+                        .help("Toggle HDR or SDR display of the developed image")
+                        .accessibilityValue(hdrPreview ? "HDR" : "SDR")
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Picker("Panel", selection: $panel) {
                         ForEach(EditorPanel.allCases) { panel in Text(LocalizedStringKey(panel.rawValue)).tag(panel) }
                     }
                     .pickerStyle(.segmented)
-                    .controlSize(.regular)
-                    .frame(width: 420)
+                    .labelsHidden()
+                    .fixedSize()
                 }
             }
             .sheet(isPresented: $showingPasteSettings, onDismiss: { browserPaste = nil; pasteEditURLs = [] }) {
@@ -873,7 +887,7 @@ struct ContentView: View {
                         histogramError: histogramError, binCount: $histogramBins,
                         mapping: $mapping, sdrSource: previewImages?.sdr,
                         revision: previewRevision, colorSpace: colorSpace,
-                        resettingTone: resettingTone, resetTone: resetTone,
+                        comparingOriginal: $comparingOriginalMouse,
                         showingSDR: $displayMode.sdrHistogram,
                         hoverPosition: displayMode.sdrHistogram ? hoveredPreviewPixel : hoveredPreviewPixel.map(originalPreviewPoint),
                         onWhitePointEditingChanged: { editing in
@@ -890,6 +904,11 @@ struct ContentView: View {
 
     private var tonePanel: some View {
     VStack(spacing: 0) {
+        HStack {
+            Text("Tone").font(.headline)
+            Spacer()
+            Button("Reset Tone", action: resetTone).disabled(resettingTone)
+        }.padding(12)
         SlopeEditor(mapping: $mapping, autoTones: $autoTones,
            onToneChanged: { tutorial.record(.tone) },
            onContrastChanged: { tutorial.record(.contrast) },
@@ -1174,8 +1193,7 @@ private struct LinearHistogram: View {
     let sdrSource: CGImage?
     let revision: UUID
     let colorSpace: ProcessingColorSpace
-    let resettingTone: Bool
-    let resetTone: () -> Void
+    @Binding var comparingOriginal: Bool
     @Binding var showingSDR: Bool
     let hoverPosition: CGPoint?
     var onWhitePointEditingChanged: (Bool) -> Void = { _ in }
@@ -1207,8 +1225,9 @@ private struct LinearHistogram: View {
                     .fontWeight(.medium)
                     .help("Toggle the linear source histogram and the developed SDR preview histogram. Black and white points can only be adjusted in Linear RGB.")
                 Spacer()
-                Button("Reset Tone", action: resetTone)
-                    .disabled(resettingTone)
+                HoldCompareButton(comparing: $comparingOriginal, title: "Compare Original")
+                    .disabled(development == nil)
+                    .help("Hold to compare with default development settings. Hold C for the same preview.")
             }
             HStack {
                 if !showingSDR {

@@ -3929,6 +3929,36 @@
           }
         }
       }
+    },
+    "Compare Original": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "对比原图"
+          }
+        }
+      }
+    },
+    "Hold C": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按住 C"
+          }
+        }
+      }
+    },
+    "Hold to compare with default development settings. Hold C for the same preview.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按住以使用默认显影设置预览。按住 C 键也可进行对比。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

@@ -28,12 +28,14 @@ nonisolated final class Halation {
             vec4 p = unpremultiply(source);
             float red = unpremultiply(redHalo).r;
             float green = unpremultiply(greenHalo).g;
-            p.r = clamp(p.r + strength * red, 0.0, ceiling);
-            p.g = clamp(p.g + strength * transmission * green, 0.0, ceiling);
+            p.r = max(p.r + strength * red, 0.0);
+            p.g = max(p.g + strength * transmission * green, 0.0);
+            if (ceiling > 0.0) { p.rg = min(p.rg, vec2(ceiling)); }
             return premultiply(p);
         }
         """)
 
+    /// A zero ceiling preserves scene-linear headroom before tone mapping.
     func apply(to image: CIImage, source: CIImage, settings: HalationSettings,
                hdrBrightness: Double, ceiling: Double) throws -> CIImage {
         guard settings.inputCurve > 0 else { return image }

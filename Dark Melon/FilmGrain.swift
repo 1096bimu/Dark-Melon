@@ -78,7 +78,7 @@ nonisolated final class FilmGrain {
         float3 w=(wide.sample(wide.transform(p)).rgb-0.5)*4.0;
         float3 unit=(n-0.95*w)*parameters.x;
         float grain=dot(unit,float3(0.2126,0.7152,0.0722));
-        // Use decoded source-linear luminance, independent of SDR/HDR development.
+        // Use incident linear luminance at the grain stage, before tone mapping.
         float3 input=unpremultiply(source.sample(source.transform(p))).rgb;
         float t=clamp(dot(input,weights),0.0,1.0);
         float peak=parameters.w*0.5;
@@ -86,7 +86,8 @@ nonisolated final class FilmGrain {
         if (peak<=0.000001) envelope=pow(1-t,4.0);
         else if (t>0 && t<1) envelope=exp(4*peak*log(t/peak)+4*(1-peak)*log((1-t)/(1-peak)));
         float gain=exp(parameters.y*parameters.z*envelope*grain);
-        color.rgb=clamp(color.rgb*gain,0.0,ceiling);
+        color.rgb=max(color.rgb*gain,0.0);
+        if (ceiling>0.0) color.rgb=min(color.rgb,ceiling);
         return premultiply(color);
     }
     }}
