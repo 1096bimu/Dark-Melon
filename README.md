@@ -20,6 +20,12 @@ You do not need an AVIF- or JPEG XL-specific workflow to see the photograph. Com
 
 An original 2736 × 1824 JPEG export with an embedded ISO 21496-1 HDR gain map. Compatible viewers can show the HDR rendition; other viewers display the SDR base. Click the image to open the original file. HDR appearance depends on the browser, display, and system settings.
 
+## Film emulation: the Kyoto collection
+
+**[Explore the Kyoto photo essay →](https://1096bimu.github.io/Dark-Melon/film-emulation/)** — twelve photographs and a practical guide to Dark Melon’s film-inspired process: lens diffusion and vignette before grain and tone mapping, exposure-driven halation, Dye Response, and the two stages of white balance. Open any photograph for a full-size view.
+
+[![A temple photograph from the Kyoto film-emulation collection](docs/film-emulation/photos/DSC07229-preview.jpg)](https://1096bimu.github.io/Dark-Melon/film-emulation/)
+
 ## Features
 
 - **RAW, SDR, and HDR image development**, with paired SDR/HDR previews and JPEG, HEIF, and TIFF export.
