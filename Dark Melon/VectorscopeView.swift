@@ -60,131 +60,145 @@ struct VectorscopeView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("Vectorscope").fontWeight(.medium)
-                Spacer()
-                Button("\(magnification, format: .number.precision(.fractionLength(1)))×") { zoom = 2 }
-                    .help("Pinch to zoom the chroma radius. Click to reset to 2×.")
-                #if os(macOS)
-                Button(pickingWhiteBalance ? "Cancel White Balance Sample" : "Sample White Balance", systemImage: "eyedropper") {
-                    pickingWhiteBalance.toggle()
+            if !mapping.color.monochrome {
+                HStack {
+                    Text("Vectorscope").fontWeight(.medium)
+                    Spacer()
+                    Button("\(magnification, format: .number.precision(.fractionLength(1)))×") { zoom = 2 }
+                        .help("Pinch to zoom the chroma radius. Click to reset to 2×.")
+                    #if os(macOS)
+                    if !mapping.color.monochrome {
+                    Button(pickingWhiteBalance ? "Cancel White Balance Sample" : "Sample White Balance", systemImage: "eyedropper") {
+                        pickingWhiteBalance.toggle()
+                    }
+                    .labelStyle(.iconOnly)
+                    .disabled(mapping.blackAndWhite.isEnabled)
+                    .tint(pickingWhiteBalance ? .accentColor : .primary)
+                    .help("Click a center in the preview, drag a circle, then click again to set white balance. Shortcut: W.")
+                    }
+                    #endif
+                    if !mapping.color.monochrome || resetRAWBalance != nil {
+                    Button("Reset WB") {
+                        if let resetRAWBalance { resetRAWBalance() } else { balance = WhiteBalance() }
+                    }
+                        .disabled((resetRAWBalance == nil && balance == WhiteBalance()) || mapping.blackAndWhite.isEnabled)
+                    }
                 }
-                .labelStyle(.iconOnly)
-                .disabled(mapping.blackAndWhite.isEnabled)
-                .tint(pickingWhiteBalance ? .accentColor : .primary)
-                .help("Click a center in the preview, drag a circle, then click again to set white balance. Shortcut: W.")
-                #endif
-                Button("Reset WB") {
-                    if let resetRAWBalance { resetRAWBalance() } else { balance = WhiteBalance() }
+                if pickingWhiteBalance {
+                    Text("Click center, drag radius, click again to apply. Click the eyedropper to cancel.")
+                        .foregroundStyle(.secondary)
                 }
-                    .disabled((resetRAWBalance == nil && balance == WhiteBalance()) || mapping.blackAndWhite.isEnabled)
-            }
-            if pickingWhiteBalance {
-                Text("Click center, drag radius, click again to apply. Click the eyedropper to cancel.")
+                Text("SDR · \(colorSpace.rawValue) · Lab · D50")
                     .foregroundStyle(.secondary)
-            }
-            Text("SDR · \(colorSpace.rawValue) · Lab · D50")
-                .foregroundStyle(.secondary)
-            GeometryReader { geometry in
-                let diameter = max(1, min(geometry.size.width, geometry.size.height) - 36)
-                ZStack {
-                    Color.black
-                    if let scope {
-                        ScopeMetalView(frame: scope, gradient: gradient)
-                            .frame(width: diameter, height: diameter)
-                            .clipShape(Circle())
-                    }
-                    Canvas { context, size in
-                        let center = CGPoint(x: size.width / 2, y: size.height / 2)
-                        let radius = diameter / 2
-                        for fraction in [0.25, 0.5, 0.75, 1.0] {
-                            let r = radius * fraction
-                            context.stroke(Path(ellipseIn: CGRect(x: center.x - r, y: center.y - r,
-                                width: r * 2, height: r * 2)),
-                                with: .color(.white.opacity(0.2)), lineWidth: 0.5)
+                GeometryReader { geometry in
+                    let diameter = max(1, min(geometry.size.width, geometry.size.height) - 36)
+                    ZStack {
+                        Color.black
+                        if let scope {
+                            ScopeMetalView(frame: scope, gradient: gradient)
+                                .frame(width: diameter, height: diameter)
+                                .clipShape(Circle())
                         }
-                        context.draw(Text("\(128.0 / magnification, format: .number.precision(.fractionLength(0)))")
-                            .font(.caption2).foregroundStyle(.secondary),
-                            at: CGPoint(x: center.x, y: center.y + radius - 8))
-                        let names = EditorGraphStyle.colorNames
-                        let colors = EditorGraphStyle.colorLabels
-                        let primaries: [(Double, Double, Double)] = [(1,0,0), (1,1,0), (0,1,0), (0,1,1), (0,0,1), (1,0,1)]
-                        for index in 0..<6 {
-                            let rgb = primaries[index]
-                            let p = ScopeProjection.point(r: rgb.0, g: rgb.1, b: rgb.2, space: colorSpace)
-                            let length = hypot(p.x, p.y)
-                            let dx = p.x / length, dy = p.y / length
-                            var line = Path()
-                            line.move(to: center)
-                            line.addLine(to: CGPoint(x: center.x + dx * radius, y: center.y + dy * radius))
-                            context.stroke(line, with: .color(.white.opacity(0.15)), lineWidth: 0.5)
-                            context.draw(Text(names[index]).font(.caption2.bold()).foregroundStyle(colors[index]),
-                                at: CGPoint(x: center.x + dx * (radius + 12), y: center.y + dy * (radius + 12)))
-                        }
-                        // General warmth direction in Lab, independent of scene exposure and WB.
-                        let direction = Self.warmDirection
-                        for (sign, label, color) in [(1.0, "Warmer", Color.orange), (-1.0, "Colder", Color.cyan)] {
-                            let dx = direction.x * sign, dy = direction.y * sign
-                            let start = CGPoint(x: center.x + dx * radius * 0.18, y: center.y + dy * radius * 0.18)
-                            let tip = CGPoint(x: center.x + dx * radius * 0.48, y: center.y + dy * radius * 0.48)
-                            var arrow = Path()
-                            arrow.move(to: start); arrow.addLine(to: tip)
-                            arrow.move(to: CGPoint(x: tip.x - dx * 7 - dy * 4, y: tip.y - dy * 7 + dx * 4))
-                            arrow.addLine(to: tip)
-                            arrow.addLine(to: CGPoint(x: tip.x - dx * 7 + dy * 4, y: tip.y - dy * 7 - dx * 4))
-                            context.stroke(arrow, with: .color(.black.opacity(0.8)), lineWidth: 4)
-                            context.stroke(arrow, with: .color(color), lineWidth: 1.5)
-                            context.draw(Text(LocalizedStringKey(label)).font(.caption2).foregroundStyle(color),
-                                         at: CGPoint(x: center.x + dx * radius * 0.65, y: center.y + dy * radius * 0.65))
-                        }
-                        if let marker = hoverMarker {
-                            let x = marker.x * magnification, y = marker.y * magnification
-                            let distance = hypot(x, y)
-                            let scale = distance > 1 ? 0.97 / distance : 1
-                            let point = CGPoint(x: center.x + x * scale * radius,
-                                                y: center.y + y * scale * radius)
-                            let color: Color = distance > 1 ? .orange : .white
-                            let ring = Path(ellipseIn: CGRect(x: point.x - 5, y: point.y - 5, width: 10, height: 10))
-                            context.stroke(ring, with: .color(.black), lineWidth: 4)
-                            context.stroke(ring, with: .color(color), lineWidth: 2)
-                            var cross = Path()
-                            cross.move(to: CGPoint(x: point.x - 9, y: point.y))
-                            cross.addLine(to: CGPoint(x: point.x + 9, y: point.y))
-                            cross.move(to: CGPoint(x: point.x, y: point.y - 9))
-                            cross.addLine(to: CGPoint(x: point.x, y: point.y + 9))
-                            context.stroke(cross, with: .color(.black), lineWidth: 3)
-                            context.stroke(cross, with: .color(color), lineWidth: 1)
+                        Canvas { context, size in
+                            let center = CGPoint(x: size.width / 2, y: size.height / 2)
+                            let radius = diameter / 2
+                            for fraction in [0.25, 0.5, 0.75, 1.0] {
+                                let r = radius * fraction
+                                context.stroke(Path(ellipseIn: CGRect(x: center.x - r, y: center.y - r,
+                                    width: r * 2, height: r * 2)),
+                                    with: .color(.white.opacity(0.2)), lineWidth: 0.5)
+                            }
+                            context.draw(Text("\(128.0 / magnification, format: .number.precision(.fractionLength(0)))")
+                                .font(.caption2).foregroundStyle(.secondary),
+                                at: CGPoint(x: center.x, y: center.y + radius - 8))
+                            let names = EditorGraphStyle.colorNames
+                            let colors = EditorGraphStyle.colorLabels
+                            let primaries: [(Double, Double, Double)] = [(1,0,0), (1,1,0), (0,1,0), (0,1,1), (0,0,1), (1,0,1)]
+                            for index in 0..<6 {
+                                let rgb = primaries[index]
+                                let p = ScopeProjection.point(r: rgb.0, g: rgb.1, b: rgb.2, space: colorSpace)
+                                let length = hypot(p.x, p.y)
+                                let dx = p.x / length, dy = p.y / length
+                                var line = Path()
+                                line.move(to: center)
+                                line.addLine(to: CGPoint(x: center.x + dx * radius, y: center.y + dy * radius))
+                                context.stroke(line, with: .color(.white.opacity(0.15)), lineWidth: 0.5)
+                                context.draw(Text(names[index]).font(.caption2.bold()).foregroundStyle(colors[index]),
+                                    at: CGPoint(x: center.x + dx * (radius + 12), y: center.y + dy * (radius + 12)))
+                            }
+                            // General warmth direction in Lab, independent of scene exposure and WB.
+                            let direction = Self.warmDirection
+                            for (sign, label, color) in [(1.0, "Warmer", Color.orange), (-1.0, "Colder", Color.cyan)] {
+                                let dx = direction.x * sign, dy = direction.y * sign
+                                let start = CGPoint(x: center.x + dx * radius * 0.18, y: center.y + dy * radius * 0.18)
+                                let tip = CGPoint(x: center.x + dx * radius * 0.48, y: center.y + dy * radius * 0.48)
+                                var arrow = Path()
+                                arrow.move(to: start); arrow.addLine(to: tip)
+                                arrow.move(to: CGPoint(x: tip.x - dx * 7 - dy * 4, y: tip.y - dy * 7 + dx * 4))
+                                arrow.addLine(to: tip)
+                                arrow.addLine(to: CGPoint(x: tip.x - dx * 7 + dy * 4, y: tip.y - dy * 7 - dx * 4))
+                                context.stroke(arrow, with: .color(.black.opacity(0.8)), lineWidth: 4)
+                                context.stroke(arrow, with: .color(color), lineWidth: 1.5)
+                                context.draw(Text(LocalizedStringKey(label)).font(.caption2).foregroundStyle(color),
+                                             at: CGPoint(x: center.x + dx * radius * 0.65, y: center.y + dy * radius * 0.65))
+                            }
+                            if let marker = hoverMarker {
+                                let x = marker.x * magnification, y = marker.y * magnification
+                                let distance = hypot(x, y)
+                                let scale = distance > 1 ? 0.97 / distance : 1
+                                let point = CGPoint(x: center.x + x * scale * radius,
+                                                    y: center.y + y * scale * radius)
+                                let color: Color = distance > 1 ? .orange : .white
+                                let ring = Path(ellipseIn: CGRect(x: point.x - 5, y: point.y - 5, width: 10, height: 10))
+                                context.stroke(ring, with: .color(.black), lineWidth: 4)
+                                context.stroke(ring, with: .color(color), lineWidth: 2)
+                                var cross = Path()
+                                cross.move(to: CGPoint(x: point.x - 9, y: point.y))
+                                cross.addLine(to: CGPoint(x: point.x + 9, y: point.y))
+                                cross.move(to: CGPoint(x: point.x, y: point.y - 9))
+                                cross.addLine(to: CGPoint(x: point.x, y: point.y + 9))
+                                context.stroke(cross, with: .color(.black), lineWidth: 3)
+                                context.stroke(cross, with: .color(color), lineWidth: 1)
+                            }
                         }
                     }
+                    .contentShape(Rectangle())
+                    .gesture(DragGesture(minimumDistance: 0).onChanged { value in
+                        guard !mapping.blackAndWhite.isEnabled, !mapping.color.monochrome else { return }
+                        guard pinch == 1 else { lastTranslation = value.translation; return }
+                        balance.nudge(dx: (value.translation.width - lastTranslation.width) / diameter,
+                                      dy: (value.translation.height - lastTranslation.height) / diameter,
+                                      colorSpace: colorSpace)
+                        lastTranslation = value.translation
+                    }.onEnded { _ in lastTranslation = .zero })
+                    .simultaneousGesture(MagnifyGesture().updating($pinch) { value, state, _ in
+                        state = value.magnification
+                    }.onEnded { value in
+                        zoom = min(16, max(1, zoom * value.magnification))
+                    })
+                    .accessibilityLabel("White balance vectorscope")
+                    .accessibilityHint("Drag toward a hue to increase that color in the image.")
                 }
-                .contentShape(Rectangle())
-                .gesture(DragGesture(minimumDistance: 0).onChanged { value in
-                    guard !mapping.blackAndWhite.isEnabled else { return }
-                    guard pinch == 1 else { lastTranslation = value.translation; return }
-                    balance.nudge(dx: (value.translation.width - lastTranslation.width) / diameter,
-                                  dy: (value.translation.height - lastTranslation.height) / diameter,
-                                  colorSpace: colorSpace)
-                    lastTranslation = value.translation
-                }.onEnded { _ in lastTranslation = .zero })
-                .simultaneousGesture(MagnifyGesture().updating($pinch) { value, state, _ in
-                    state = value.magnification
-                }.onEnded { value in
-                    zoom = min(16, max(1, zoom * value.magnification))
-                })
-                .accessibilityLabel("White balance vectorscope")
-                .accessibilityHint("Drag toward a hue to increase that color in the image.")
+                .aspectRatio(1, contentMode: .fit)
+                if let errorMessage { Text(errorMessage).foregroundStyle(.secondary) }
             }
-            .aspectRatio(1, contentMode: .fit)
-            if let errorMessage { Text(errorMessage).foregroundStyle(.secondary) }
             if mapping.rawWhiteBalance != nil {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("White Balance").fontWeight(.medium)
-                    gainValues
-                    if let convertWhiteBalance {
-                        HStack {
-                            Spacer()
-                            Button("Convert to WB", action: convertWhiteBalance)
-                                .disabled(balance == WhiteBalance())
+                    HStack {
+                        Text("White Balance").fontWeight(.medium)
+                        Spacer()
+                        if mapping.color.monochrome, let resetRAWBalance {
+                            Button("Reset WB", action: resetRAWBalance)
+                        }
+                    }
+                    if !mapping.color.monochrome {
+                        gainValues
+                        if let convertWhiteBalance {
+                            HStack {
+                                Spacer()
+                                Button("Convert to WB", action: convertWhiteBalance)
+                                    .disabled(balance == WhiteBalance())
+                            }
                         }
                     }
                     HStack {
@@ -222,7 +236,7 @@ struct VectorscopeView: View {
                     })
                 }
                 .disabled(mapping.blackAndWhite.isEnabled)
-            } else {
+            } else if !mapping.color.monochrome {
                 gainValues
             }
         }
@@ -232,7 +246,7 @@ struct VectorscopeView: View {
             if old != nil { commitWBField() }
         }
         .task(id: ScopeHoverRequest(position: hoverPosition, revision: hoverRevision, space: colorSpace)) {
-            guard let hoverPosition, let hoverSource else {
+            guard !mapping.color.monochrome, let hoverPosition, let hoverSource else {
                 hoveredPoint = nil
                 return
             }
@@ -246,7 +260,7 @@ struct VectorscopeView: View {
             } catch { hoveredPoint = nil }
         }
         .task(id: ScopeRequest(revision: source == nil ? nil : revision, mapping: mapping, zoom: magnification, space: colorSpace)) {
-            guard let source else { scope = nil; return }
+            guard !mapping.color.monochrome, let source else { scope = nil; return }
             do {
                 if worker == nil { worker = try GPUVectorscope() }
                 let result = try await worker!.render(source: source, mapping: mapping, space: colorSpace, zoom: magnification)

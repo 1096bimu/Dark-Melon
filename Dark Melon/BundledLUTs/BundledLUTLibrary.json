@@ -1,0 +1,42 @@
+[
+  {
+    "id": "C6483AB1-4DC8-4104-9060-339D282B3DFC",
+    "name": "Fuji_XTrans_III_Velvia",
+    "lutID": "EB91F695-0412-4CB9-803F-90EEEE262F4F"
+  },
+  {
+    "id": "CFEF641E-9C46-4A81-BEC7-5D4A1390AF99",
+    "name": "Fuji_XTrans_III_Acros",
+    "lutID": "3549F6E0-EC5C-445E-8D5C-3BBE9C7CCCB0"
+  },
+  {
+    "id": "E7C5F1EF-080F-4C4A-8390-46569BF5A882",
+    "name": "Fuji_XTrans_III_Classic_Chrome",
+    "lutID": "6C764890-5764-4B15-8FD3-5C55041E352E"
+  },
+  {
+    "id": "F6A2A813-13B6-452F-BD52-DDB4B12F6289",
+    "name": "Fuji_XTrans_III_Pro_Neg_Std",
+    "lutID": "D14F2B5F-F59B-4059-9FF6-C301D60F1D4B"
+  },
+  {
+    "id": "39D13439-484D-447D-BF69-13BFE2D1E810",
+    "name": "Leica_X2_VIVID_33_sRGB",
+    "lutID": "22DCDFCE-F317-4D7A-8C95-1BA9F825B88E"
+  },
+  {
+    "id": "0D052BDA-E821-4D42-BD7F-239AF82F014A",
+    "name": "Contax_ND_STD_33_sRGB",
+    "lutID": "09F09EBF-881D-45F8-AEA7-DBBEDC63D00C"
+  },
+  {
+    "id": "9D5FE81B-70F2-4B94-ABE2-5040A828ACF3",
+    "name": "FujiGFX50S_PROVIA_33_sRGB",
+    "lutID": "68A9AFA6-A342-4120-963E-98D4AED2A0CD"
+  },
+  {
+    "id": "4332DC9F-6D83-4B2E-9CCC-B20A5E2586EE",
+    "name": "Pentax_K5_Reversal_Film_33_sRGB",
+    "lutID": "4E8A0A99-CF25-4306-80BD-4ED6DB7EE648"
+  }
+]

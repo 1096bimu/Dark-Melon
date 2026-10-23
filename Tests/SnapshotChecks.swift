@@ -46,6 +46,26 @@ import Foundation
         old.removeValue(forKey: "snapshots")
         let migrated = try DevelopmentRecipe.decode(JSONSerialization.data(withJSONObject: old))
         assert(migrated.snapshots.isEmpty)
+        assert(decoded.snapshots[0].createdAt == recipe.snapshots[0].createdAt)
+        var legacy = try JSONSerialization.jsonObject(with: recipe.encoded()) as! [String:Any]
+        var snapshots = legacy["snapshots"] as! [[String:Any]]
+        snapshots[0].removeValue(forKey: "createdAt")
+        legacy["snapshots"] = snapshots
+        let oldSnapshots = try DevelopmentRecipe.decode(JSONSerialization.data(withJSONObject:legacy))
+        assert(oldSnapshots.snapshots[0].createdAt == nil)
+        var pending = PendingEdits()
+        pending.remember(url:file,recipe:draft,baseline:saved,saved:saved)
+        let timestamp = pending.entry(for:file)!.modifiedAt
+        pending.remember(url:file,recipe:draft,baseline:saved,saved:saved)
+        assert(pending.entry(for:file)!.modifiedAt == timestamp)
+        var calendar = Calendar(identifier:.gregorian)
+        calendar.timeZone = TimeZone(identifier:"America/Toronto")!
+        let now = calendar.date(from:DateComponents(year:2026,month:10,day:23,hour:12))!
+        let yesterday = calendar.date(byAdding:.day,value:-1,to:now)!
+        assert(SnapshotTimestamp.label(for:yesterday,now:now,calendar:calendar) == yesterday.formatted(date:.abbreviated,time:.omitted))
+        assert(SnapshotTimestamp.label(for:now,now:now,calendar:calendar) == String(localized:"Just now"))
+        print(SnapshotTimestamp.label(for:now.addingTimeInterval(-600),now:now,calendar:calendar))
+        print(SnapshotTimestamp.label(for:now.addingTimeInterval(-7200),now:now,calendar:calendar))
         print("Snapshot switching/replacement undo-redo, recipe roundtrip, sidecar write, and old recipe defaults passed.")
     }
 }

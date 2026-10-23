@@ -76,13 +76,22 @@ nonisolated final class OKLabColorPipeline {
     }()
 
     func apply(_ image:CIImage,color:ColorAdjustments,vertices:[OKLabVertexAdjustment],space:ProcessingColorSpace,ceiling:Double,domainCeiling:Double) throws -> CIImage {
-        let hasWarp = !vertices.allSatisfy(\.isIdentity)
+        let effectiveVertices = color.monochrome ? vertices.map { vertex in
+            var result = vertex
+            result.chroma = 0
+            result.rotation = 0
+            result.hueOffset = 0
+            result.darkerHue = 0
+            result.lighterHue = 0
+            return result
+        } : vertices
+        let hasWarp = !effectiveVertices.allSatisfy(\.isIdentity)
         guard !color.isIdentity || hasWarp else { return image }
         if tintCache?.0 != color.splitTone || tintCache?.1 != space || tintCache?.2 != domainCeiling {
             tintCache=(color.splitTone,space,domainCeiling,SplitToneGradient.table(settings:color.splitTone,space:space,ceiling:domainCeiling))
         }
-        if fieldCache?.0 != vertices || fieldCache?.1 != space {
-            fieldCache=(vertices,space,OKLabVertexWarp.field(controls:vertices,space:space))
+        if fieldCache?.0 != effectiveVertices || fieldCache?.1 != space {
+            fieldCache=(effectiveVertices,space,OKLabVertexWarp.field(controls:effectiveVertices,space:space))
         }
         let table=tintCache!.3, field=fieldCache!.2
         let to=ScopeProjection.matrix(.sRGB).inverse * ScopeProjection.matrix(space), from=to.inverse

@@ -27,9 +27,20 @@ nonisolated struct OKLabVertexAdjustment: Codable, Equatable, Sendable {
 
 /// Compact hue-wedge deformation in OKLab. Neighboring hue faces bound influence.
 nonisolated final class OKLabVertexWarp {
-    static let vertices: [SIMD3<Double>] = [SIMD3(1,0,0),SIMD3(1,0.25,0),SIMD3(1,1,0),SIMD3(0,1,0),SIMD3(0,1,1),SIMD3(0,0,1),SIMD3(1,0,1)]
+    private static let vertices: [SIMD3<Double>] = [SIMD3(1,0,0),SIMD3(1,1,0),SIMD3(0,1,0),SIMD3(0,1,1),SIMD3(0,0,1),SIMD3(1,0,1)]
     static let count = 7
     static var defaults: [OKLabVertexAdjustment] { Array(repeating: OKLabVertexAdjustment(), count: count) }
+    /// Monochrome is destructive for node color edits; Density is retained.
+    static func setMonochrome(_ enabled: Bool, controls: inout [OKLabVertexAdjustment]) {
+        for i in controls.indices {
+            controls[i].chroma = enabled ? 0 : 1
+            controls[i].rotation = 0
+            controls[i].hueOffset = 0
+            controls[i].darkerHue = 0
+            controls[i].lighterHue = 0
+        }
+    }
+
     // Normalize old six-anchor edits at the recipe/library boundary.
     static func expanded(_ controls: [OKLabVertexAdjustment], space: ProcessingColorSpace) -> [OKLabVertexAdjustment] {
         guard controls.count == 6 else { return controls }
@@ -70,13 +81,15 @@ nonisolated final class OKLabVertexWarp {
         ProcessingColorSpace.allCases.map { space in
             let matrix=ScopeProjection.matrix(.sRGB).inverse * ScopeProjection.matrix(space)
             var previous = -Double.infinity
-            let hues=vertices.map { vertex -> Double in
+            var hues=vertices.map { vertex -> Double in
                 let value=lab(matrix * vertex)
                 var angle=atan2(value.z,value.y)
                 while angle < previous { angle += 2 * .pi }
                 previous=angle
                 return angle
             }
+            // Orange bisects the perceptual hue arc, independent of RGB primaries.
+            hues.insert((hues[0] + hues[1]) / 2, at: 1)
             return (space,hues)
         })
 

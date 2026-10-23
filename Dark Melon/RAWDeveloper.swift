@@ -61,9 +61,10 @@ actor RAWDeveloper {
     private let rawSettings: RAWSettings?
     private let rawWhiteBalance: RAWWhiteBalance?
 
-    init(colorSpace: ProcessingColorSpace = .sRGB, rawSettings: RAWSettings? = nil, rawWhiteBalance: RAWWhiteBalance? = nil) {
+    init(colorSpace: ProcessingColorSpace = .sRGB, rawSettings: RAWSettings? = nil, rawWhiteBalance: RAWWhiteBalance? = nil, lutStore: LUTStore = .shared) {
         self.rawSettings = rawSettings
         self.rawWhiteBalance = rawWhiteBalance
+        self.lutPipeline = LUTPipeline(store: lutStore)
         self.colorSpace = colorSpace
     }
     private lazy var context = CIContext(options: [
@@ -72,6 +73,7 @@ actor RAWDeveloper {
         .cacheIntermediates: false
     ])
 
+    private let lutPipeline: LUTPipeline
     private var filmGrain: FilmGrain?
     private lazy var halation = Halation()
     private lazy var vignette = Vignette()
@@ -173,12 +175,18 @@ actor RAWDeveloper {
         let sdr = try transformedPreview(fullSDR, mapping: mapping, hdr: false)
         let hdr = mapping.hdrEnabled ? try transformedPreview(fullHDR, mapping: mapping, hdr: true) : sdr
         try Task.checkCancellation()
-        return PreviewImages(source: source, sdr: sdr, hdr: hdr, fullSDR: fullSDR, fullHDR: fullHDR)
+        var overviewMapping = mapping
+        overviewMapping.transform = nil
+        let lutSDR = try transformedPreview(fullSDR, mapping: overviewMapping, hdr: false)
+        let lutHDR = mapping.hdrEnabled ? try transformedPreview(fullHDR, mapping: overviewMapping, hdr: true) : lutSDR
+        return PreviewImages(source: source, sdr: sdr, hdr: hdr, fullSDR: lutSDR, fullHDR: lutHDR)
     }
 
     private func transformedPreview(_ source: CGImage, mapping: ToneMapping, hdr: Bool) throws -> CGImage {
-        guard let transform = mapping.transform else { return source }
-        return try displayPreview(transform.apply(to: CIImage(cgImage: source)), hdr: hdr, headroom: mapping.hdrMax)
+        guard mapping.transform != nil || mapping.lutID != nil else { return source }
+        let input = CIImage(cgImage: source)
+        let transformed = try mapping.transform?.apply(to: input) ?? input
+        return try displayPreview(lutPipeline.apply(transformed, id: mapping.lutID), hdr: hdr, headroom: mapping.hdrMax)
     }
 
     func preview(_ source: CGImage, mapping: ToneMapping, hdr: Bool = true) throws -> CGImage {
@@ -245,7 +253,7 @@ actor RAWDeveloper {
 
     /// RGB white balance and monochrome conversion follow tone and spatial effects.
     private func applyWhiteBalance(_ image: CIImage, mapping: ToneMapping) throws -> CIImage {
-        let gains = mapping.blackAndWhite.isEnabled ? WhiteBalance() : mapping.whiteBalance
+        let gains = (mapping.blackAndWhite.isEnabled || mapping.color.monochrome) ? WhiteBalance() : mapping.whiteBalance
         var balanced = image.applyingFilter("CIColorMatrix", parameters: [
             "inputRVector": CIVector(x: gains.red, y: 0, z: 0, w: 0),
             "inputGVector": CIVector(x: 0, y: gains.green, z: 0, w: 0),
@@ -291,7 +299,8 @@ actor RAWDeveloper {
 
     func mappedImage(_ image: CIImage, mapping: ToneMapping, hdr: Bool) throws -> CIImage {
         let developed = try developedImage(image, mapping: mapping, hdr: hdr)
-        return try mapping.transform?.apply(to: developed) ?? developed
+        let transformed = try mapping.transform?.apply(to: developed) ?? developed
+        return try lutPipeline.apply(transformed, id: mapping.lutID)
     }
 
     private lazy var offsetKernel = CIColorKernel(source: """
@@ -314,7 +323,7 @@ actor RAWDeveloper {
         image = try vignette.apply(to: image, settings: mapping.vignette, transform: mapping.transform)
         if mapping.hdrEnabled && mapping.halation.inputCurve > 0 {
             image = try halation.apply(to: image, source: image, settings: mapping.halation,
-                                       hdrBrightness: mapping.hdrMax, ceiling: 0)
+                                       hdrBrightness: mapping.hdrMax, ceiling: 0, monochrome: mapping.color.monochrome)
         }
         if mapping.grain.strength > 0 {
             if filmGrain == nil { filmGrain = try FilmGrain() }

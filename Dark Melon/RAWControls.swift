@@ -47,21 +47,23 @@ nonisolated struct RAWSettings: Codable, Equatable, Sendable {
     var supported: Set<RAWAdjustment> = []
     var lensCorrection = false
     var supportsLensCorrection = false
+    /// Nil means a complete legacy recipe; a set describes sparse browser pastes.
+    var selectedSwitches: Set<String>? = nil
     var highlightRecovery = true
     var supportsHighlightRecovery = false
 
-    private enum CodingKeys: String, CodingKey { case values, lensCorrection, highlightRecovery }
+    private enum CodingKeys: String, CodingKey { case values, lensCorrection, highlightRecovery, selectedSwitches }
 
     static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.values == rhs.values && lhs.lensCorrection == rhs.lensCorrection && lhs.highlightRecovery == rhs.highlightRecovery
+        lhs.values == rhs.values && lhs.lensCorrection == rhs.lensCorrection && lhs.highlightRecovery == rhs.highlightRecovery && lhs.selectedSwitches == rhs.selectedSwitches
     }
 
     /// Capabilities always belong to the destination decoder, not the saved recipe.
     func resolved(using defaults: Self) -> Self {
         var result = defaults
         result.values.merge(values) { _, saved in saved }
-        result.lensCorrection = lensCorrection
-        result.highlightRecovery = highlightRecovery
+        if selectedSwitches == nil || selectedSwitches!.contains("lens") { result.lensCorrection = lensCorrection }
+        if selectedSwitches == nil || selectedSwitches!.contains("highlight") { result.highlightRecovery = highlightRecovery }
         return result
     }
 
@@ -80,8 +82,8 @@ nonisolated struct RAWSettings: Codable, Equatable, Sendable {
         for control in RAWAdjustment.allCases where control.supported(by: raw) {
             if let value = values[control] { raw[keyPath: control.amount] = value }
         }
-        if raw.isLensCorrectionSupported { raw.isLensCorrectionEnabled = lensCorrection }
-        if raw.isHighlightRecoverySupported { raw.isHighlightRecoveryEnabled = highlightRecovery }
+        if raw.isLensCorrectionSupported && (selectedSwitches == nil || selectedSwitches!.contains("lens")) { raw.isLensCorrectionEnabled = lensCorrection }
+        if raw.isHighlightRecoverySupported && (selectedSwitches == nil || selectedSwitches!.contains("highlight")) { raw.isHighlightRecoveryEnabled = highlightRecovery }
     }
 }
 

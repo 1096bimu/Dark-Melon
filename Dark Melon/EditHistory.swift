@@ -125,6 +125,7 @@ import AppKit
         if old.colorSpace != new.colorSpace { return String(localized: "Color space") }
         if old.rawSettings != new.rawSettings { return String(localized: "RAW") }
         let a = old.mapping, b = new.mapping
+        if a.lutID != b.lutID { return String(localized: "LUT") }
         if a.transform != b.transform { return String(localized: "Transform") }
         if a.whiteBalance != b.whiteBalance || a.rawWhiteBalance != b.rawWhiteBalance { return String(localized: "White Balance") }
         if a.color != b.color { return String(localized: "Color") }

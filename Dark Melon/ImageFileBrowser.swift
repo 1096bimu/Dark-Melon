@@ -23,15 +23,27 @@ nonisolated struct BrowserEntry: Identifiable, Sendable {
     var id: URL { url }
 }
 
+nonisolated enum BrowserFileFilter: String {
+    case all, raw, edited
+}
+
 @Observable
 @MainActor
 final class ImageBrowserModel {
     var root: URL?
     var directory: URL?
     var entries: [BrowserEntry] = []
-    var rawOnly = false
+    var filter = BrowserFileFilter.all
+    var pendingURLs: Set<URL> = []
     var visibleFiles: [BrowserEntry] {
-        entries.filter { !$0.isFolder && (!rawOnly || $0.isRAW) }
+        entries.filter {
+            guard !$0.isFolder else { return false }
+            switch filter {
+            case .all: return true
+            case .raw: return $0.isRAW
+            case .edited: return $0.hasSavedSettings || pendingURLs.contains($0.url.standardizedFileURL)
+            }
+        }
     }
     var batchFiles: [BrowserEntry] {
         let files = visibleFiles
@@ -142,6 +154,7 @@ struct ImageFileBrowser: View {
     var fileAction: ((BrowserFileAction, URL) -> Void)? = nil
     var multipleFileAction: ((BrowserFileAction, [URL]) -> Void)? = nil
     var hasPendingEdit: ((URL) -> Bool)? = nil
+    @State private var centeredOnOpen = false
     @State private var choosingFolder = false
     @State private var selectedFiles: Set<URL> = []
     @State private var selectionAnchor: URL?
@@ -191,8 +204,12 @@ struct ImageFileBrowser: View {
         // builders. Async listings must invalidate this view even when the first
         // layout happened while the directory was still empty.
         let entries = model.entries
+        let pendingURLs = Set(entries.filter { !$0.isFolder && (hasPendingEdit?($0.url) ?? false) }.map { $0.url.standardizedFileURL })
         let folders = selection == nil ? entries.filter(\.isFolder) : []
-        let files = selection == nil ? model.visibleFiles : model.batchFiles
+        let visible = model.filter == .edited
+            ? entries.filter { !$0.isFolder && ($0.hasSavedSettings || pendingURLs.contains($0.url.standardizedFileURL)) }
+            : model.visibleFiles
+        let files = selection == nil ? visible : visible.filter(\.hasSavedSettings) + visible.filter { !$0.hasSavedSettings }
         let folderCounts = model.folderCounts
         let listingRevision = model.listingRevision
         let returnFolder = model.returnFolder
@@ -269,6 +286,7 @@ struct ImageFileBrowser: View {
                                             }
 
                                     }
+                                    .id(entry.url.standardizedFileURL)
                                     .buttonStyle(.plain)
                                     .help(entry.url.lastPathComponent + (entry.hasSavedSettings ? " · " + String(localized: "Saved development settings") : ""))
                                     .accessibilityValue(entry.hasSavedSettings ? "Saved development settings" : "")
@@ -300,12 +318,22 @@ struct ImageFileBrowser: View {
                         .frame(maxWidth: .infinity)
                     }
                     .task(id: listingRevision) {
-                        guard let returnFolder,
-                              folders.contains(where: { $0.url.standardizedFileURL == returnFolder }) else { return }
+                        let current = selectedURL?.standardizedFileURL
+                        let target: URL?
+                        if !centeredOnOpen, let current,
+                           files.contains(where: { $0.url.standardizedFileURL == current }) {
+                            target = current
+                        } else if let returnFolder,
+                                  folders.contains(where: { $0.url.standardizedFileURL == returnFolder }) {
+                            target = returnFolder
+                        } else { target = nil }
+                        guard !model.loading else { return }
+                        centeredOnOpen = true
+                        guard let target else { return }
                         // Let the newly mounted lazy rows register their scroll IDs.
                         await Task.yield()
                         guard !Task.isCancelled else { return }
-                        proxy.scrollTo(returnFolder, anchor: .center)
+                        proxy.scrollTo(target, anchor: .center)
                     }
                 }
                 // Recreate the scroll layout when an async listing arrives after
@@ -315,7 +343,7 @@ struct ImageFileBrowser: View {
                 .overlay {
                     if model.loading { ProgressView() }
                     else if let error = model.error { Text(error).font(.caption).padding() }
-                    else if files.isEmpty && folders.isEmpty { Text(model.rawOnly ? "No RAW images" : "No images").foregroundStyle(.secondary) }
+                    else if files.isEmpty && folders.isEmpty { Text(model.filter == .raw ? "No RAW images" : model.filter == .edited ? "No edited images" : "No images").foregroundStyle(.secondary) }
                 }
             } else {
                 Spacer()
@@ -327,15 +355,16 @@ struct ImageFileBrowser: View {
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             HStack {
-                Picker("File filter", selection: Binding(get: { model.rawOnly }, set: { value in
-                    model.rawOnly = value
+                Picker("File filter", selection: Binding(get: { model.filter }, set: { value in
+                    model.filter = value
                     let visible = Set(model.visibleFiles.map(\.url))
                     selectedFiles.formIntersection(visible)
                     if let selection { selection.wrappedValue.formIntersection(visible) }
                     selectionAnchor = nil
                 })) {
-                    Text("ALL").tag(false)
-                    Text("RAW").tag(true)
+                    Text("ALL").tag(BrowserFileFilter.all)
+                    Text("RAW").tag(BrowserFileFilter.raw)
+                    Text("Edited").tag(BrowserFileFilter.edited)
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
@@ -346,6 +375,9 @@ struct ImageFileBrowser: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.bar)
+        .onChange(of: pendingURLs, initial: true) { _, urls in
+            model.pendingURLs = urls
+        }
         .onReceive(NotificationCenter.default.publisher(for: .developmentSettingsChanged)
             .receive(on: DispatchQueue.main)) { notification in
             if let url = notification.object as? URL { model.refreshSavedSettingsFlag(for: url) }

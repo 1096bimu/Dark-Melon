@@ -1,6 +1,7 @@
 import Foundation
 
 nonisolated struct ToneMapping: Codable, Equatable, Sendable {
+    var lutID: UUID? = nil
     var transform: TransformSettings? = nil
     var whiteBalance = WhiteBalance()
     var rawWhiteBalance: RAWWhiteBalance?

@@ -44,6 +44,7 @@ private actor HueChromaBoundary {
 
 struct HueChromaScope: View {
     @Binding var controls: [OKLabVertexAdjustment]
+    @Binding var monochrome: Bool
     @State private var selected: Int?
     let source: CGImage?
     let revision: UUID
@@ -61,6 +62,7 @@ struct HueChromaScope: View {
     @State private var boundary: [Double] = []
     @State private var error: String?
     private var scale: Double { cbrt(hdr ? max(1, headroom) : 1) }
+    private var showsTwister: Bool { showHueTwister && !monochrome }
     private var maximum: Double { OKLCHGamut.maxima[space]! * scale }
     private struct Request: Equatable {
         let revision: UUID
@@ -69,11 +71,13 @@ struct HueChromaScope: View {
         let hdr: Bool
         let hasSource: Bool
         let showHueTwister: Bool
+        let monochrome: Bool
     }
     private struct HoverRequest: Equatable {
         let position: CGPoint?
         let revision: UUID
         let hdr: Bool
+        let monochrome: Bool
         let space: ProcessingColorSpace
     }
     private func hoverPoint(lightness: Bool) -> CGPoint? {
@@ -81,19 +85,19 @@ struct HueChromaScope: View {
         let chroma=hypot(lab.y,lab.z)
         guard chroma>0.00001 else { return nil }
         let hue=atan2(lab.z,lab.y)/(2 * .pi)
-        return CGPoint(x:hue-floor(hue),y:1-(lightness ? lab.x/scale : chroma/maximum))
+        return CGPoint(x:hue-floor(hue),y:1-(lightness ? lab.x/(monochrome ? 1 : scale) : chroma/maximum))
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("OKLCH").fontWeight(.medium)
+                Text(monochrome ? "Source · OKLCH" : "OKLCH").fontWeight(.medium)
                 Spacer()
                 Text(hdr ? "HDR" : "SDR").foregroundStyle(.secondary)
             }
             HStack {
-                Text("Chroma")
+                Text(monochrome ? "Lightness" : "Chroma")
                 Spacer()
-                Text(maximum, format: .number.precision(.fractionLength(3)))
+                Text(monochrome ? 1 : maximum, format: .number.precision(.fractionLength(3)))
             }.font(.caption).foregroundStyle(.secondary)
             Canvas { context, size in
                 for (index, hue) in OKLabVertexWarp.vertexHues[space]!.enumerated().filter { $0.offset != 1 }.map(\.element).enumerated() {
@@ -124,10 +128,16 @@ struct HueChromaScope: View {
                         }
                         context.stroke(path, with: .color(color), style: EditorGraphStyle.guide)
                     }
-                    outline(scale, color: EditorGraphStyle.guideColor)
+                    if !monochrome { outline(scale, color: EditorGraphStyle.guideColor) }
+                    else {
+                        for value in [0.0,0.5,1.0] {
+                            context.draw(Text(value,format:.number.precision(.fractionLength(1))).font(.caption2).foregroundStyle(.secondary),
+                                at:CGPoint(x:12,y:max(8,min(size.height-8,(1-value)*size.height))))
+                        }
+                    }
                 }.allowsHitTesting(false)
-                ScopePixelMarker(position:hoverPoint(lightness:false))
-                MountainRangeHandles(controls:$controls,selected:$selected,space:space,maximumChroma:maximum,scale:scale,boundary:boundary)
+                ScopePixelMarker(position:hoverPoint(lightness:monochrome))
+                MountainRangeHandles(controls:$controls,selected:$selected,space:space,maximumChroma:maximum,scale:scale,boundary:boundary,movementEnabled:!monochrome,densityMode:monochrome)
             }.aspectRatio(1.6, contentMode: .fit)
             Canvas { context, size in
                 for i in 0..<180 {
@@ -148,11 +158,15 @@ struct HueChromaScope: View {
                 Text(hdr ? "HDR" : "SDR").foregroundStyle(.secondary)
             }.font(.caption)
             HStack {
-                Button("Monochrome") {
-                    for i in controls.indices { controls[i].chroma=0;controls[i].hueOffset=0;controls[i].rotation=0 }
-                }
+                Toggle("Monochrome", isOn: Binding(get: { monochrome }, set: { enabled in
+                    monochrome = enabled
+                    OKLabVertexWarp.setMonochrome(enabled, controls: &controls)
+                })).toggleStyle(.switch)
                 Spacer()
-                Button("Reset") { controls=OKLabVertexWarp.defaults }
+                Button("Reset") {
+                    controls = OKLabVertexWarp.defaults
+                    if monochrome { OKLabVertexWarp.setMonochrome(true, controls: &controls) }
+                }
             }
             if let i=selected {
                 HStack {
@@ -160,22 +174,31 @@ struct HueChromaScope: View {
                     Spacer()
                 }
                 HStack {
-                    Text("Chroma")
-                    AdjustmentField(title:"Chroma",value:$controls[i].chroma,range:0...2,unit:"×",width:52)
+                    if !monochrome {
+                        Text("Chroma")
+                        AdjustmentField(title:"Chroma",value:$controls[i].chroma,range:0...2,unit:"×",width:52)
+                    }
                     Spacer()
-                    Text("Lightness")
-                    AdjustmentField(title:"Lightness",value:$controls[i].lightness,range: -0.25...0.25,digits:3,width:52)
+                    Text("Density")
+                    AdjustmentField(title:"Density",value:$controls[i].lightness,range: -0.25...0.25,digits:3,width:52)
+                }
+                if !monochrome {
+                    Slider(value: $controls[i].lightness, in: -0.25...0.25) {
+                        Text("Density")
+                    }.labelsHidden()
                 }
             }
-            if showHueTwister {
+            if showsTwister {
                 Divider()
                 LightnessHueControls(controls:$controls,selected:$selected,space:space,texture:lightnessTexture,hover:hoverPoint(lightness:true),gradient:gradient)
             }
             if let error { Text(error).font(.caption).foregroundStyle(.secondary) }
         }
         .padding(12)
-        .help("Pixel density by OKLCH hue and chroma. Outlines show the selected gamut’s maximum chroma across all lightness values. Neutral pixels have no hue and are omitted.")
-        .task(id: HoverRequest(position:hoverPosition,revision:revision,hdr:hdr,space:space)) {
+        .help(monochrome
+            ? "Source pixel density by OKLCH hue and lightness. Drag color nodes vertically to adjust Density."
+            : "Pixel density by OKLCH hue and chroma. Outlines show the selected gamut’s maximum chroma across all lightness values. Neutral pixels have no hue and are omitted.")
+        .task(id: HoverRequest(position:hoverPosition,revision:revision,hdr:hdr,monochrome:monochrome,space:space)) {
             hoveredLab=nil
             guard let source,let hoverPosition else { return }
             do {
@@ -186,15 +209,15 @@ struct HueChromaScope: View {
             } catch {}
         }
         .task(id: space) { boundary = await HueChromaBoundary.shared.values(space) }
-        .task(id: Request(revision: revision, space: space, maximum: maximum, hdr: hdr, hasSource: source != nil, showHueTwister: showHueTwister)) {
+        .task(id: Request(revision: revision, space: space, maximum: maximum, hdr: hdr, hasSource: source != nil, showHueTwister: showsTwister, monochrome: monochrome)) {
             guard let source else { texture = nil; lightnessTexture = nil; return }
             do {
                 if worker == nil { worker = try GPUVectorscope() }
                 let result = try await worker!.render(source: source, mapping: ToneMapping(),
-                    space: space, zoom: -1/maximum, hueChroma: true)
+                    space: space, zoom: -1/maximum, hueChroma: true, lightnessScale: monochrome ? 1 : 0)
                 try Task.checkCancellation()
                 texture = result
-                if showHueTwister {
+                if showsTwister {
                     let lighter = try await worker!.render(source:source,mapping:ToneMapping(),
                         space:space,zoom:-1/maximum,hueChroma:true,lightnessScale:scale)
                     try Task.checkCancellation()

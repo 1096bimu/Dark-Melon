@@ -9,12 +9,15 @@ struct MountainRangeHandles: View {
     let scale: Double
     var lightnessMode = false
     var boundary: [Double] = []
+    var movementEnabled = true
+    var densityMode = false
     @State private var drag: DragStart?
     private struct DragStart {
         let index: Int
         let upper: Bool
         let hue: Double
         let chroma: Double
+        let lightness: Double
     }
     static let colors: [Color] = [.red,.orange,.yellow,.green,.cyan,.blue,.purple]
     static let names = ["Red","Orange","Yellow","Green","Cyan","Blue","Magenta"]
@@ -33,11 +36,12 @@ struct MountainRangeHandles: View {
         return boundary[index]*(1-fraction)+boundary[(index+1)%boundary.count]*fraction
     }
     private func point(_ i: Int, upper: Bool, size: CGSize) -> CGPoint {
-        let angle=hue(i,upper:upper)
+        let angle=movementEnabled ? hue(i,upper:upper) : slices[i].hue
         let wrapped=angle-floor(angle/(2 * .pi))*2 * .pi
         let y: Double
-        if lightnessMode { y=1-(upper ? slices[i].upper:slices[i].lower) }
-        else { y=1-ceiling(angle)*controls[i].chroma/2*scale/maximumChroma }
+        if densityMode { y=0.5-controls[i].lightness*2 }
+        else if lightnessMode { y=1-(upper ? slices[i].upper:slices[i].lower) }
+        else { y=1-ceiling(angle)*(movementEnabled ? controls[i].chroma : 0)/2*scale/maximumChroma }
         return CGPoint(x:wrapped/(2 * .pi)*size.width,y:min(1,max(0,y))*size.height)
     }
     var body: some View {
@@ -56,10 +60,16 @@ struct MountainRangeHandles: View {
                                     .gesture(DragGesture(minimumDistance:0)
                                         .onChanged { value in
                                             selected=i
+                                            guard movementEnabled || densityMode else { return }
                                             if drag == nil {
-                                                drag=DragStart(index:i,upper:upper,hue:hue(i,upper:upper),chroma:controls[i].chroma)
+                                                drag=DragStart(index:i,upper:upper,hue:hue(i,upper:upper),chroma:controls[i].chroma,lightness:controls[i].lightness)
                                             }
                                             guard let start=drag,start.index==i,start.upper==upper else { return }
+                                            if densityMode {
+                                                let offset=start.lightness-value.translation.height/max(1,size.height)*0.5
+                                                controls[i].lightness=offset.clamped(to: -0.25...0.25)
+                                                return
+                                            }
                                             let target=start.hue+value.translation.width/max(1,size.width)*2 * .pi
                                             if lightnessMode {
                                                 let offset=(target-slices[i].hue-base(i)).clamped(to: -Double.pi...Double.pi)

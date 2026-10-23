@@ -7,6 +7,8 @@ import simd
     static func main() throws {
         let pipeline=OKLabColorPipeline()
         for space in ProcessingColorSpace.allCases {
+            let hues = OKLabVertexWarp.vertexHues[space]!
+            assert(abs(hues[1] - (hues[0] + hues[2]) / 2) < 1e-12)
             let original=OKLabVertexWarp.field(controls:OKLabVertexWarp.defaults,space:space)
             assert(original.adjustments.count==7 && original.hues.count==7)
             var controls=OKLabVertexWarp.defaults

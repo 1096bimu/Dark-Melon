@@ -5,41 +5,162 @@ import AppKit
 import UIKit
 #endif
 
-nonisolated struct SettingsPasteSelection: Codable, Sendable {
+nonisolated enum PasteItem: String, CaseIterable, Codable, Sendable, Identifiable {
+    case tone, contrast, whitePoint, hdrGain, hdrRolloff, rgbWhiteBalance, rawWhiteBalance
+    case chromaCurve, lightnessChromaCurve, vertices, hueTwister, splitTone
+    case dyeResponse, clarity, hdf, grain, halation, vignette
+    case transform, lut
+    case exposure, shadowBias, offset, luminanceNoise, colorNoise, sharpness, detail, edgeContrast, moire, lensCorrection, highlightRecovery
+    var id: Self { self }
+    var title: String {
+        switch self {
+        case .tone: "Tone"
+        case .contrast: "Contrast"
+        case .whitePoint: "White Point"
+        case .hdrGain: "HDR Gain"
+        case .hdrRolloff: "HDR Rolloff"
+        case .rgbWhiteBalance: "RGB White Balance"
+        case .rawWhiteBalance: "RAW Kelvin White Balance"
+        case .chromaCurve: "Chroma → Chroma"
+        case .lightnessChromaCurve: "Lightness → Chroma"
+        case .vertices: "Color Nodes"
+        case .hueTwister: "HUE Twister"
+        case .splitTone: "Split Tone"
+        case .dyeResponse: "Dye Response"
+        case .clarity: "Clarity"
+        case .hdf: "HDF"
+        case .grain: "Film Grain"
+        case .halation: "Halation"
+        case .vignette: "Vignette"
+        case .transform: "Transform"
+        case .lut: "LUT"
+        case .exposure: "Exposure"
+        case .shadowBias: "Shadow Bias"
+        case .offset: "Offset"
+        case .luminanceNoise: "Luminance Noise Reduction"
+        case .colorNoise: "Color Noise Reduction"
+        case .sharpness: "Sharpness"
+        case .detail: "Detail"
+        case .edgeContrast: "Local Edge Contrast"
+        case .moire: "Moiré Reduction"
+        case .lensCorrection: "Lens Correction"
+        case .highlightRecovery: "Highlight Recovery"
+        }
+    }
+    var rawAdjustment: RAWAdjustment? {
+        switch self {
+        case .exposure: .exposure
+        case .shadowBias: .shadowBias
+        case .luminanceNoise: .luminance
+        case .colorNoise: .color
+        case .sharpness: .sharpness
+        case .detail: .detail
+        case .edgeContrast: .contrast
+        case .moire: .moire
+        default: nil
+        }
+    }
+    static let toneItems: [Self] = [.tone,.contrast,.whitePoint,.hdrGain,.hdrRolloff]
+    static let balanceItems: [Self] = [.rgbWhiteBalance,.rawWhiteBalance]
+    static let colorItems: [Self] = [.chromaCurve,.lightnessChromaCurve,.vertices,.hueTwister,.splitTone]
+    static let effectItems: [Self] = [.dyeResponse,.clarity,.hdf,.grain,.halation,.vignette]
+    static let rawItems: [Self] = [.exposure,.shadowBias,.offset,.luminanceNoise,.colorNoise,.sharpness,.detail,.edgeContrast,.moire,.lensCorrection,.highlightRecovery]
+}
+
+/// Legacy group flags keep existing Library entries and internal reset callers compatible.
+/// New selections store independent leaves.
+nonisolated struct SettingsPasteSelection: Codable, Sendable, Equatable {
     var tone = true
     var whiteBalance = true
     var color = true
     var effects = true
     var raw = true
-    var isEmpty: Bool { !tone && !whiteBalance && !color && !effects && !raw }
+    var items: Set<PasteItem>? = nil
+
+    func contains(_ item: PasteItem) -> Bool {
+        if let items { return items.contains(item) }
+        if PasteItem.toneItems.contains(item) { return tone }
+        if PasteItem.balanceItems.contains(item) { return whiteBalance }
+        if PasteItem.colorItems.contains(item) { return color }
+        if PasteItem.effectItems.contains(item) { return effects }
+        if PasteItem.rawItems.contains(item) { return raw }
+        return false // Transform was not included in legacy selections.
+    }
+    var selectedItems: Set<PasteItem> { Set(PasteItem.allCases.filter(contains)) }
+    var isEmpty: Bool { selectedItems.isEmpty }
+    mutating func set(_ item: PasteItem, enabled: Bool) {
+        var selected = selectedItems
+        if enabled { selected.insert(item) } else { selected.remove(item) }
+        items = selected
+    }
 
     func applying(_ source: ToneMapping, to destination: ToneMapping) -> ToneMapping {
         var result = destination
-        if raw { result.offset = source.offset }
-        if tone {
-            result.white = source.white
-            result.tonePosition = source.tonePosition
-            result.concentration = source.concentration
-            result.hdrTarget = source.hdrTarget
-            result.hdrGain = source.hdrGain
-            result.hdrRolloff = source.hdrRolloff
+        if contains(.offset) { result.offset = source.offset }
+        if contains(.whitePoint) { result.white = source.white }
+        if contains(.tone) { result.tonePosition = source.tonePosition }
+        if contains(.contrast) { result.concentration = source.concentration }
+        result.tonePosition = min(result.white, result.tonePosition)
+        if contains(.tone) || contains(.contrast) || contains(.whitePoint) { result.setAutomaticHDRTarget() }
+        if contains(.hdrGain) { result.hdrGain = source.hdrGain }
+        if contains(.hdrRolloff) { result.hdrRolloff = source.hdrRolloff }
+        if contains(.rgbWhiteBalance) { result.whiteBalance = source.whiteBalance }
+        if contains(.rawWhiteBalance), destination.rawWhiteBalance != nil, let balance = source.rawWhiteBalance {
+            result.rawWhiteBalance = balance
         }
-        if whiteBalance {
-            result.whiteBalance = source.whiteBalance
-            if let rawBalance = source.rawWhiteBalance, destination.rawWhiteBalance != nil {
-                result.rawWhiteBalance = rawBalance
+        if contains(.chromaCurve) {
+            result.color.saturationStart = source.color.saturationStart
+            result.color.saturationMid = source.color.saturationMid
+            result.color.saturationEnd = source.color.saturationEnd
+            result.color.saturationHDR = source.color.saturationHDR
+        }
+        if contains(.lightnessChromaCurve) {
+            result.color.luminanceSaturationStart = source.color.luminanceSaturationStart
+            result.color.luminanceSaturationMid = source.color.luminanceSaturationMid
+            result.color.luminanceSaturationEnd = source.color.luminanceSaturationEnd
+            result.color.luminanceSaturationHDR = source.color.luminanceSaturationHDR
+        }
+        for i in result.vertexWarp.indices {
+            if contains(.vertices) {
+                result.vertexWarp[i].chroma = source.vertexWarp[i].chroma
+                result.vertexWarp[i].lightness = source.vertexWarp[i].lightness
+                result.vertexWarp[i].rotation = source.vertexWarp[i].rotation
+                result.vertexWarp[i].hueOffset = source.vertexWarp[i].hueOffset
+            }
+            if contains(.hueTwister) {
+                result.vertexWarp[i].darkerHue = source.vertexWarp[i].darkerHue
+                result.vertexWarp[i].lighterHue = source.vertexWarp[i].lighterHue
             }
         }
-        if color { result.color = source.color; result.vertexWarp = source.vertexWarp; result.hls = source.hls; result.blackAndWhite = source.blackAndWhite }
-        if effects {
-            result.channelContrast = source.channelContrast
-            result.clarity = source.clarity
-            result.clarityRadius = source.clarityRadius
-            result.hdf = source.hdf
-            result.hdfRadius = source.hdfRadius
-            result.grain = source.grain
-            result.halation = source.halation
-            result.vignette = source.vignette
+        if contains(.vertices) { result.color.monochrome = source.color.monochrome; result.hls = source.hls; result.blackAndWhite = source.blackAndWhite }
+        if contains(.splitTone) { result.color.splitTone = source.color.splitTone }
+        if contains(.dyeResponse) { result.channelContrast = source.channelContrast }
+        if contains(.clarity) { result.clarity = source.clarity; result.clarityRadius = source.clarityRadius }
+        if contains(.hdf) { result.hdf = source.hdf; result.hdfRadius = source.hdfRadius }
+        if contains(.grain) { result.grain = source.grain }
+        if contains(.halation) { result.halation = source.halation }
+        if contains(.vignette) { result.vignette = source.vignette }
+        if contains(.transform) { result.transform = source.transform }
+        if contains(.lut) { result.lutID = source.lutID }
+        return result
+    }
+
+    func applyingRAW(_ source: RAWSettings?, to destination: RAWSettings?) -> RAWSettings? {
+        guard let source else { return destination }
+        let decoderItems = PasteItem.rawItems.filter { $0 != .offset && contains($0) }
+        guard !decoderItems.isEmpty else { return destination }
+        var result = destination ?? RAWSettings()
+        if destination == nil { result.selectedSwitches = [] }
+        for item in PasteItem.rawItems where contains(item) {
+            if let control = item.rawAdjustment, let value = source.values[control] { result.values[control] = value }
+        }
+        if contains(.lensCorrection), source.selectedSwitches == nil || source.selectedSwitches!.contains("lens") {
+            result.lensCorrection = source.lensCorrection
+            result.selectedSwitches?.insert("lens")
+        }
+        if contains(.highlightRecovery), source.selectedSwitches == nil || source.selectedSwitches!.contains("highlight") {
+            result.highlightRecovery = source.highlightRecovery
+            result.selectedSwitches?.insert("highlight")
         }
         return result
     }
@@ -96,25 +217,58 @@ struct SettingsPasteOptions: View {
     var title: LocalizedStringKey = "Paste Settings"
     var actionTitle: LocalizedStringKey = "Paste"
     @Environment(\.dismiss) private var dismiss
-    @AppStorage("pasteSettings.tone") private var tone = true
-    @AppStorage("pasteSettings.whiteBalance") private var whiteBalance = true
-    @AppStorage("pasteSettings.color") private var color = true
-    @AppStorage("pasteSettings.effects") private var effects = true
-    @AppStorage("pasteSettings.raw") private var raw = true
-    private var selection: SettingsPasteSelection {
-        SettingsPasteSelection(tone: tone, whiteBalance: whiteBalance, color: color, effects: effects, raw: raw)
+    @State private var selection: SettingsPasteSelection = {
+        let defaults = UserDefaults.standard
+        if let data = defaults.data(forKey: "pasteSettings.selection"),
+           let saved = try? JSONDecoder().decode(SettingsPasteSelection.self, from: data) { return saved }
+        func old(_ key: String) -> Bool { defaults.object(forKey: key) as? Bool ?? true }
+        return SettingsPasteSelection(tone: old("pasteSettings.tone"),
+            whiteBalance: old("pasteSettings.whiteBalance"), color: old("pasteSettings.color"),
+            effects: old("pasteSettings.effects"), raw: old("pasteSettings.raw"))
+    }()
+    @State private var expanded: Set<String> = ["Tone","Color","Effects","Transform","RAW"]
+    private struct Choice {
+        let item: PasteItem
+        var enabled: Bool
+    }
+    private func choices(_ items: [PasteItem]) -> Binding<[Choice]> {
+        Binding(get: { items.map { Choice(item: $0, enabled: selection.contains($0)) } },
+                set: { values in for value in values { selection.set(value.item, enabled: value.enabled) } })
+    }
+    private func tree(_ title: String, items: [PasteItem]) -> some View {
+        DisclosureGroup(isExpanded: Binding(get: { expanded.contains(title) }, set: {
+            if $0 { expanded.insert(title) } else { expanded.remove(title) }
+        })) {
+            ForEach(items) { item in
+                Toggle(LocalizedStringKey(item.title), isOn: Binding(
+                    get: { selection.contains(item) }, set: { selection.set(item, enabled: $0) }))
+                    .padding(.leading, 8)
+            }
+        } label: {
+            Toggle(LocalizedStringKey(title), sources: choices(items), isOn: \.enabled)
+                .fontWeight(.medium)
+        }
     }
 
     var body: some View {
         NavigationStack {
             Form {
-                Toggle("Tone", isOn: $tone)
-                Toggle("White Balance", isOn: $whiteBalance)
-                Toggle("Color", isOn: $color)
-                Toggle("Effects", isOn: $effects)
-                Toggle("RAW", isOn: $raw)
+                tree("Tone", items: PasteItem.toneItems + PasteItem.balanceItems)
+                tree("Color", items: PasteItem.colorItems)
+                tree("Effects", items: PasteItem.effectItems)
+                tree("Transform", items: [.transform])
+                tree("RAW", items: PasteItem.rawItems)
+                tree("LUT", items: [.lut])
             }
             .formStyle(.grouped)
+            #if os(macOS)
+            .toggleStyle(.checkbox)
+            #endif
+            .onChange(of: selection) { _, value in
+                if let data = try? JSONEncoder().encode(value) {
+                    UserDefaults.standard.set(data, forKey: "pasteSettings.selection")
+                }
+            }
             .navigationTitle(title)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -127,7 +281,7 @@ struct SettingsPasteOptions: View {
             }
         }
         #if os(macOS)
-        .frame(width: 340, height: 360)
+        .frame(width: 420, height: 620)
         #endif
     }
 }

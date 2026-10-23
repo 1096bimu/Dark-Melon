@@ -1,6 +1,7 @@
 import Foundation
 
 nonisolated struct ColorAdjustments: Codable, Equatable, Sendable {
+    var monochrome = false
     var saturationStart = 1.0
     var saturationEnd = 1.0
     var saturationMid = 1.0
@@ -11,13 +12,14 @@ nonisolated struct ColorAdjustments: Codable, Equatable, Sendable {
     var luminanceSaturationHDR = 1.0
     var isLuminanceSaturationIdentity: Bool { luminanceSaturationStart == 1 && luminanceSaturationEnd == 1 && luminanceSaturationMid == 1 && luminanceSaturationHDR == 1 }
     var splitTone = SplitToneSettings()
-    var isIdentity: Bool { saturationStart == 1 && saturationEnd == 1 && saturationMid == 1 && saturationHDR == 1 && isLuminanceSaturationIdentity && splitTone.isIdentity }
+    var isIdentity: Bool { !monochrome && saturationStart == 1 && saturationEnd == 1 && saturationMid == 1 && saturationHDR == 1 && isLuminanceSaturationIdentity && splitTone.isIdentity }
     init() {}
     private enum CodingKeys: String, CodingKey {
-        case saturationStart, saturationEnd, saturationMid, saturationHDR, luminanceSaturationStart, luminanceSaturationEnd, luminanceSaturationMid, luminanceSaturationHDR, splitTone
+        case monochrome, saturationStart, saturationEnd, saturationMid, saturationHDR, luminanceSaturationStart, luminanceSaturationEnd, luminanceSaturationMid, luminanceSaturationHDR, splitTone
     }
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
+        monochrome = try values.decodeIfPresent(Bool.self, forKey: .monochrome) ?? false
         saturationStart = try values.decodeIfPresent(Double.self, forKey: .saturationStart) ?? 1
         saturationEnd = try values.decodeIfPresent(Double.self, forKey: .saturationEnd) ?? 1
         saturationMid = try values.decodeIfPresent(Double.self, forKey: .saturationMid) ?? 1

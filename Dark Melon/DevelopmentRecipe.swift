@@ -8,6 +8,7 @@ nonisolated struct DevelopmentRecipe: Codable, Equatable, Sendable {
     var mapping: ToneMapping
     var rawSettings: RAWSettings? = nil
     var snapshots: [NamedSnapshot] = []
+    var draftSnapshot: DraftSnapshot? = nil
 
     func encoded() throws -> Data {
         let encoder = JSONEncoder()
@@ -21,6 +22,7 @@ nonisolated struct DevelopmentRecipe: Codable, Equatable, Sendable {
               let version = document["version"] as? Int, version == 1 else {
             throw RecipeError.unsupported
         }
+        let draftSnapshot = document.removeValue(forKey: "draftSnapshot") as? [String: Any]
         let snapshots = document.removeValue(forKey: "snapshots") as? [[String: Any]] ?? []
         // Old HDR Gain was an endpoint, not a multiplier. Keep that endpoint
         // and use neutral gain; preserve the old Off state.
@@ -95,6 +97,12 @@ nonisolated struct DevelopmentRecipe: Codable, Equatable, Sendable {
         }
         var result = try JSONDecoder().decode(Self.self, from: JSONSerialization.data(withJSONObject: merged(defaults, document)))
         result.mapping.vertexWarp = OKLabVertexWarp.expanded(result.mapping.vertexWarp, space: result.colorSpace)
+        // The former Monochrome button zeroed every node; expose that as On.
+        let storedColor = (document["mapping"] as? [String: Any])?["color"] as? [String: Any]
+        if storedColor?["monochrome"] == nil,
+           result.mapping.vertexWarp.allSatisfy({ $0.chroma == 0 }) {
+            result.mapping.color.monochrome = true
+        }
         try result.validate()
         result.snapshots = try snapshots.map { item in
             guard let idString = item["id"] as? String, let id = UUID(uuidString: idString),
@@ -103,9 +111,23 @@ nonisolated struct DevelopmentRecipe: Codable, Equatable, Sendable {
             edit["version"] = 1
             edit.removeValue(forKey: "snapshots")
             let validated = try Self.decode(JSONSerialization.data(withJSONObject: edit))
-            return NamedSnapshot(id: id, name: name, edit: SnapshotEdit(validated))
+            let timestamp = item["createdAt"] as? Double
+            guard timestamp?.isFinite != false else { throw RecipeError.unsupported }
+            return NamedSnapshot(id: id, name: name, edit: SnapshotEdit(validated),
+                createdAt: timestamp.map { Date(timeIntervalSinceReferenceDate: $0) })
         }
         guard Set(result.snapshots.map(\.id)).count == result.snapshots.count else { throw RecipeError.unsupported }
+        if let draftSnapshot {
+            guard var edit = draftSnapshot["edit"] as? [String: Any] else { throw RecipeError.unsupported }
+            edit["version"] = 1
+            edit.removeValue(forKey: "snapshots")
+            edit.removeValue(forKey: "draftSnapshot")
+            let validated = try Self.decode(JSONSerialization.data(withJSONObject: edit))
+            let timestamp = draftSnapshot["modifiedAt"] as? Double
+            guard timestamp?.isFinite != false else { throw RecipeError.unsupported }
+            result.draftSnapshot = DraftSnapshot(edit: SnapshotEdit(validated),
+                modifiedAt: timestamp.map { Date(timeIntervalSinceReferenceDate: $0) })
+        }
         result.mapping.offset = result.mapping.offset.clamped(to: -0.02...0.02)
         // Preserve older recipes while bringing their multiplier into the current range.
         result.mapping.hdrGain = result.mapping.hdrGain == 0 ? 0 : min(5, max(1, result.mapping.hdrGain))

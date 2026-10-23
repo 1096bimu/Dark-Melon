@@ -10,6 +10,7 @@ struct EffectsControls: View {
     @Binding var halation: HalationSettings
     @Binding var vignette: VignetteSettings
     let hdrEnabled: Bool
+    var monochrome = false
     @Binding var comparing: Bool
 
     var body: some View {
@@ -30,9 +31,10 @@ struct EffectsControls: View {
                         channelContrast[channel] = $0
                     })
                     HStack {
-                        Text(LocalizedStringKey(name))
+                        Image(systemName: "circle.lefthalf.striped.horizontal")
                             .foregroundStyle([Color.red, .green, .blue][channel])
-                            .frame(width: 44, alignment: .leading)
+                            .frame(width: 22)
+                            .accessibilityHidden(true)
                         Slider(value: value, in: -0.2...0.2)
                             .accessibilityLabel(Text(LocalizedStringKey(name)))
                         AdjustmentField(title: LocalizedStringKey(name), value: value, range: -0.2...0.2,
@@ -113,12 +115,14 @@ struct EffectsControls: View {
                     Image(systemName: "circle.dashed")
                     Slider(value: $halation.radius, in: 0.5...3) { Text("Halation radius") }.labelsHidden()
                 }
+                Group {
                 HStack {
                     Text("Transmission")
                     AdjustmentField(title: "Transmission", value: $halation.transmission, range: 0...0.5, digits: 2, scale: 1, unit: "")
 
                 }
                 Slider(value: $halation.transmission, in: 0...0.5) { Text("Transmission") }.labelsHidden()
+                }.disabled(monochrome)
             }
             .disabled(!hdrEnabled)
             if !hdrEnabled {

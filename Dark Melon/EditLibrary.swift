@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct LibraryEntry: Identifiable, Codable {
     var id = UUID()
@@ -6,13 +7,15 @@ struct LibraryEntry: Identifiable, Codable {
     var name: String
     var recipe: DevelopmentRecipe?
     var selection: SettingsPasteSelection?
-    var isFolder: Bool { recipe == nil }
+    var lutID: UUID? = nil
+    var isFolder: Bool { recipe == nil && lutID == nil }
 }
 
 @MainActor @Observable final class EditLibrary {
     static let shared = EditLibrary()
     private(set) var entries: [LibraryEntry] = []
     var error: String?
+    var importingLUT = false
     private let url: URL
     private var readable = true
     init(url: URL? = nil) {
@@ -20,19 +23,43 @@ struct LibraryEntry: Identifiable, Codable {
             .appendingPathComponent("Dark Melon/EditLibrary.json")
         do {
             if FileManager.default.fileExists(atPath: self.url.path) {
-                entries = try JSONDecoder().decode([LibraryEntry].self, from: Data(contentsOf: self.url))
-                for i in entries.indices {
-                    if var recipe = entries[i].recipe {
-                        recipe.mapping.vertexWarp = OKLabVertexWarp.expanded(recipe.mapping.vertexWarp, space: recipe.colorSpace)
-                        entries[i].recipe = recipe
-                    }
-                }
+                entries = try Self.decode(Data(contentsOf: self.url))
+            } else if url == nil, let bundled = Bundle.main.url(forResource: "BundledLUTLibrary", withExtension: "json", subdirectory: "BundledLUTs")
+                ?? Bundle.main.url(forResource: "BundledLUTLibrary", withExtension: "json") {
+                entries = try Self.decode(Data(contentsOf: bundled))
+                save(entries)
             }
         } catch { readable = false; self.error = error.localizedDescription }
     }
+    /// Library recipes use the same additive-field migrations as image sidecars.
+    private static func decode(_ data: Data) throws -> [LibraryEntry] {
+        guard var items = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+            throw CocoaError(.fileReadCorruptFile)
+        }
+        let defaults = try JSONSerialization.jsonObject(with: JSONEncoder().encode(SettingsPasteSelection())) as! [String: Any]
+        for i in items.indices {
+            if let document = items[i]["recipe"] as? [String: Any] {
+                let recipe = try DevelopmentRecipe.decode(JSONSerialization.data(withJSONObject: document))
+                items[i]["recipe"] = try JSONSerialization.jsonObject(with: recipe.encoded())
+            }
+            if let selection = items[i]["selection"] as? [String: Any] {
+                items[i]["selection"] = defaults.merging(selection) { _, saved in saved }
+            }
+        }
+        return try JSONDecoder().decode([LibraryEntry].self, from: JSONSerialization.data(withJSONObject: items))
+    }
+
     private func save(_ updated: [LibraryEntry]) {
-        guard readable else { return }
         do {
+            if !readable {
+                // Never replace an unreadable library until its original bytes are safe.
+                let backup = url.deletingPathExtension().appendingPathExtension("backup-\(UUID().uuidString).json")
+                if FileManager.default.fileExists(atPath: url.path) {
+                    try FileManager.default.copyItem(at: url, to: backup)
+                }
+                readable = true
+                error = String(localized: "The unreadable library was backed up. A new library has been created.")
+            }
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
             try JSONEncoder().encode(updated).write(to: url, options: .atomic)
             entries = updated
@@ -43,11 +70,27 @@ struct LibraryEntry: Identifiable, Codable {
     }
     func addEdit(_ name: String, parent: UUID?, recipe: DevelopmentRecipe, selection: SettingsPasteSelection) {
         var mapping = selection.applying(recipe.mapping, to: ToneMapping())
-        if selection.whiteBalance { mapping.rawWhiteBalance = recipe.mapping.rawWhiteBalance }
+        if selection.contains(.rawWhiteBalance) { mapping.rawWhiteBalance = recipe.mapping.rawWhiteBalance }
         let selected = DevelopmentRecipe(colorSpace: recipe.colorSpace, mapping: mapping,
-            rawSettings: selection.raw ? recipe.rawSettings : nil)
+            rawSettings: PasteItem.rawItems.contains(where: selection.contains) ? recipe.rawSettings : nil)
         save(entries + [LibraryEntry(parent: parent, name: name, recipe: selected, selection: selection)])
     }
+    func addLUT(_ source: URL, parent: UUID?) async {
+        guard !importingLUT else { return }
+        importingLUT = true
+        error = nil
+        defer { importingLUT = false }
+        do {
+            let id = try await Task.detached(priority: .userInitiated) {
+                try LUTStore.shared.importFile(source)
+            }.value
+            let destination = parent.flatMap { id in entries.contains(where: { $0.id == id && $0.isFolder }) ? id : nil }
+            let item = LibraryEntry(parent: destination, name: source.deletingPathExtension().lastPathComponent, lutID: id)
+            save(entries + [item])
+            if !entries.contains(where: { $0.id == item.id }) { LUTStore.shared.remove(id) }
+        } catch { self.error = error.localizedDescription }
+    }
+
     func move(_ id: UUID, to parent: UUID?) {
         guard let index = entries.firstIndex(where: { $0.id == id }), !entries[index].isFolder else { return }
         var updated = entries; updated[index].parent = parent; save(updated)
@@ -59,7 +102,9 @@ struct LibraryEntry: Identifiable, Codable {
             count = removed.count
             for entry in entries where entry.parent.map(removed.contains) == true { removed.insert(entry.id) }
         }
+        let luts = entries.filter { removed.contains($0.id) }.compactMap(\.lutID)
         save(entries.filter { !removed.contains($0.id) })
+        for id in luts where !entries.contains(where: { $0.lutID == id }) { LUTStore.shared.remove(id) }
     }
 }
 
@@ -69,13 +114,15 @@ struct EditLibraryView: View {
     @State private var snapshot: DevelopmentRecipe?
     @State private var selection: SettingsPasteSelection?
     @State private var choosingParts = false
+    @State private var choosingLUT = false
     @State private var namingFolder = false
     @State private var namingEdit = false
     @State private var deleting: LibraryEntry?
     @State private var name = ""
     let current: DevelopmentRecipe?
+    @Binding var selectedLUT: UUID?
     let filename: String
-    let apply: (DevelopmentRecipe, SettingsPasteSelection) -> Void
+    let apply: (String, DevelopmentRecipe, SettingsPasteSelection) -> Void
 
     private var children: [LibraryEntry] {
         library.entries.filter { $0.parent == folder }.sorted {
@@ -96,25 +143,30 @@ struct EditLibraryView: View {
                 Spacer()
                 Menu {
                     Button("Add Folder", systemImage: "folder.badge.plus") { name = ""; namingFolder = true }
-                    Button("Add Edit", systemImage: "plus") {
+                    Button("Add Current Edit", systemImage: "slider.horizontal.3") {
                         snapshot = current; selection = nil; choosingParts = true
                     }.disabled(current == nil)
+                    Button("Add LUT…", systemImage: "cube") { choosingLUT = true }
                 } label: { Label("Add", systemImage: "plus") }
-                .menuStyle(.borderlessButton).fixedSize()
+                .disabled(library.importingLUT)
+                .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
             }.padding(12)
             List {
                 ForEach(children) { entry in
                     Button {
                         if entry.isFolder { folder = entry.id }
-                        else if let recipe = entry.recipe, let parts = entry.selection { apply(recipe, parts) }
+                        else if let id = entry.lutID { selectedLUT = selectedLUT == id ? nil : id }
+                        else if let recipe = entry.recipe, let parts = entry.selection { apply(entry.name, recipe, parts) }
                     } label: {
                         HStack {
-                            Label(entry.name, systemImage: entry.isFolder ? "folder" : "slider.horizontal.3")
+                            Label(entry.name, systemImage: entry.isFolder ? "folder" : entry.lutID != nil ? "cube" : "slider.horizontal.3")
                             Spacer()
                             if entry.isFolder { Image(systemName: "chevron.right").foregroundStyle(.secondary) }
+                            else if let id = entry.lutID, id == selectedLUT { Image(systemName: "checkmark") }
                         }.contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .listRowBackground(entry.lutID != nil && entry.lutID == selectedLUT ? Color.accentColor.opacity(0.2) : Color.clear)
                     .disabled(!entry.isFolder && current == nil)
                     .contextMenu {
                         if !entry.isFolder {
@@ -130,6 +182,12 @@ struct EditLibraryView: View {
                 }
             }.listStyle(.sidebar)
             if let error = library.error { Text(error).foregroundStyle(.red).font(.caption).padding() }
+        }
+        .fileImporter(isPresented: $choosingLUT, allowedContentTypes: [UTType(filenameExtension: "cube") ?? .data]) { (result: Result<URL, Error>) in
+            switch result {
+            case .success(let url): Task { await library.addLUT(url, parent: folder) }
+            case .failure(let error): library.error = error.localizedDescription
+            }
         }
         .sheet(isPresented: $choosingParts, onDismiss: {
             if selection != nil { namingEdit = true }
@@ -156,7 +214,10 @@ struct EditLibraryView: View {
         }
         .alert("Delete", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })) {
             Button("Cancel", role: .cancel) { deleting = nil }
-            Button("Delete", role: .destructive) { if let deleting { library.remove(deleting.id) }; deleting = nil }
+            Button("Delete", role: .destructive) { if let deleting {
+                library.remove(deleting.id)
+                if let selectedLUT, !library.entries.contains(where: { $0.lutID == selectedLUT }) { self.selectedLUT = nil }
+            }; deleting = nil }
         } message: { Text("Delete this library item and any edits inside it?") }
     }
 }
