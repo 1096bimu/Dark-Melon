@@ -26,9 +26,32 @@ An original 2736 × 1824 JPEG export with an embedded ISO 21496-1 HDR gain map. 
 
 [![A shop beneath a pine tree from the Kyoto film-emulation collection](docs/film-emulation/photos/DSC07481-preview.jpg)](https://1096bimu.github.io/Dark-Melon/film-emulation/)
 
+## LUTs: use the camera maker’s own look
+
+Dark Melon supports **3D `.cube` LUTs, including camera-log LUTs released by camera manufacturers themselves**. With an official LUT, you are applying the maker’s published color transform rather than a third-party attempt to recreate it. There is no need to guess whether a reproduction LUT faithfully matches the official transform: you can use the actual one.
+
+The brightness information going into that LUT matters as much as the LUT itself. Dark Melon uses its **fully processed HDR rendition as the input to log LUTs**, retaining brightness relationships and highlight separation beyond SDR white. It then converts that image into the LUT’s intended log curve and gamut. This gives the manufacturer’s rendering the extended brightness range it was designed to work with, rather than feeding it an SDR image whose highlights have already been flattened or clipped.
+
+The goal is a faithful application of the manufacturer’s branded color processing, with its own handling of color and bright highlights. The published LUT is authentic; an exact match to a particular camera still depends on exposure, sensor response, and RAW decoding.
+
+### Example: Fujifilm’s official film-simulation LUTs
+
+Download compatible `.cube` files from **[Fujifilm’s official LUT library](https://www.fujifilm-x.com/global/support/download/lut/)**. The example below applies Fujifilm’s **REALA ACE** LUT to a Sony RAW photograph, using **Fujifilm F-Log2 / Rec.2020** as input and **Rec.709 (BT.709)** as output.
+
+<img src="docs/images/lut-fujifilm-reala-ace.png" alt="Dark Melon applying Fujifilm’s official REALA ACE LUT to a Sony RAW photograph, with F-Log2 / Rec.2020 input, a 33 × 33 × 33 LUT grid, and Rec.709 output." width="960">
+
+1. In **Library**, use **Add → Add LUT…**. You can select multiple files at once; Dark Melon copies them into its own storage.
+2. Right-click a LUT and choose **Configure LUT…**. Set its intended input and output gamma/gamut according to the LUT’s documentation. The window also shows its native grid size. Existing and packaged LUTs default to sRGB on both sides.
+3. Select the LUT and **enable HDR Gain for log input**. Adjust HDR Gain to control the brightness entering the look. With HDR Gain off, a log-input LUT is bypassed without losing its selection.
+
+Available profiles include **sRGB, Rec.709, Sony S-Log3 / S-Gamut3.Cine, Panasonic V-Log / V-Gamut, Canon C-Log3 / Cinema Gamut, Fujifilm F-Log / F-Gamut, and Fujifilm F-Log2 / Rec.2020**. Input and output can be configured separately.
+
+**Log-input LUTs currently produce an SDR preview and export**, even though HDR is used to prepare their input. The LUT supplies the final SDR rendering; Dark Melon does not apply another tone curve afterward. Ordinary sRGB LUTs retain the existing SDR/HDR workflow.
+
 ## Features
 
 - **RAW, SDR, and HDR image development**, with paired SDR/HDR previews and JPEG, HEIF, and TIFF export.
+- **3D LUT support**, including official manufacturer log LUTs, per-LUT input/output profiles, and multi-file import. [See the Fujifilm example above.](#luts-use-the-camera-makers-own-look)
 - **Batch export on macOS**, using saved settings or automatic development for unedited files, concurrent processing with a memory budget, and automatic filename-conflict handling.
 - **Portable XMP sidecar settings**, leaving original images untouched. Unsaved recipes stay in a pending-edits list when switching images. Save commits them to sidecars; folder changes and normal close/quit ask before discarding pending work.
 - **Copy and paste settings**, with separate choices for Tone, White Balance, Color, Effects, and RAW controls.
