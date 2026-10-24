@@ -4,9 +4,9 @@ import simd
 
 /// Bundled gamma/gamut choices, using full-range normalized LUT coordinates.
 nonisolated enum LUTProfile: String, CaseIterable, Codable, Identifiable, Sendable {
-    case sRGB, rec709, sLog3, vLog, cLog3
+    case sRGB, rec709, sLog3, vLog, cLog3, fLog, fLog2
     var id: Self { self }
-    var isLog: Bool { self == .sLog3 || self == .vLog || self == .cLog3 }
+    var isLog: Bool { self == .sLog3 || self == .vLog || self == .cLog3 || self == .fLog || self == .fLog2 }
     var name: String {
         switch self {
         case .sRGB: "sRGB"
@@ -14,12 +14,16 @@ nonisolated enum LUTProfile: String, CaseIterable, Codable, Identifiable, Sendab
         case .sLog3: "Sony S-Log3 / S-Gamut3.Cine"
         case .vLog: "Panasonic V-Log / V-Gamut"
         case .cLog3: "Canon C-Log3 / Cinema Gamut"
+        case .fLog: "Fujifilm F-Log / F-Gamut"
+        case .fLog2: "Fujifilm F-Log2 / Rec.2020"
         }
     }
     var code: Double { Double(Self.allCases.firstIndex(of: self)!) }
 
     // D65 primaries and transfer equations follow the vendor-supplied ACES CSCs:
     // https://github.com/aces-aswf/aces-input-and-colorspaces (Sony, Panasonic, Canon).
+    // F-Log / F-Gamut: https://dl.fujifilm-x.com/technical-data/F-Log_DataSheet_E_Ver.1.2.pdf
+    // F-Log2 / Rec.2020: https://dl.fujifilm-x.com/support/lut/F-Log2_DataSheet_E_Ver.1.0.pdf
     var toXYZ: simd_double3x3 {
         let points: [SIMD2<Double>]
         switch self {
@@ -27,6 +31,7 @@ nonisolated enum LUTProfile: String, CaseIterable, Codable, Identifiable, Sendab
         case .sLog3: points = [.init(0.766, 0.275), .init(0.225, 0.800), .init(0.089, -0.087)]
         case .vLog: points = [.init(0.730, 0.280), .init(0.165, 0.840), .init(0.100, -0.030)]
         case .cLog3: points = [.init(0.740, 0.270), .init(0.170, 1.140), .init(0.080, -0.100)]
+        case .fLog, .fLog2: points = [.init(0.708, 0.292), .init(0.170, 0.797), .init(0.131, 0.046)]
         }
         func xyz(_ xy: SIMD2<Double>) -> SIMD3<Double> { .init(xy.x / xy.y, 1, (1 - xy.x - xy.y) / xy.y) }
         let matrix = simd_double3x3(columns: (xyz(points[0]), xyz(points[1]), xyz(points[2])))
@@ -59,10 +64,18 @@ nonisolated final class LUTProfileTransform {
             if (profile < 3.5) {
                 return x < 0.01 ? 5.6*x+0.125 : 0.241514*log(x+0.00873)/log(10.0)+0.598206;
             }
-            float v = x/0.9;
-            if (v < -0.014) return -0.36726845*log(1.0-14.98325*v)/log(10.0)+0.12783901;
-            if (v <= 0.014) return 1.9754798*v+0.12512219;
-            return 0.36726845*log(1.0+14.98325*v)/log(10.0)+0.12240537;
+            if (profile < 4.5) {
+                float v = x/0.9;
+                if (v < -0.014) return -0.36726845*log(1.0-14.98325*v)/log(10.0)+0.12783901;
+                if (v <= 0.014) return 1.9754798*v+0.12512219;
+                return 0.36726845*log(1.0+14.98325*v)/log(10.0)+0.12240537;
+            }
+            if (profile < 5.5) {
+                return x >= 0.00089 ? 0.344676*log(0.555556*x+0.009468)/log(10.0)+0.790453
+                    : 8.735631*x+0.092864;
+            }
+            return x >= 0.000889 ? 0.245281*log(5.555556*x+0.064829)/log(10.0)+0.384316
+                : 8.799461*x+0.092864;
         }
         float decodeLUT(float x, float profile) {
             if (profile < 0.5) {
@@ -80,9 +93,17 @@ nonisolated final class LUTProfileTransform {
             if (profile < 3.5) {
                 return x < 0.181 ? (x-0.125)/5.6 : pow(10.0,(x-0.598206)/0.241514)-0.00873;
             }
-            if (x < 0.097465473) return -0.9*(pow(10.0,(0.12783901-x)/0.36726845)-1.0)/14.98325;
-            if (x <= 0.15277891) return 0.9*(x-0.12512219)/1.9754798;
-            return 0.9*(pow(10.0,(x-0.12240537)/0.36726845)-1.0)/14.98325;
+            if (profile < 4.5) {
+                if (x < 0.097465473) return -0.9*(pow(10.0,(0.12783901-x)/0.36726845)-1.0)/14.98325;
+                if (x <= 0.15277891) return 0.9*(x-0.12512219)/1.9754798;
+                return 0.9*(pow(10.0,(x-0.12240537)/0.36726845)-1.0)/14.98325;
+            }
+            if (profile < 5.5) {
+                return x >= 0.100537775223865 ? (pow(10.0,(x-0.790453)/0.344676)-0.009468)/0.555556
+                    : (x-0.092864)/8.735631;
+            }
+            return x >= 0.100686685370811 ? (pow(10.0,(x-0.384316)/0.245281)-0.064829)/5.555556
+                : (x-0.092864)/8.799461;
         }
         kernel vec4 lutProfile(__sample source, vec3 row0, vec3 row1, vec3 row2, float profile, float decodeMode) {
             vec4 p = unpremultiply(source);

@@ -17,8 +17,10 @@ struct LibraryEntry: Identifiable, Codable {
     var error: String?
     var importingLUT = false
     private let url: URL
+    private let lutStore: LUTStore
     private var readable = true
-    init(url: URL? = nil) {
+    init(url: URL? = nil, lutStore: LUTStore = .shared) {
+        self.lutStore = lutStore
         self.url = url ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Dark Melon/EditLibrary.json")
         do {
@@ -75,20 +77,32 @@ struct LibraryEntry: Identifiable, Codable {
             rawSettings: PasteItem.rawItems.contains(where: selection.contains) ? recipe.rawSettings : nil)
         save(entries + [LibraryEntry(parent: parent, name: name, recipe: selected, selection: selection)])
     }
-    func addLUT(_ source: URL, parent: UUID?) async {
-        guard !importingLUT else { return }
+    func addLUTs(_ sources: [URL], parent: UUID?) async {
+        guard !importingLUT, !sources.isEmpty else { return }
         importingLUT = true
         error = nil
         defer { importingLUT = false }
-        do {
-            let id = try await Task.detached(priority: .userInitiated) {
-                try LUTStore.shared.importFile(source)
-            }.value
-            let destination = parent.flatMap { id in entries.contains(where: { $0.id == id && $0.isFolder }) ? id : nil }
-            let item = LibraryEntry(parent: destination, name: source.deletingPathExtension().lastPathComponent, lutID: id)
-            save(entries + [item])
-            if !entries.contains(where: { $0.id == item.id }) { LUTStore.shared.remove(id) }
-        } catch { self.error = error.localizedDescription }
+        var imported: [LibraryEntry] = []
+        var failures: [String] = []
+        let store = lutStore
+        // Parse one cube at a time so a large selection doesn't multiply memory use.
+        for source in sources {
+            do {
+                let id = try await Task.detached(priority: .userInitiated) {
+                    try store.importFile(source)
+                }.value
+                imported.append(LibraryEntry(name: source.deletingPathExtension().lastPathComponent, lutID: id))
+            } catch { failures.append("\(source.lastPathComponent): \(error.localizedDescription)") }
+        }
+        let destination = parent.flatMap { id in entries.contains(where: { $0.id == id && $0.isFolder }) ? id : nil }
+        for index in imported.indices { imported[index].parent = destination }
+        if !imported.isEmpty {
+            save(entries + imported)
+            for item in imported where !entries.contains(where: { $0.id == item.id }) {
+                if let id = item.lutID { store.remove(id) }
+            }
+        }
+        if !failures.isEmpty { error = ([error].compactMap { $0 } + failures).joined(separator: "\n") }
     }
 
     func move(_ id: UUID, to parent: UUID?) {
@@ -104,7 +118,7 @@ struct LibraryEntry: Identifiable, Codable {
         }
         let luts = entries.filter { removed.contains($0.id) }.compactMap(\.lutID)
         save(entries.filter { !removed.contains($0.id) })
-        for id in luts where !entries.contains(where: { $0.lutID == id }) { LUTStore.shared.remove(id) }
+        for id in luts where !entries.contains(where: { $0.lutID == id }) { lutStore.remove(id) }
     }
 }
 
@@ -193,9 +207,9 @@ struct EditLibraryView: View {
         .sheet(item: $configuringLUT) { entry in
             if let id = entry.lutID { LUTConfigurationView(id: id, name: entry.name, hdrEnabled: current?.mapping.hdrEnabled) }
         }
-        .fileImporter(isPresented: $choosingLUT, allowedContentTypes: [UTType(filenameExtension: "cube") ?? .data]) { (result: Result<URL, Error>) in
+        .fileImporter(isPresented: $choosingLUT, allowedContentTypes: [UTType(filenameExtension: "cube") ?? .data], allowsMultipleSelection: true) { (result: Result<[URL], Error>) in
             switch result {
-            case .success(let url): Task { await library.addLUT(url, parent: folder) }
+            case .success(let urls): Task { await library.addLUTs(urls, parent: folder) }
             case .failure(let error): library.error = error.localizedDescription
             }
         }

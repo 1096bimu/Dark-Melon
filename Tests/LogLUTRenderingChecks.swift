@@ -30,7 +30,7 @@ import ImageIO
         var mapping = ToneMapping(); mapping.concentration = 0; mapping.hdrGain = 8; mapping.setAutomaticHDRTarget()
         mapping.clarity = 0.2; mapping.hdf = 0.02; mapping.whiteBalance.red = 1.1
         let bitmap = context.createCGImage(source,from: source.extent,format: .RGBAf,colorSpace: space.linear)!
-        for profile in [LUTProfile.sLog3,.vLog,.cLog3] {
+        for profile in [LUTProfile.sLog3,.vLog,.cLog3,.fLog,.fLog2] {
             try store.configure(id,as: LUTConfiguration(input: profile,output: .sRGB))
             let hdr = try await worker.mappedImage(source,mapping: mapping,hdr: true)
             assert(pixel(hdr).x > 1)

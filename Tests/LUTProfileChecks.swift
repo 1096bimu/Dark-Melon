@@ -33,7 +33,7 @@ import simd
             assert((0..<4).allSatisfy { abs(a[$0] - b[$0]) < tolerance }, "\(a) != \(b)")
         }
         let reference: [LUTProfile: Float] = [.sRGB: 0.46135613, .rec709: 0.40900773,
-            .sLog3: 420.0/1023.0, .vLog: 0.42331145, .cLog3: 0.34338962]
+            .sLog3: 420.0/1023.0, .vLog: 0.42331145, .cLog3: 0.34338962, .fLog: 0.45931846, .fLog2: 0.39100724]
         for profile in LUTProfile.allCases {
             let grey = image(.init(0.18, 0.18, 0.18, 1))
             let encoded = try transform.encode(grey, profile: profile)
@@ -62,12 +62,25 @@ import simd
                 ctx.render(image, toBitmap: &pixel, rowBytes: 16, bounds: CGRect(x: 0,y: 0,width: 1,height: 1), format: .RGBAf, colorSpace: space.linear)
                 return pixel
             }
-            for profile in [LUTProfile.rec709, .sLog3, .vLog, .cLog3] {
+            for profile in [LUTProfile.rec709, .sLog3, .vLog, .cLog3, .fLog, .fLog2] {
                 let pipeline = LUTPipeline(store: store, configuration: LUTConfiguration(input: profile,output: profile))
                 near(rendered(try pipeline.apply(input,id:id)),rendered(input),tolerance:0.0005)
             }
         }
         print("PASS: identity profile conversions in sRGB, Display P3 and Rec.2020 working spaces")
+        for (linear, encoded) in [(0.0,0.092864),(0.0005,0.0972318155),(0.18,0.4593184587),(0.9,0.6895033459)] {
+            let grey = image(.init(Float(linear),Float(linear),Float(linear),1))
+            let result = try transform.encode(grey,profile:.fLog)
+            assert(abs(Double(sample(result).x)-encoded)<0.00001)
+            near(sample(try transform.decode(result,profile:.fLog)),sample(grey))
+        }
+        for (linear, encoded) in [(0.0,0.092864),(0.0005,0.0972637305),(0.18,0.3910072419),(0.9,0.5571323640)] {
+            let grey = image(.init(Float(linear),Float(linear),Float(linear),1))
+            let result = try transform.encode(grey,profile:.fLog2)
+            assert(abs(Double(sample(result).x)-encoded)<0.00001)
+            near(sample(try transform.decode(result,profile:.fLog2)),sample(grey))
+        }
+        assert(LUTProfile.fLog2.toXYZ == LUTProfile.fLog.toXYZ)
         let frozen = store.configuration(for: id)
         let pinned = LUTPipeline(store: store, configuration: frozen)
         let pixel = image(.init(0.15,0.3,0.5,1))
