@@ -104,7 +104,10 @@ struct EditorCommands: Commands {
 
 struct EditorSettingsView: View {
     @State private var section = 0
+    @AppStorage(ExportMetadata.effectiveISOPreferenceKey) private var effectiveISO = true
+    @AppStorage(HDRScreenSaver.preferenceKey) private var screenSaver = false
     @AppStorage("showHueTwister") private var showHueTwister = false
+    @AppStorage(RAWSettings.maximizeRangePreferenceKey) private var alwaysMaximizeRAWRange = false
     @AppStorage(ScopeGradient.preferenceKey) private var gradient = ScopeGradient.inferno
     var body: some View {
         VStack(spacing: 0) {
@@ -124,6 +127,18 @@ struct EditorSettingsView: View {
 
     private var preferencesView: some View {
         Form {
+            Section("Preview") {
+                Toggle("Screen Saver", isOn: $screenSaver)
+                    .help("Fade the HDR preview to SDR when the app loses focus or after one minute without mouse or keyboard input. Activity restores HDR without changing the selected preview mode.")
+            }
+            Section("Export") {
+                Toggle("Effective ISO", isOn: $effectiveISO)
+                    .help("Replace the exported capture ISO with the effective ISO shown by the ISO slider. The original file is unchanged.")
+            }
+            Section("RAW") {
+                Toggle("Always maximize RAW range", isOn: $alwaysMaximizeRAWRange)
+                    .help("Run Max Range automatically for RAW files without saved or pending edits.")
+            }
             Section("Color Scope") {
                 Toggle("HUE Twister", isOn: $showHueTwister)
                     .help("Show darker/lighter hue controls. Saved adjustments remain active when hidden.")
@@ -155,6 +170,7 @@ struct EditorSettingsView: View {
                 shortcut("Original", "Hold C")
                 shortcut("Toggle HDR preview", "H")
                 shortcut("Toggle left panel", "F")
+                shortcut("Select All", "⌘A")
                 shortcut("Toggle white balance picker", "W")
             }
             Section("Panels") {

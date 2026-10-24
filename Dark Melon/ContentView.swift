@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 import CoreImage
 import UniformTypeIdentifiers
 
@@ -36,7 +37,7 @@ struct ContentView: View {
         return development
     }
     @State private var browserPaste: BrowserRecipeTarget?
-    @State private var browserExport: BrowserFileDevelopment?
+    @State private var exportSession: (development: RAWDevelopment, recipe: DevelopmentRecipe)?
     @State private var fileActionBusy = false
     @State private var deleteEditURLs: [URL] = []
     @State private var pasteEditURLs: [URL] = []
@@ -48,6 +49,10 @@ struct ContentView: View {
     @AppStorage("leftPanel.library") private var showingLibrary = false
     #if os(macOS)
     @State private var showingBatchExport = false
+    @State private var exportQueue = ExportQueue.shared
+    @State private var showingExportQueue = false
+    @State private var pendingSingleExport: (plan: ExportPlan, worker: RAWDeveloper)?
+    @State private var exportPresentationWindow: NSWindow?
     #endif
     @State private var pastedSettings: CopiedSettings?
     @State private var recipeSourceURL: URL?
@@ -64,6 +69,7 @@ struct ContentView: View {
     @State private var savedRecipe: DevelopmentRecipe?
     @State private var savingRecipe = false
     @State private var rawSettings = RAWSettings()
+    @State private var maximizingRAWRange = false
     @State private var panel = EditorPanel.tone
     @State private var comparingOriginalMouse = false
     @State private var comparingOriginalKey = false
@@ -73,7 +79,6 @@ struct ContentView: View {
     @State private var sourceURL: URL?
     @State private var developer = RAWDeveloper()
     @State private var histogramWorker = RAWDeveloper()
-    @State private var exportWorker = RAWDeveloper()
     @State private var histogramBins = 1
     @State private var histogram: HistogramData?
     @State private var histogramError: String?
@@ -90,7 +95,6 @@ struct ContentView: View {
     @AppStorage("guidedTutorialPresented") private var tutorialPresented = false
     @State private var tutorial = EditingTutorial()
     @State private var pendingPicker: EditorPickerTool?
-    @AppStorage("autoTones") private var autoTones = false
     @State private var hoveredPreviewPixel: CGPoint?
     @State private var displayMode = PreviewHistogramMode.hdrLinear
     private var hdrPreview: Bool {
@@ -106,8 +110,11 @@ struct ContentView: View {
     @State private var adjustingWhitePoint = false
     @State private var toneLocatorImage: CGImage?
     @State private var previewRevision = UUID()
+    @State private var lutRevision = 0
     @State private var filename = "Dark Melon"
     @State private var importing = false
+    @State private var showingFilmLock = false
+    @State private var lockedFilm: FilmSettings?
     @State private var loading = false
     @State private var errorMessage: String?
 
@@ -328,7 +335,8 @@ struct ContentView: View {
             Color.black
             if let previewImages {
                 #if os(macOS)
-                HDRImagePreview(image: ((adjustingTone || adjustingWhitePoint) ? toneLocatorImage : nil) ?? (cropping ? (hdrPreview ? previewImages.fullHDR : previewImages.fullSDR) : (hdrPreview ? previewImages.hdr : previewImages.sdr)),
+                HDRImagePreview(sdrImage: cropping ? previewImages.fullSDR : previewImages.sdr,
+                                image: ((adjustingTone || adjustingWhitePoint) ? toneLocatorImage : nil) ?? (cropping ? (hdrPreview ? previewImages.fullHDR : previewImages.fullSDR) : (hdrPreview ? previewImages.hdr : previewImages.sdr)),
                                 sourceSize: previewOutputSize, detail: visibleDetail,
                                 regionChanged: { previewRegion = $0 },
                                 hdr: hdrPreview, sourceID: previewDevelopment?.id ?? previewRevision,
@@ -355,6 +363,7 @@ struct ContentView: View {
                         } catch { errorMessage = error.localizedDescription }
                     }
                 }
+                    .modifier(HDRScreenSaver())
                     .padding(cropping ? 0 : 16)
                 #else
                 if cropping {
@@ -487,7 +496,7 @@ struct ContentView: View {
                         toggle: toggleTransform,
                         resetPerspective: { if !cropping { toggleTransform() }; cropTransform.horizontal = 0; cropTransform.vertical = 0 },
                         resetRotation: { if !cropping { toggleTransform() }; cropTransform.rotation = 0 },
-                        resetAll: resetTransform)
+                        resetAll: resetTransform).filmLock(.transform)
                 } else if panel == .raw {
                     RAWControls(settings: $rawSettings, offset: $mapping.offset, isRAW: development?.isRAW == true, commit: {
                         if let sourceURL { load(sourceURL, resetEdits: false) }
@@ -497,7 +506,7 @@ struct ContentView: View {
                             rawSettings = defaults
                             load(sourceURL, resetEdits: false)
                         }
-                    })
+                    }, maximizingRange: maximizingRAWRange, maxRange: maximizeRAWRange)
                 } else if panel == .color {
                     ColorControls(settings: $mapping.color, vertices: $mapping.vertexWarp, monochrome: mapping.blackAndWhite.isEnabled || mapping.color.monochrome, hdrMax: mapping.hdrMax, colorSpace: colorSpace)
                 } else if panel == .effects {
@@ -515,6 +524,7 @@ struct ContentView: View {
     var body: some View {
         NavigationStack {
             editorColumns
+            .environment(\.lockedFilmItems, lockedFilm?.selection.selectedItems ?? [])
             .task {
                 editHistory.restore = restoreHistory
                 editHistory.captureSession = { snapshotSession }
@@ -543,9 +553,6 @@ struct ContentView: View {
             }
             .onChange(of: recipeSourceURL) { _, _ in
                 if tutorial.active { tutorial.resetForImage() }
-            }
-            .onChange(of: autoTones) { _, enabled in
-                if enabled { applyAutoTones() }
             }
             .onChange(of: exportSettings) { _, settings in settings.remember() }
             .onChange(of: mapping.color.monochrome) { _, _ in pickingWhiteBalance = false }
@@ -596,8 +603,12 @@ struct ContentView: View {
             }
             .task(id: confirmingPreset?.id) { await preparePresetPreview() }
             .onChange(of: presetShowingBefore) { _, _ in previewRevision = UUID() }
+            .onReceive(NotificationCenter.default.publisher(for: .lutConfigurationChanged).receive(on: DispatchQueue.main)) { notification in
+                guard notification.object as? UUID == previewMapping.lutID else { return }
+                lutRevision += 1
+            }
             .task(id: PreviewRequest(mapping: previewMapping,
-                                     sourceID: development?.id, loading: loading, canvas: previewCanvas)) {
+                                     sourceID: development?.id, loading: loading, canvas: previewCanvas, lutRevision: lutRevision)) {
                 guard let development, !loading, confirmingPreset == nil else { return }
                 do {
                     let renderedMapping = previewMapping
@@ -678,7 +689,7 @@ struct ContentView: View {
             #if os(macOS)
             .focusedSceneValue(\.batchExport, browserModel.directory == nil ? nil : { showingBatchExport = true })
             .sheet(isPresented: $showingBatchExport) {
-                if let directory = browserModel.directory { BatchExportView(directory: directory) }
+                if let directory = browserModel.directory { BatchExportView(directory: directory, film: lockedFilm, queue: exportQueue) }
             }
             #endif
             .toolbar {
@@ -697,7 +708,7 @@ struct ContentView: View {
                 #endif
                 ToolbarItemGroup(placement: .principal) {
                     Button(exporting ? "Preparing Image…" : "Export…", systemImage: "square.and.arrow.up") {
-                        showingExportOptions = true
+                        beginExportOptions()
                     }
                     .labelStyle(.iconOnly)
                     .help("Export…")
@@ -710,6 +721,15 @@ struct ContentView: View {
                     .keyboardShortcut("s", modifiers: .command)
                     .disabled(development == nil || loading || savingRecipe || (savedRecipe == currentRecipe && !tutorialNeedsSave))
                     .help("Save development settings beside the original image in an XMP sidecar")
+                    Toggle("Lock Film", systemImage: lockedFilm == nil ? "lock.open" : "lock.fill", isOn: Binding(
+                        get: { lockedFilm != nil },
+                        set: {
+                            confirmingPreset = nil
+                            if $0 { requestFilmLock() } else { lockedFilm = nil }
+                        }))
+                        .toggleStyle(.button)
+                        .disabled(loading || (development == nil && lockedFilm == nil))
+                        .help("Capture film settings and apply them as unsaved edits when opening another photo. Unlock to stop applying them.")
                     Picker("Color space", selection: Binding(get: { colorSpace }, set: { selected in
                         guard selected != colorSpace else { return }
                         colorSpace = selected
@@ -722,7 +742,7 @@ struct ContentView: View {
                     .pickerStyle(.segmented)
                     .labelsHidden()
                     .fixedSize()
-                    .disabled(loading || exporting)
+                    .disabled(loading)
                     Toggle("HDR", isOn: Binding(get: { hdrPreview }, set: { enabled in
                         hdrPreview = enabled
                         tutorial.previewToggled(hdr: enabled)
@@ -733,6 +753,18 @@ struct ContentView: View {
                         .help("Toggle HDR or SDR display of the developed image")
                         .accessibilityValue(hdrPreview ? "HDR" : "SDR")
                 }
+                #if os(macOS)
+                if !exportQueue.jobs.isEmpty {
+                    ToolbarItem {
+                        Button("Exports", systemImage: exportQueue.symbol) {
+                            showingExportQueue.toggle()
+                        }
+                        .labelStyle(.iconOnly)
+                        .help("Exports")
+                        .popover(isPresented: $showingExportQueue) { ExportQueueView(queue: exportQueue) }
+                    }
+                }
+                #endif
                 ToolbarItem(placement: .primaryAction) {
                     Picker("Panel", selection: $panel) {
                         ForEach(EditorPanel.allCases) { panel in Text(LocalizedStringKey(panel.rawValue)).tag(panel) }
@@ -742,37 +774,40 @@ struct ContentView: View {
                     .fixedSize()
                 }
             }
+            .sheet(isPresented: $showingFilmLock) {
+                SettingsPasteOptions(apply: { selection in
+                    lockedFilm = FilmSettings(mapping, rawSettings: mapping.rawWhiteBalance == nil ? nil : rawSettings, selection: selection)
+                }, title: "Lock Film", actionTitle: "Lock", selectingLock: true)
+            }
             .sheet(isPresented: $showingPasteSettings, onDismiss: { browserPaste = nil; pasteEditURLs = [] }) {
                 SettingsPasteOptions { selection in
                     if pasteEditURLs.isEmpty { applyPastedSettings(selection, target: browserPaste) }
                     else { pasteMultipleEdits(selection, urls: pasteEditURLs) }
                 }
             }
-            .sheet(isPresented: $showingExportOptions, onDismiss: { browserExport = nil }) {
-                if let target = browserExport {
-                    HEIFExportOptions(settings: $exportSettings, width: target.development.width,
-                                      height: target.development.height, hdrEnabled: target.recipe.mapping.hdrEnabled,
-                                      sourceURL: target.development.url, mapping: target.recipe.mapping,
-                                      colorSpace: target.recipe.colorSpace,
-                                      rawSettings: target.recipe.rawSettings ?? target.development.rawDefaults ?? RAWSettings(),
-                                      save: { prepareExport(target) })
-                } else if let development {
-                    HEIFExportOptions(settings: $exportSettings, width: development.width,
-                                      height: development.height, hdrEnabled: mapping.hdrEnabled,
-                                      sourceURL: development.url, mapping: currentRecipe.mapping, colorSpace: colorSpace,
-                                      rawSettings: rawSettings, save: { prepareExport() })
+            .sheet(isPresented: $showingExportOptions, onDismiss: {
+                exportSession = nil
+                #if os(macOS)
+                let window = exportPresentationWindow
+                exportPresentationWindow = nil
+                if let prepared = pendingSingleExport {
+                    pendingSingleExport = nil
+                    chooseExportDestination(prepared.plan, worker: prepared.worker, window: window)
+                }
+                #endif
+            }) {
+                if let session = exportSession {
+                    HEIFExportOptions(settings: $exportSettings, width: session.development.width,
+                                      height: session.development.height, hdrEnabled: session.recipe.mapping.hdrEnabled,
+                                      sourceURL: session.development.url, mapping: session.recipe.mapping,
+                                      colorSpace: session.recipe.colorSpace,
+                                      rawSettings: session.recipe.rawSettings ?? session.development.rawDefaults ?? RAWSettings(),
+                                      save: { prepareExport(development: session.development, recipe: session.recipe, worker: $0) })
                 }
             }
             .fileExporter(isPresented: $showingSave, document: exportDocument,
                           contentType: exportContentType, defaultFilename: exportName) { (result: Result<URL, Error>) in
-                switch result {
-                case .success:
-                    if exportedSourceURL?.standardizedFileURL == recipeSourceURL?.standardizedFileURL {
-                        tutorial.record(.export)
-                    }
-                case .failure(let error): errorMessage = error.localizedDescription
-                }
-                exportDocument = nil
+                finishFileExport(result)
             }
             .fileImporter(isPresented: $importing, allowedContentTypes: [.image]) { (result: Result<URL, Error>) in
                 switch result {
@@ -813,7 +848,7 @@ struct ContentView: View {
         .frame(minWidth: 1000, minHeight: 600)
         #endif
     }
-    private func load(_ url: URL, resetEdits: Bool) {
+    private func load(_ url: URL, resetEdits: Bool, onLoaded: (() -> Void)? = nil) {
         #if os(macOS)
         if resetEdits { SidecarFolderAccess.shared.requestIfNeeded(for: url) }
         #endif
@@ -835,6 +870,10 @@ struct ContentView: View {
                     editHistory.activate(url, recipe: currentRecipe)
                 }
                 loading = false
+                if recipeSourceURL == url, development != nil {
+                    if resetEdits { applyLockedFilm() }
+                    onLoaded?()
+                }
             }
             do {
                 var restored: DevelopmentRecipe?
@@ -859,10 +898,12 @@ struct ContentView: View {
                     savedSnapshotDate = (try? RecipeStore.sidecarURL(for: url).resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
                 }
                 let initializeEdits = resetEdits && restored == nil && draft == nil
-                let options: RAWSettings? = resetEdits ? (draft?.recipe ?? restored)?.rawSettings : rawSettings
+                var options: RAWSettings? = resetEdits ? (draft?.recipe ?? restored)?.rawSettings : rawSettings
+                if initializeEdits, !FileManager.default.fileExists(atPath: RecipeStore.sidecarURL(for: url).path) {
+                    options = try await RAWDeveloper(colorSpace: colorSpace).initialRAWSettings(url)
+                }
                 developer = RAWDeveloper(colorSpace: colorSpace, rawSettings: options, rawWhiteBalance: mapping.rawWhiteBalance)
                 histogramWorker = RAWDeveloper(colorSpace: colorSpace, rawSettings: options, rawWhiteBalance: mapping.rawWhiteBalance)
-                exportWorker = RAWDeveloper(colorSpace: colorSpace, rawSettings: options, rawWhiteBalance: mapping.rawWhiteBalance)
                 detailWorker = RAWDeveloper(colorSpace: colorSpace)
                 let loaded = try await developer.develop(url, previewCanvas: previewCanvas)
                 if resetEdits {
@@ -904,24 +945,64 @@ struct ContentView: View {
         }
     }
 
+    private func applyLockedFilm() {
+        guard let lockedFilm else { return }
+        let updated = lockedFilm.applying(to: currentRecipe)
+        guard updated.mapping != mapping || updated.rawSettings != currentRecipe.rawSettings else { return }
+        let reload = updated.mapping.rawWhiteBalance != mapping.rawWhiteBalance || updated.rawSettings != currentRecipe.rawSettings
+        mapping = updated.mapping
+        if let raw = updated.rawSettings { rawSettings = raw }
+        var session = snapshotSession
+        session.draft = baselineRecipe.map { SnapshotEdit($0) == SnapshotEdit(currentRecipe) } == true
+            ? nil : SnapshotEdit(currentRecipe)
+        session.draftModifiedAt = session.draft == nil ? nil : Date()
+        session.selected = session.draft == nil ? "saved" : "unsaved"
+        snapshotSession = session
+        // Register the transfer against the loaded edit, not against a new baseline.
+        snapshotAppliedRecipe = currentRecipe
+        editHistory.observe(currentRecipe, name: String(localized: "Lock Film"))
+        editHistory.flush()
+        rememberCurrentEdits()
+        if reload, let sourceURL { load(sourceURL, resetEdits: false) }
+    }
+
     private func resetTone() {
         guard let development, !loading, !resettingTone else { return }
         commitHistory()
         let original = mapping
-        let worker = developer
-        let existingHistogram = histogram
-        let bins = histogramBins
+        let originalRAW = rawSettings
+        let maximizeRange = UserDefaults.standard.bool(forKey: RAWSettings.maximizeRangePreferenceKey)
+        let worker = RAWDeveloper(colorSpace: colorSpace, rawSettings: originalRAW, rawWhiteBalance: mapping.rawWhiteBalance)
         resettingTone = true
         Task {
             defer { resettingTone = false }
             do {
-                let automatic = try await worker.automaticMapping(for: development, bins: bins,
-                                                                  histogram: existingHistogram)
-                guard self.development?.id == development.id, mapping == original else { return }
+                var resetRAW = originalRAW
+                if development.isRAW {
+                    if maximizeRange { resetRAW = try await worker.maximumRAWRange(development.url) }
+                    else { resetRAW.values[.exposure] = 0 }
+                }
+                guard self.development?.id == development.id, mapping == original,
+                      rawSettings == originalRAW else { return }
+                let automatic = ToneMapping.fresh(isRAW: development.isRAW, sourceHeadroom: development.sourceHeadroom)
                 mapping = SettingsPasteSelection(tone: true, whiteBalance: false, color: false,
                                                  effects: false, raw: false).applying(automatic, to: mapping)
+                rawSettings = resetRAW
+                // Record before reloading so the decoder refresh cannot swallow
+                // the reset's unsaved snapshot or split it into separate undo steps.
+                var session = snapshotSession
+                session.draft = baselineRecipe.map { SnapshotEdit($0) == SnapshotEdit(currentRecipe) } == true
+                    ? nil : SnapshotEdit(currentRecipe)
+                session.draftModifiedAt = session.draft == nil ? nil : Date()
+                session.selected = session.draft == nil ? "saved" : "unsaved"
+                snapshotSession = session
+                snapshotAppliedRecipe = currentRecipe
                 editHistory.observe(currentRecipe, name: String(localized: "Reset Tone"))
                 editHistory.flush()
+                rememberCurrentEdits()
+                if development.isRAW, resetRAW != originalRAW {
+                    load(development.url, resetEdits: false)
+                }
             } catch { errorMessage = error.localizedDescription }
         }
     }
@@ -1026,6 +1107,20 @@ struct ContentView: View {
         }
     }
 
+    private func requestFilmLock() {
+        commitHistory()
+        rememberCurrentEdits()
+        guard !pendingEdits.entries.isEmpty else {
+            showingFilmLock = true
+            return
+        }
+        requestDiscard {
+            guard let url = recipeSourceURL else { return }
+            // Reload the resolved state: discarded edits must not be captured as film.
+            load(url, resetEdits: true) { showingFilmLock = true }
+        }
+    }
+
     private func requestDiscard(_ action: @escaping () -> Void) {
         rememberCurrentEdits()
         pendingTransition = action
@@ -1106,7 +1201,7 @@ struct ContentView: View {
         LinearHistogram(development: development, histogram: histogram,
                         histogramError: histogramError, binCount: $histogramBins,
                         mapping: $mapping, sdrSource: previewImages?.sdr,
-                        revision: previewRevision, colorSpace: colorSpace,
+                        revision: previewRevision, colorSpace: colorSpace, hdrPreview: hdrPreview,
                         comparingOriginal: $comparingOriginalMouse,
                         showingSDR: $displayMode.sdrHistogram,
                         hoverPosition: displayMode.sdrHistogram ? hoveredPreviewPixel : hoveredPreviewPixel.map(originalPreviewPoint),
@@ -1116,12 +1211,6 @@ struct ContentView: View {
                         })
     }
 
-    private func applyAutoTones() {
-        guard autoTones, development != nil, !loading else { return }
-        mapping = ToneSampleWhitePoint.automaticTones(mapping: mapping, space: colorSpace)
-        mapping.setAutomaticHDRTarget()
-    }
-
     private var tonePanel: some View {
     VStack(spacing: 0) {
         HStack {
@@ -1129,18 +1218,21 @@ struct ContentView: View {
             Spacer()
             Button("Reset Tone", action: resetTone).disabled(resettingTone)
         }.padding(12)
-        SlopeEditor(mapping: $mapping, autoTones: $autoTones,
+        SlopeEditor(mapping: $mapping, sourceISO: development?.metadata.iso,
+           rawExposure: development?.isRAW == true ? Double(rawSettings.values[.exposure] ?? 0) : 0,
+           sourceHeadroom: development?.sourceHeadroom ?? 1,
            onToneChanged: { tutorial.record(.tone) },
            onContrastChanged: { tutorial.record(.contrast) },
-           onContrastAdjustment: { hdrPreview = false },
-           onHDRGainAdjustment: { hdrPreview = mapping.hdrEnabled }) { editing in
-            adjustingTone = editing
-            if !editing {
-                toneLocatorImage = nil
-                applyAutoTones()
-                if development != nil, !loading { mapping.setAutomaticHDRTarget() }
-            }
-        }
+           onISOAdjustment: { hdrPreview = false },
+           onHDRGainAdjustment: { hdrPreview = mapping.hdrEnabled },
+           onToneEditingChanged: { editing in
+               adjustingTone = editing
+               if !editing { toneLocatorImage = nil }
+           },
+           onISOEditingChanged: { editing in
+               adjustingWhitePoint = editing
+               toneLocatorImage = nil
+           })
         if !mapping.color.monochrome || mapping.rawWhiteBalance != nil {
         Divider()
         VectorscopeView(source: development?.preview,
@@ -1165,6 +1257,26 @@ struct ContentView: View {
                 mapping.whiteBalance = WhiteBalance()
                 commitRAWWhiteBalance()
             } catch { errorMessage = error.localizedDescription }
+        }
+    }
+
+    private func maximizeRAWRange() {
+        guard let development, development.isRAW, !loading, !maximizingRAWRange else { return }
+        maximizingRAWRange = true
+        let originalSettings = rawSettings
+        let originalBalance = mapping.rawWhiteBalance
+        let worker = RAWDeveloper(colorSpace: colorSpace, rawSettings: originalSettings, rawWhiteBalance: originalBalance)
+        Task {
+            defer { maximizingRAWRange = false }
+            do {
+                let settings = try await worker.maximumRAWRange(development.url)
+                guard self.development?.id == development.id, !loading,
+                      rawSettings == originalSettings, mapping.rawWhiteBalance == originalBalance else { return }
+                rawSettings = settings
+                load(development.url, resetEdits: false)
+            } catch {
+                if self.development?.id == development.id { errorMessage = error.localizedDescription }
+            }
         }
     }
 
@@ -1279,15 +1391,14 @@ struct ContentView: View {
                 } else {
                     // Export deliberately uses disk settings or automatic defaults.
                     let draft = action == .export ? nil : pendingEdits.entry(for: url)?.recipe
-                    target = try await BrowserFileDevelopment.load(url, override: draft, bins: histogramBins)
+                    target = try await BrowserFileDevelopment.load(url, override: draft, bins: histogramBins, film: lockedFilm)
                 }
                 switch action {
                 case .copyEdit:
                     try SettingsClipboard.copy(target.recipe, reference: target.development.whitePoint, source: target.development.url)
                 case .pasteEdit: break
                 case .export:
-                    browserExport = target
-                    showingExportOptions = true
+                    beginExportOptions(target)
                 case .deleteEdit, .showInFinder: break
                 }
             } catch { errorMessage = error.localizedDescription }
@@ -1384,24 +1495,69 @@ struct ContentView: View {
         }
     }
 
-    private func prepareExport(_ target: BrowserFileDevelopment? = nil) {
-        guard let development = target?.development ?? development else { return }
-        let settings = exportSettings
-        let snapshot = target?.recipe.mapping ?? currentRecipe.mapping
-        let worker = target?.worker ?? exportWorker
+    private func finishFileExport(_ result: Result<URL, Error>) {
+        switch result {
+        case .success:
+            if exportedSourceURL?.standardizedFileURL == recipeSourceURL?.standardizedFileURL { tutorial.record(.export) }
+        case .failure(let error): errorMessage = error.localizedDescription
+        }
+        exportDocument = nil
+    }
+
+    private func beginExportOptions(_ target: BrowserFileDevelopment? = nil) {
+        guard let source = target?.development ?? development else { return }
+        let original = target?.recipe ?? currentRecipe
+        exportSession = (source, lockedFilm?.applying(to: original) ?? original)
+        #if os(macOS)
+        // Capture the editor before the options sheet takes focus. Attaching the
+        // save panel to that closing sheet would dismiss the save panel with it.
+        var window = NSApp.keyWindow ?? NSApp.mainWindow
+        while let parent = window?.sheetParent { window = parent }
+        exportPresentationWindow = window
+        #endif
+        showingExportOptions = true
+    }
+
+    private func prepareExport(development: RAWDevelopment, recipe: DevelopmentRecipe, worker: RAWDeveloper) {
+        let plan = ExportPlan(items: [PreparedExportItem(source: development.url, recipe: recipe)], settings: exportSettings)
+        #if os(macOS)
+        // The options sheet closes before the save panel opens. No live editor
+        // state is read after this immutable plan has been created.
+        pendingSingleExport = (plan, worker)
+        #else
         exportedSourceURL = development.url
         exporting = true
-        exportContentType = settings.format.type
-        exportName = development.url.deletingPathExtension().lastPathComponent + "." + settings.format.fileExtension
+        exportContentType = plan.settings.format.type
+        exportName = development.url.deletingPathExtension().lastPathComponent + "." + plan.settings.format.fileExtension
         Task {
             defer { exporting = false }
             do {
-                let data = try await worker.exportHEIF(development.url, mapping: snapshot, settings: settings)
+                await worker.useLUTConfiguration(plan.items.first?.lutConfiguration)
+                let data = try await worker.cachedExport(development.url, mapping: recipe.mapping, settings: plan.settings)
                 exportDocument = HEIFDocument(data: data)
                 showingSave = true
             } catch { errorMessage = error.localizedDescription }
         }
+        #endif
     }
+
+    #if os(macOS)
+    private func chooseExportDestination(_ plan: ExportPlan, worker: RAWDeveloper, window: NSWindow?) {
+        guard let item = plan.items.first else { return }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [plan.settings.format.type]
+        panel.nameFieldStringValue = item.source.deletingPathExtension().lastPathComponent + "." + plan.settings.format.fileExtension
+        panel.canCreateDirectories = true
+        let complete: (NSApplication.ModalResponse) -> Void = { response in
+            guard response == .OK, let url = panel.url else { return }
+            exportQueue.enqueue(plan, destination: .file(url), cachedWorker: worker) {
+                if item.source.standardizedFileURL == recipeSourceURL?.standardizedFileURL { tutorial.record(.export) }
+            }
+        }
+        if let window { panel.beginSheetModal(for: window, completionHandler: complete) }
+        else { panel.begin(completionHandler: complete) }
+    }
+    #endif
 
 }
 
@@ -1435,6 +1591,7 @@ private struct LinearHistogram: View {
     let sdrSource: CGImage?
     let revision: UUID
     let colorSpace: ProcessingColorSpace
+    let hdrPreview: Bool
     @Binding var comparingOriginal: Bool
     @Binding var showingSDR: Bool
     let hoverPosition: CGPoint?
@@ -1457,7 +1614,25 @@ private struct LinearHistogram: View {
     @State private var sdrError: String?
     @State private var sdrWorker: GPUHistogram?
     @State private var workerSpace: ProcessingColorSpace?
-    private var displayedHistogram: HistogramData? { showingSDR ? sdrHistogram : histogram }
+    @State private var draggingInputMaximum: Double?
+    @State private var zoomHistogram: HistogramData?
+    @State private var zoomWorker: GPUHistogram?
+    @State private var zoomSpace: ProcessingColorSpace?
+    @State private var completedZoomRequest: HistogramZoomRequest?
+    private var inputMaximum: Double {
+        draggingInputMaximum ?? HistogramInputRange.maximum(white: mapping.white, hdr: hdrPreview, encoded: showingSDR)
+    }
+    private var zoomRequest: HistogramZoomRequest {
+        HistogramZoomRequest(sourceID: development?.id, bins: binCount, upper: inputMaximum, space: colorSpace)
+    }
+    private var usingZoomHistogram: Bool {
+        !showingSDR && inputMaximum < 1 && completedZoomRequest == zoomRequest
+    }
+    private var displayedHistogram: HistogramData? {
+        showingSDR ? sdrHistogram : usingZoomHistogram ? zoomHistogram : histogram
+    }
+    private var histogramMaximum: Double { usingZoomHistogram ? inputMaximum : 1 }
+
     private let colors: [Color] = [.red, .green, .blue]
 
     var body: some View {
@@ -1493,18 +1668,19 @@ private struct LinearHistogram: View {
                 guard let histogram = displayedHistogram else { return }
                 let channels = histogram.histogram
                 let count = channels[0].count
+                let visibleCount = max(1, min(count, Int(ceil(Double(count) * inputMaximum / histogramMaximum))))
                 let scalingCounts = showingSDR
                     ? channels.flatMap { Array($0[3...252]) }
-                    : channels.flatMap { $0 }
+                    : channels.flatMap { Array($0.prefix(visibleCount)) }
                 let peak = max(1, scalingCounts.max() ?? 1)
                 let logPeak = log1p(Double(peak))
                 context.blendMode = .plusLighter
                 for channel in 0..<3 {
                     var path = Path()
                     path.move(to: CGPoint(x: 0, y: size.height))
-                    for index in 0..<count {
-                        let x0 = CGFloat(index) / CGFloat(count) * size.width
-                        let x1 = CGFloat(index + 1) / CGFloat(count) * size.width
+                    for index in 0..<visibleCount {
+                        let x0 = CGFloat(index) / CGFloat(count) * size.width * histogramMaximum / inputMaximum
+                        let x1 = CGFloat(index + 1) / CGFloat(count) * size.width * histogramMaximum / inputMaximum
                         let value = Double(channels[channel][index])
                         let height = showingSDR ? min(1, value / Double(peak)) : log1p(value) / logPeak
                         let y = size.height * (1 - CGFloat(height))
@@ -1517,20 +1693,21 @@ private struct LinearHistogram: View {
                     context.stroke(path, with: .color((mapping.color.monochrome ? Color.white : colors[channel]).opacity(0.85)), lineWidth: 0.75)
                 }
             }
+            .clipped()
             .overlay {
-                if !showingSDR { HistogramToneCurve(mapping: mapping).allowsHitTesting(false) }
+                if !showingSDR { HistogramToneCurve(mapping: mapping, hdrPreview: hdrPreview, inputMaximum: inputMaximum).allowsHitTesting(false) }
             }
             .overlay {
                 Canvas { context, size in
                     guard let value = hoverLuminance else { return }
-                    let x = min(size.width - 1, max(1, min(1, max(0, value)) * size.width))
+                    let x = min(size.width - 1, max(1, min(1, max(0, value / inputMaximum)) * size.width))
                     var line = Path()
                     line.move(to: CGPoint(x: x, y: 0))
                     line.addLine(to: CGPoint(x: x, y: size.height))
                     context.stroke(line, with: .color(.black.opacity(0.9)), lineWidth: 3)
                     context.stroke(line, with: .color(.white),
                                    style: StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
-                    let label = Text("Y" + (value < 0 ? "‹" : value > 1 ? "›" : ""))
+                    let label = Text("Y" + (value < 0 ? "‹" : value > inputMaximum ? "›" : ""))
                         .font(.caption2.bold())
                     let point = CGPoint(x: min(size.width - 12, max(12, x)), y: 9)
                     context.draw(label.foregroundStyle(.black), at: CGPoint(x: point.x + 1, y: point.y + 1))
@@ -1539,7 +1716,12 @@ private struct LinearHistogram: View {
                 .allowsHitTesting(false)
             }
             .overlay {
-                if !showingSDR { HistogramPoints(mapping: $mapping, onWhitePointEditingChanged: onWhitePointEditingChanged) }
+                if !showingSDR { HistogramPoints(mapping: $mapping, inputMaximum: inputMaximum, onWhitePointEditingChanged: { editing in
+                    // Freeze the axis during a drag so zoom cannot feed back into picking.
+                    if editing { draggingInputMaximum = inputMaximum }
+                    else { draggingInputMaximum = nil }
+                    onWhitePointEditingChanged(editing)
+                }).filmLock(.whitePoint) }
             }
             .frame(height: 190)
             .onGeometryChange(for: Int.self) { geometry in
@@ -1548,7 +1730,7 @@ private struct LinearHistogram: View {
             HStack {
                 ForEach(0...4, id: \.self) { tick in
                     if showingSDR { Text("\(Int((Double(tick) * 255 / 4).rounded()))") }
-                    else { Text(Double(tick) / 4, format: .number.precision(.fractionLength(2))) }
+                    else { Text(Double(tick) / 4 * inputMaximum, format: .number.precision(.fractionLength(inputMaximum < 0.01 ? 4 : inputMaximum < 0.1 ? 3 : 2))) }
                     if tick < 4 { Spacer() }
                 }
             }
@@ -1593,6 +1775,21 @@ private struct LinearHistogram: View {
             } catch is CancellationError {
             } catch { hoveredRGB = nil }
         }
+        .task(id: zoomRequest) {
+            let request = zoomRequest
+            guard request.upper < 1, !showingSDR, let source = development?.preview, let id = request.sourceID else { return }
+            do {
+                if zoomWorker == nil || zoomSpace != colorSpace {
+                    zoomWorker = try GPUHistogram(colorSpace: colorSpace)
+                    zoomSpace = colorSpace
+                }
+                let result = try await zoomWorker!.calculate(image: CIImage(cgImage: source), sourceID: id,
+                                                            bins: request.bins, upperInput: request.upper)
+                try Task.checkCancellation()
+                zoomHistogram = result
+                completedZoomRequest = request
+            } catch { /* Keep the existing source histogram if the zoom pass is unavailable. */ }
+        }
         .task(id: SDRHistogramRequest(revision: revision, bins: 256, space: colorSpace)) {
             guard let sdrSource else { sdrHistogram = nil; return }
             do {
@@ -1616,6 +1813,7 @@ private struct PreviewRequest: Equatable {
     let sourceID: UUID?
     let loading: Bool
     let canvas: CGSize
+    var lutRevision: Int = 0
 }
 
 private struct DetailPreviewRequest: Equatable {
@@ -1658,5 +1856,12 @@ private struct HistogramHoverRequest: Equatable {
     let position: CGPoint?
     let revision: UUID?
     let encoded: Bool
+    let space: ProcessingColorSpace
+}
+
+private struct HistogramZoomRequest: Equatable {
+    let sourceID: UUID?
+    let bins: Int
+    let upper: Double
     let space: ProcessingColorSpace
 }

@@ -216,6 +216,7 @@ struct SettingsPasteOptions: View {
     let apply: (SettingsPasteSelection) -> Void
     var title: LocalizedStringKey = "Paste Settings"
     var actionTitle: LocalizedStringKey = "Paste"
+    var selectingLock = false
     @Environment(\.dismiss) private var dismiss
     @State private var selection: SettingsPasteSelection = {
         let defaults = UserDefaults.standard
@@ -226,7 +227,10 @@ struct SettingsPasteOptions: View {
             whiteBalance: old("pasteSettings.whiteBalance"), color: old("pasteSettings.color"),
             effects: old("pasteSettings.effects"), raw: old("pasteSettings.raw"))
     }()
-    @State private var expanded: Set<String> = ["Tone","Color","Effects","Transform","RAW"]
+    private var selectionPreferenceKey: String {
+        selectingLock ? "filmLock.selection" : "pasteSettings.selection"
+    }
+    @State private var expanded: Set<String> = []
     private struct Choice {
         let item: PasteItem
         var enabled: Bool
@@ -253,20 +257,44 @@ struct SettingsPasteOptions: View {
     var body: some View {
         NavigationStack {
             Form {
+                HStack {
+                    if selectingLock {
+                        Button("Film") { selection = FilmSettings.film }
+                        Button("Digital") { selection = FilmSettings.digital }
+                    }
+                    Button("All") { selection = SettingsPasteSelection(items: Set(PasteItem.allCases)) }
+                    Button("None") { selection = SettingsPasteSelection(items: []) }
+                }.buttonStyle(.bordered).tint(.secondary).focusEffectDisabled()
                 tree("Tone", items: PasteItem.toneItems + PasteItem.balanceItems)
                 tree("Color", items: PasteItem.colorItems)
                 tree("Effects", items: PasteItem.effectItems)
                 tree("Transform", items: [.transform])
                 tree("RAW", items: PasteItem.rawItems)
                 tree("LUT", items: [.lut])
+                if selectingLock {
+                    Text("These settings will apply to every photo you open and every export, including batch exports, overriding saved settings where they differ. Any resulting changes remain unsaved until you save them. Consider whether you want to save edits made from this point forward.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             .formStyle(.grouped)
             #if os(macOS)
             .toggleStyle(.checkbox)
             #endif
+            .onAppear {
+                if selectingLock {
+                    if let data = UserDefaults.standard.data(forKey: selectionPreferenceKey),
+                       let saved = try? JSONDecoder().decode(SettingsPasteSelection.self, from: data) {
+                        selection = FilmSettings.restoredSelection(saved)
+                    } else {
+                        selection = FilmSettings.film
+                    }
+                }
+            }
             .onChange(of: selection) { _, value in
                 if let data = try? JSONEncoder().encode(value) {
-                    UserDefaults.standard.set(data, forKey: "pasteSettings.selection")
+                    UserDefaults.standard.set(data, forKey: selectionPreferenceKey)
                 }
             }
             .navigationTitle(title)

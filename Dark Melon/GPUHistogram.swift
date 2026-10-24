@@ -37,7 +37,7 @@ actor GPUHistogram {
         reducePipeline = try device.makeComputePipelineState(function: reduce)
     }
 
-    func calculate(image: CIImage, sourceID: UUID, bins: Int) async throws -> HistogramData {
+    func calculate(image: CIImage, sourceID: UUID, bins: Int, upperInput: Double = 1) async throws -> HistogramData {
         try Task.checkCancellation()
         let bins = max(1, bins)
         let slots = bins * 3 + 2 + 256
@@ -77,6 +77,8 @@ actor GPUHistogram {
         let weights = colorSpace.luminance
         var statistics = SIMD4<Float>(Float(weights.x), Float(weights.y), Float(weights.z), encoded ? 1 : 0)
         count.setBytes(&statistics, length: 16, index: 3)
+        var upper = Float(max(Double.leastNormalMagnitude, upperInput))
+        count.setBytes(&upper, length: 4, index: 4)
         let groupWidth = countPipeline.threadExecutionWidth
         let groupHeight = max(1, min(8, countPipeline.maxTotalThreadsPerThreadgroup / groupWidth))
         count.dispatchThreads(MTLSize(width: texture.width, height: texture.height, depth: 1),
@@ -121,6 +123,7 @@ actor GPUHistogram {
                          device atomic_uint *counts [[buffer(0)]],
                          constant uint &bins [[buffer(1)]], constant uint &shards [[buffer(2)]],
                          constant float4 &statistics [[buffer(3)]],
+                         constant float &upper [[buffer(4)]],
                          uint2 p [[thread_position_in_grid]]) {
         if (p.x >= image.get_width() || p.y >= image.get_height()) return;
         uint stride = bins * 3 + 2 + 256;
@@ -136,8 +139,8 @@ actor GPUHistogram {
             if (!isfinite(value)) continue;
             uint slot;
             if (value < 0.0f) slot = bins * 3;
-            else if (value > 1.0f) slot = bins * 3 + 1;
-            else slot = c * bins + min(uint(value * float(bins)), bins - 1);
+            else if (value > upper) slot = bins * 3 + 1;
+            else slot = c * bins + min(uint(value / upper * float(bins)), bins - 1);
             atomic_fetch_add_explicit(counts + offset + slot, 1u, memory_order_relaxed);
         }
     }

@@ -4,7 +4,7 @@ import ImageIO
 import UniformTypeIdentifiers
 
 /// Recipe-only browser operations never demosaic or render destination pixels.
-struct BrowserRecipeTarget {
+nonisolated struct BrowserRecipeTarget: Sendable {
     let url: URL
     let recipe: DevelopmentRecipe
     let savedRecipe: DevelopmentRecipe?
@@ -15,7 +15,8 @@ struct BrowserRecipeTarget {
         return try await metadata(url, restored: override ?? saved, saved: saved)
     }
 
-    private nonisolated static func metadata(_ url: URL, restored: DevelopmentRecipe?, saved: DevelopmentRecipe?) async throws -> Self {
+    @concurrent
+    private static func metadata(_ url: URL, restored: DevelopmentRecipe?, saved: DevelopmentRecipe?) async throws -> Self {
         let accessed = url.startAccessingSecurityScopedResource()
         defer { if accessed { url.stopAccessingSecurityScopedResource() } }
         guard let container = CGImageSourceCreateWithURL(url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary),

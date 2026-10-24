@@ -130,7 +130,7 @@ nonisolated struct DevelopmentRecipe: Codable, Equatable, Sendable {
         }
         result.mapping.offset = result.mapping.offset.clamped(to: -0.02...0.02)
         // Preserve older recipes while bringing their multiplier into the current range.
-        result.mapping.hdrGain = result.mapping.hdrGain == 0 ? 0 : min(5, max(1, result.mapping.hdrGain))
+        result.mapping.hdrGain = result.mapping.hdrGain == 0 ? 0 : max(1, result.mapping.hdrGain)
         return result
     }
 
@@ -157,7 +157,7 @@ nonisolated struct DevelopmentRecipe: Codable, Equatable, Sendable {
               within(m.offset, -0.3...0.3), within(m.white, 0...1), m.white >= ToneMapping.minimumRange * 0.999,
               within(m.tonePosition, 0...1), within(m.concentration, -1...1),
               m.channelContrast.count == 3, m.channelContrast.allSatisfy({ within($0, -0.2...0.2) }),
-              within(m.hdrRolloff, 0...1), within(m.hdrTarget, 1...20), within(m.hdrGain, 0...20),
+              within(m.hdrRolloff, 0...1), within(m.hdrTarget, 1...20), m.hdrGain.isFinite, m.hdrGain >= 0,
               within(m.clarity, -2...2), within(m.clarityRadius, 15...90),
               within(m.hdf, 0...0.2), within(m.hdfRadius, 50...200),
               within(m.vignette.amount, 0...4), within(m.vignette.spread, 0...1),

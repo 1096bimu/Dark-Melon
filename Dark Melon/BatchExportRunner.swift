@@ -2,7 +2,7 @@
 import Foundation
 import ImageIO
 
-nonisolated private final class BatchMemoryPressure: @unchecked Sendable {
+nonisolated final class BatchMemoryPressure: @unchecked Sendable {
     private let lock = NSLock()
     private var pressured = false
     private let source = DispatchSource.makeMemoryPressureSource(eventMask: [.normal, .warning, .critical], queue: .global(qos: .utility))
@@ -31,43 +31,29 @@ nonisolated enum BatchExportRunner {
     }
 
     @concurrent
-    static func run(files: [URL], destination: URL, settings: HEIFSettings,
+    static func run(plan: ExportPlan, destination: URL,
                     progress: @escaping @MainActor @Sendable (Result, Int) -> Void) async {
         let pressure = BatchMemoryPressure()
         let budget = BatchExportBudget.limit(memory: ProcessInfo.processInfo.physicalMemory)
         let cpuLimit = max(1, ProcessInfo.processInfo.activeProcessorCount)
-        // Properties only: never decode the pixel data during admission planning.
-        let costs = files.map { url in
-            autoreleasepool {
-                let source = CGImageSourceCreateWithURL(url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary)
-                let properties = source.flatMap { CGImageSourceCopyPropertiesAtIndex($0, 0, nil) as? [CFString: Any] }
-                let width = (properties?[kCGImagePropertyPixelWidth] as? NSNumber)?.doubleValue ?? 0
-                let height = (properties?[kCGImagePropertyPixelHeight] as? NSNumber)?.doubleValue ?? 0
-                return BatchExportBudget.bytes(pixels: width > 0 && height > 0 ? width * height : 100_000_000,
-                                               scale: settings.scale)
-            }
-        }
+        let items = plan.items
+        let settings = plan.settings
+        let costs = items.map { BatchExportBudget.bytes(pixels: $0.pixels, scale: settings.scale) }
         await withTaskGroup(of: Result.self) { group in
             var next = 0, active = 0
             var reserved: UInt64 = 0
-            while next < files.count || active > 0 {
-                while !Task.isCancelled, next < files.count,
+            while next < items.count || active > 0 {
+                while !Task.isCancelled, next < items.count,
                       BatchExportBudget.admits(cost: costs[next], reserved: reserved, active: active,
                                                cpuLimit: cpuLimit, budget: budget, pressured: pressure.isPressured) {
-                    let source = files[next], cost = costs[next]
+                    let item = items[next], source = item.source, cost = costs[next]
                     group.addTask {
                         do {
                             try Task.checkCancellation()
-                            if let recipe = try await RecipeStore.shared.load(for: source) {
-                                // Saved edits need no preview or automatic-analysis pass.
-                                let worker = RAWDeveloper(colorSpace: recipe.colorSpace, rawSettings: recipe.rawSettings)
-                                try await worker.exportBatch(source, mapping: recipe.mapping, settings: settings, destination: destination)
-                            } else {
-                                let prepared = try await BrowserFileDevelopment.load(source, bins: 512)
-                                try Task.checkCancellation()
-                                try await prepared.worker.exportBatch(source, mapping: prepared.recipe.mapping,
-                                                                      settings: settings, destination: destination)
-                            }
+                            let recipe = item.recipe
+                            let worker = RAWDeveloper(colorSpace: recipe.colorSpace, rawSettings: recipe.rawSettings,
+                                                      rawWhiteBalance: recipe.mapping.rawWhiteBalance, lutConfiguration: item.lutConfiguration)
+                            try await worker.exportBatch(source, mapping: recipe.mapping, settings: settings, destination: destination)
                             return Result(source: source, cost: cost, error: nil, cancelled: false)
                         } catch is CancellationError {
                             return Result(source: source, cost: cost, error: nil, cancelled: true)

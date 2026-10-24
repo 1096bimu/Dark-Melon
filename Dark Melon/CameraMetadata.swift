@@ -22,7 +22,10 @@ nonisolated struct CameraMetadata: Sendable {
         }
         aperture = number(kCGImagePropertyExifFNumber)
         exposure = number(kCGImagePropertyExifExposureTime)
-        iso = (exif[kCGImagePropertyExifISOSpeedRatings] as? [NSNumber])?.first.map { $0.doubleValue }.flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
+        let rating = (exif[kCGImagePropertyExifISOSpeedRatings] as? [NSNumber])?.first?.doubleValue
+        let extended = number(kCGImagePropertyExifISOSpeed)
+        iso = (rating == nil || rating == 65535 ? extended ?? rating : rating)
+            .flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
         focalLength = number(kCGImagePropertyExifFocalLength)
         switch (exif[kCGImagePropertyExifWhiteBalance] as? NSNumber)?.intValue {
         case 0: whiteBalanceMode = String(localized: "Auto")

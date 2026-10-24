@@ -137,7 +137,7 @@ struct HueChromaScope: View {
                     }
                 }.allowsHitTesting(false)
                 ScopePixelMarker(position:hoverPoint(lightness:monochrome))
-                MountainRangeHandles(controls:$controls,selected:$selected,space:space,maximumChroma:maximum,scale:scale,boundary:boundary,movementEnabled:!monochrome,densityMode:monochrome)
+                MountainRangeHandles(controls:$controls,selected:$selected,space:space,maximumChroma:maximum,scale:scale,boundary:boundary,movementEnabled:!monochrome,densityMode:monochrome).filmLock(.vertices)
             }.aspectRatio(1.6, contentMode: .fit)
             Canvas { context, size in
                 for i in 0..<180 {
@@ -161,13 +161,15 @@ struct HueChromaScope: View {
                 Toggle("Monochrome", isOn: Binding(get: { monochrome }, set: { enabled in
                     monochrome = enabled
                     OKLabVertexWarp.setMonochrome(enabled, controls: &controls)
-                })).toggleStyle(.switch)
+                })).toggleStyle(.switch).filmLock(.vertices)
                 Spacer()
                 Button("Reset") {
                     controls = OKLabVertexWarp.defaults
                     if monochrome { OKLabVertexWarp.setMonochrome(true, controls: &controls) }
                 }
             }
+            .filmLock(.vertices)
+            Group {
             if let i=selected {
                 HStack {
                     Text(LocalizedStringKey(MountainRangeHandles.names[i])).foregroundStyle(MountainRangeHandles.colors[i])
@@ -188,9 +190,10 @@ struct HueChromaScope: View {
                     }.labelsHidden()
                 }
             }
+            }.filmLock(.vertices)
             if showsTwister {
                 Divider()
-                LightnessHueControls(controls:$controls,selected:$selected,space:space,texture:lightnessTexture,hover:hoverPoint(lightness:true),gradient:gradient)
+                LightnessHueControls(controls:$controls,selected:$selected,space:space,texture:lightnessTexture,hover:hoverPoint(lightness:true),gradient:gradient).filmLock(.hueTwister)
             }
             if let error { Text(error).font(.caption).foregroundStyle(.secondary) }
         }

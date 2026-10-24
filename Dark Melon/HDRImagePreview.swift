@@ -12,6 +12,8 @@ final class PreviewViewport {
 
 /// Keeps HDR presentation on the image layer while zooming and panning.
 struct HDRImagePreview: NSViewRepresentable {
+    let sdrImage: CGImage
+    @Environment(\.hdrScreenSaverActive) private var screenSaverActive
     let image: CGImage
     let sourceSize: CGSize
     let detail: PreviewDetail?
@@ -36,13 +38,15 @@ struct HDRImagePreview: NSViewRepresentable {
         view.configureCrop(ratio: cropRatio, saved: savedTransform)
         view.hover = hover
         view.regionChanged = regionChanged
-        view.display(image, sourceSize: sourceSize, detail: detail, hdr: hdr, sourceID: sourceID)
+        view.display(image, sdrImage: sdrImage, sourceSize: sourceSize, detail: detail,
+                     hdr: hdr, sourceID: sourceID, screenSaverActive: screenSaverActive)
         view.sample = sample
         view.sampleTool = sampleTool
     }
 
     final class ImageDisplay: NSView {
         private let imageLayer = CALayer()
+        private let sdrLayer = CALayer()
         private let detailLayer = CALayer()
         private var detailRect: CGRect?
         var regionChanged: ((PreviewRegion?) -> Void)?
@@ -155,6 +159,10 @@ struct HDRImagePreview: NSViewRepresentable {
             super.init(frame: .zero)
             let container = CALayer()
             container.masksToBounds = true
+            // Keep the SDR base present throughout interrupted or reversed HDR fades.
+            sdrLayer.preferredDynamicRange = .standard
+            sdrLayer.contentsHeadroom = 1
+            container.addSublayer(sdrLayer)
             container.addSublayer(imageLayer)
             imageLayer.addSublayer(detailLayer)
             circle.strokeColor = NSColor.white.cgColor
@@ -184,7 +192,8 @@ struct HDRImagePreview: NSViewRepresentable {
         }
         required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
-        func display(_ image: CGImage, sourceSize: CGSize, detail: PreviewDetail?, hdr: Bool, sourceID: UUID) {
+        func display(_ image: CGImage, sdrImage: CGImage, sourceSize: CGSize, detail: PreviewDetail?,
+                     hdr: Bool, sourceID: UUID, screenSaverActive: Bool) {
             if self.sourceID != sourceID {
                 self.sourceID = sourceID
                 reportedCropPolygon = []
@@ -199,6 +208,18 @@ struct HDRImagePreview: NSViewRepresentable {
             imageLayer.preferredDynamicRange = hdr ? .high : .standard
             imageLayer.contentsHeadroom = hdr ? CGFloat(image.contentHeadroom) : 1
             imageLayer.contents = image
+            sdrLayer.contents = sdrImage
+            let targetOpacity: Float = hdr && screenSaverActive ? 0 : 1
+            if imageLayer.opacity != targetOpacity {
+                let from = imageLayer.presentation()?.opacity ?? imageLayer.opacity
+                imageLayer.opacity = targetOpacity
+                let fade = CABasicAnimation(keyPath: "opacity")
+                fade.fromValue = from
+                fade.toValue = targetOpacity
+                fade.duration = 1
+                fade.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                imageLayer.add(fade, forKey: "screenSaverFade")
+            }
             detailLayer.contents = detail?.image
             detailLayer.isHidden = detail == nil || cropRatio != nil
             detailLayer.preferredDynamicRange = hdr ? .high : .standard
@@ -278,6 +299,11 @@ struct HDRImagePreview: NSViewRepresentable {
             imageLayer.position = crop == nil ? CGPoint(x: bounds.midX + offset.x, y: bounds.midY + offset.y)
                                              : CGPoint(x: bounds.midX, y: bounds.midY)
             imageLayer.transform = crop == nil ? CATransform3DIdentity : cropTransform.matrix(in: crop ?? bounds, pan: offset)
+            sdrLayer.bounds = imageLayer.bounds
+            sdrLayer.position = imageLayer.position
+            sdrLayer.transform = imageLayer.transform
+            sdrLayer.magnificationFilter = filter
+            sdrLayer.minificationFilter = filter
             if let detailRect {
                 detailLayer.frame = CGRect(x: detailRect.minX * size.width, y: detailRect.minY * size.height,
                                            width: detailRect.width * size.width, height: detailRect.height * size.height)

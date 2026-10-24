@@ -64,6 +64,24 @@ nonisolated final class LUTStore: @unchecked Sendable {
     }
     private let cache = NSCache<NSUUID, Box>()
     private let loadLock = NSLock()
+    private var configurations: [UUID: LUTConfiguration] = [:]
+    func configuration(for id: UUID) -> LUTConfiguration {
+        loadLock.lock(); defer { loadLock.unlock() }
+        if let value = configurations[id] { return value }
+        let value = (try? Data(contentsOf: configurationURL(id)))
+            .flatMap { try? JSONDecoder().decode(LUTConfiguration.self, from: $0) } ?? LUTConfiguration()
+        configurations[id] = value
+        return value
+    }
+    private func configurationURL(_ id: UUID) -> URL { url(for: id).deletingPathExtension().appendingPathExtension("json") }
+    func configure(_ id: UUID, as configuration: LUTConfiguration) throws {
+        try loadLock.withLock {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            try JSONEncoder().encode(configuration).write(to: configurationURL(id), options: .atomic)
+            configurations[id] = configuration
+        }
+        NotificationCenter.default.post(name: .lutConfigurationChanged, object: id)
+    }
     private let bundledDirectory: URL?
     init(directory: URL? = nil) {
         bundledDirectory = Bundle.main.resourceURL
@@ -107,13 +125,46 @@ nonisolated final class LUTStore: @unchecked Sendable {
     }
     func remove(_ id: UUID) {
         try? FileManager.default.removeItem(at: url(for: id))
+        try? FileManager.default.removeItem(at: configurationURL(id))
+        loadLock.lock(); configurations.removeValue(forKey: id); loadLock.unlock()
         cache.removeObject(forKey: id as NSUUID)
     }
 }
 
+extension Notification.Name {
+    nonisolated static let lutConfigurationChanged = Notification.Name("DarkMelon.lutConfigurationChanged")
+}
+
 nonisolated final class LUTPipeline {
     private let store: LUTStore
-    init(store: LUTStore = .shared) { self.store = store }
+    var configurationOverride: LUTConfiguration?
+    init(store: LUTStore = .shared, configuration: LUTConfiguration? = nil) {
+        self.store = store; self.configurationOverride = configuration
+    }
+    func configuration(for id: UUID?) -> LUTConfiguration? {
+        id.map { configurationOverride ?? store.configuration(for: $0) }
+    }
+    private let profileTransform = LUTProfileTransform()
+    // Explicit float sampling avoids the native cube filter's quantization of
+    // encoded log values, whose inverse transfer can amplify small LUT errors.
+    private let profileCube = CIKernel(source: """
+        kernel vec4 profileLUT(sampler source, sampler cube, vec3 low, vec3 span, float dimension) {
+            vec4 p = unpremultiply(sample(source,samplerCoord(source)));
+            vec3 t = clamp((p.rgb-low)/span,0.0,1.0)*(dimension-1.0);
+            vec3 a = floor(t), b = min(a+1.0,vec3(dimension-1.0)), f = t-a;
+            vec3 c000 = sample(cube,samplerTransform(cube,vec2(a.x,a.y+a.z*dimension)+vec2(0.5))).rgb;
+            vec3 c100 = sample(cube,samplerTransform(cube,vec2(b.x,a.y+a.z*dimension)+vec2(0.5))).rgb;
+            vec3 c010 = sample(cube,samplerTransform(cube,vec2(a.x,b.y+a.z*dimension)+vec2(0.5))).rgb;
+            vec3 c110 = sample(cube,samplerTransform(cube,vec2(b.x,b.y+a.z*dimension)+vec2(0.5))).rgb;
+            vec3 c001 = sample(cube,samplerTransform(cube,vec2(a.x,a.y+b.z*dimension)+vec2(0.5))).rgb;
+            vec3 c101 = sample(cube,samplerTransform(cube,vec2(b.x,a.y+b.z*dimension)+vec2(0.5))).rgb;
+            vec3 c011 = sample(cube,samplerTransform(cube,vec2(a.x,b.y+b.z*dimension)+vec2(0.5))).rgb;
+            vec3 c111 = sample(cube,samplerTransform(cube,vec2(b.x,b.y+b.z*dimension)+vec2(0.5))).rgb;
+            vec3 c = mix(mix(mix(c000,c100,f.x),mix(c010,c110,f.x),f.y),
+                         mix(mix(c001,c101,f.x),mix(c011,c111,f.x),f.y),f.z);
+            return premultiply(vec4(c,p.a));
+        }
+        """)
     private let domain = CIColorKernel(source: """
         kernel vec4 lutDomain(__sample source, vec3 low, vec3 span) {
             vec4 p = unpremultiply(source);
@@ -122,9 +173,55 @@ nonisolated final class LUTPipeline {
             return premultiply(p);
         }
         """)
+    func isAvailable(_ id: UUID?, hdrEnabled: Bool = true) -> Bool {
+        guard hdrEnabled || configuration(for: id)?.input.isLog != true else { return false }
+        return id.flatMap { store.cube(for: $0) } != nil
+    }
+    func outputsSDR(_ mapping: ToneMapping) -> Bool {
+        mapping.hdrEnabled && configuration(for: mapping.lutID)?.input.isLog == true
+            && isAvailable(mapping.lutID)
+    }
+    func activeID(_ mapping: ToneMapping) -> UUID? {
+        isAvailable(mapping.lutID, hdrEnabled: mapping.hdrEnabled) ? mapping.lutID : nil
+    }
+
+    private let hdrGain = CIColorKernel(source: """
+        kernel vec4 lutHDRGain(__sample originalHDR, __sample originalSDR, __sample gradedSDR) {
+            vec4 h = unpremultiply(originalHDR);
+            vec3 s = clamp(unpremultiply(originalSDR).rgb, 0.0, 1.0);
+            vec3 graded = max(unpremultiply(gradedSDR).rgb, vec3(0.0));
+            // Match the linear-light offsets used by ISO gain-map generation.
+            // Offset reconstruction is identity when the grade is identity,
+            // and remains defined for black or zero-valued color channels.
+            vec3 gain = (max(h.rgb, vec3(0.0)) + vec3(0.00001)) / (s + vec3(0.00001));
+            vec3 result = max((graded + vec3(0.00001)) * gain - vec3(0.00001), vec3(0.0));
+            return premultiply(vec4(result, h.a));
+        }
+        """)
+
+    func applyHDR(_ hdr: CIImage, sdr: CIImage, gradedSDR: CIImage) throws -> CIImage {
+        guard let output = hdrGain?.apply(extent: hdr.extent, arguments: [hdr, sdr, gradedSDR]) else {
+            throw LUTError.invalid
+        }
+        return output
+    }
+
     func apply(_ image: CIImage, id: UUID?) throws -> CIImage {
         guard let id, let cube = store.cube(for: id) else { return image }
         let span = cube.maximum - cube.minimum
+        let configuration = configuration(for: id) ?? LUTConfiguration()
+        if configuration != LUTConfiguration() {
+            let encoded = try profileTransform.encode(image, profile: configuration.input)
+            let atlas = CIImage(bitmapData: cube.data, bytesPerRow: cube.dimension * 16,
+                size: CGSize(width: cube.dimension, height: cube.dimension * cube.dimension), format: .RGBAf, colorSpace: nil)
+                .transformed(by: CGAffineTransform(translationX: 0, y: Double(cube.dimension * cube.dimension)).scaledBy(x: 1, y: -1))
+            guard let output = profileCube?.apply(extent: image.extent,
+                roiCallback: { index, rect in index == 0 ? rect : atlas.extent },
+                arguments: [encoded, atlas,
+                    CIVector(x: cube.minimum.x, y: cube.minimum.y, z: cube.minimum.z),
+                    CIVector(x: span.x, y: span.y, z: span.z), Double(cube.dimension)]) else { throw LUTError.invalid }
+            return try profileTransform.decode(output, profile: configuration.output)
+        }
         guard let input = domain?.apply(extent: image.extent, arguments: [
             image, CIVector(x: cube.minimum.x,y: cube.minimum.y,z: cube.minimum.z),
             CIVector(x: span.x,y: span.y,z: span.z)
@@ -138,7 +235,7 @@ nonisolated final class LUTPipeline {
     }
 }
 
-private enum LUTError: LocalizedError {
+nonisolated enum LUTError: LocalizedError {
     case invalid, threeDimensional
     var errorDescription: String? {
         switch self {

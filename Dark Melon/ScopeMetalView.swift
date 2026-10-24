@@ -20,6 +20,7 @@ struct ScopeMetalView: UIViewRepresentable {
 final class ScopeDisplay: MTKView, MTKViewDelegate {
     private var image: MTLTexture?
     private var palette: MTLTexture?
+    private var wrapsHue: UInt32 = 0
     private var paletteGradient: ScopeGradient?
     private var queue: MTLCommandQueue?
     private var pipeline: MTLRenderPipelineState?
@@ -41,9 +42,19 @@ final class ScopeDisplay: MTKView, MTKViewDelegate {
             float2 uv = float2((id << 1) & 2, id & 2);
             return {float4(uv.x * 2 - 1, 1 - uv.y * 2, 0, 1), uv};
         }
-        fragment float4 scopeFragment(Vertex v [[stage_in]], texture2d<float> image [[texture(0)]], texture2d<float> palette [[texture(1)]]) {
-            constexpr sampler s(coord::normalized, address::clamp_to_edge, filter::nearest);
-            float value=image.sample(s,v.uv).r;
+        float scopeValue(texture2d<float> image, float2 uv, uint wrapsHue) {
+            constexpr sampler s(coord::normalized, address::clamp_to_zero, filter::nearest);
+            if (wrapsHue != 0) uv.x = fract(uv.x);
+            return image.sample(s, uv).r;
+        }
+        fragment float4 scopeFragment(Vertex v [[stage_in]], texture2d<float> image [[texture(0)]], texture2d<float> palette [[texture(1)]], constant uint &wrapsHue [[buffer(0)]]) {
+            // A symmetric 3×3 cross in drawable pixels, independent of plot aspect.
+            float2 dx = dfdx(v.uv), dy = dfdy(v.uv);
+            float value = scopeValue(image, v.uv, wrapsHue);
+            value = max(value, scopeValue(image, v.uv - dx, wrapsHue));
+            value = max(value, scopeValue(image, v.uv + dx, wrapsHue));
+            value = max(value, scopeValue(image, v.uv - dy, wrapsHue));
+            value = max(value, scopeValue(image, v.uv + dy, wrapsHue));
             constexpr sampler colors(coord::normalized,address::clamp_to_edge,filter::linear);
             return value<=0.0 ? float4(0,0,0,1) : palette.sample(colors,float2((value*255.0+0.5)/256.0,0.5));
         }
@@ -76,6 +87,7 @@ final class ScopeDisplay: MTKView, MTKViewDelegate {
             paletteGradient = gradient
         }
         image = frame.texture
+        wrapsHue = frame.wrapsHue ? 1 : 0
         requestDisplay()
     }
 
@@ -107,6 +119,7 @@ final class ScopeDisplay: MTKView, MTKViewDelegate {
         encoder.setRenderPipelineState(pipeline)
         encoder.setFragmentTexture(image, index: 0)
         encoder.setFragmentTexture(palette, index: 1)
+        encoder.setFragmentBytes(&wrapsHue, length: MemoryLayout<UInt32>.size, index: 0)
         encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
         encoder.endEncoding()
         command.present(drawable)

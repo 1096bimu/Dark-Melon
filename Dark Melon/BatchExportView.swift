@@ -4,6 +4,8 @@ import UniformTypeIdentifiers
 
 struct BatchExportView: View {
     let directory: URL
+    var film: FilmSettings? = nil
+    let queue: ExportQueue
     @Environment(\.dismiss) private var dismiss
     @State private var browser = ImageBrowserModel()
     @State private var selection: Set<URL> = []
@@ -11,6 +13,7 @@ struct BatchExportView: View {
     @State private var sample: RAWDevelopment?
     @State private var sampleRecipe: DevelopmentRecipe?
     @State private var sources: [URL] = []
+    @State private var preparedItems: [PreparedExportItem] = []
     @State private var showingOptions = false
     @State private var choosingDestination = false
     @State private var destinationAfterOptions = false
@@ -64,9 +67,9 @@ struct BatchExportView: View {
                 HEIFExportOptions(settings: $settings, width: sample.width, height: sample.height,
                                   hdrEnabled: true, sourceURL: sample.url, mapping: sampleRecipe.mapping,
                                   colorSpace: sampleRecipe.colorSpace, rawSettings: sampleRecipe.rawSettings ?? sample.rawDefaults ?? RAWSettings(),
-                                  percentageOnly: true, save: { destinationAfterOptions = true })
+                                  percentageOnly: true, save: { _ in destinationAfterOptions = true })
                     .safeAreaInset(edge: .bottom) {
-                        Text("Size and estimate use the first selected image. The same size percentage applies to each image. Images use saved settings when available, otherwise automatic adjustments.")
+                        Text("Size and estimate use the first prepared image. The same size percentage applies to every image. Settings are captured during preparation; later edits and Film Lock changes do not affect this export.")
                             .font(.caption).foregroundStyle(.secondary).padding()
                     }
             }
@@ -82,14 +85,25 @@ struct BatchExportView: View {
     private func prepareOptions() {
         settings.scale = min(1, max(0.25, (settings.scale * 20).rounded() / 20))
         sources = browser.batchFiles.filter { selection.contains($0.url) }.map(\.url)
-        guard let first = sources.first else { return }
+        guard !sources.isEmpty else { return }
         busy = true; completed = 0; failures = []; status = String(localized: "Preparing export settings…")
+        let capturedFilm = film
+        let maximizeRange = UserDefaults.standard.bool(forKey: RAWSettings.maximizeRangePreferenceKey)
+        let files = sources
         job = Task {
             defer { busy = false }
             do {
-                let prepared = try await BrowserFileDevelopment.load(first, bins: 512)
+                let prepared = try await ExportPlan.prepare(files: files, film: capturedFilm, maximizeRAWRange: maximizeRange) { done, total in
+                    completed = done
+                    status = String(localized: "Preparing settings: \(done) of \(total)")
+                }
+                preparedItems = prepared.items; failures = prepared.failures
+                guard let first = preparedItems.first else { status = String(localized: "No files could be prepared."); return }
+                let recipe = first.recipe
+                let worker = RAWDeveloper(colorSpace: recipe.colorSpace, rawSettings: recipe.rawSettings, rawWhiteBalance: recipe.mapping.rawWhiteBalance)
+                let loaded = try await worker.develop(first.source)
                 try Task.checkCancellation()
-                sampleRecipe = prepared.recipe; sample = prepared.development
+                sampleRecipe = recipe; sample = loaded
                 status = ""; showingOptions = true
             } catch is CancellationError { status = String(localized: "Cancelled.") }
             catch { status = error.localizedDescription }
@@ -97,24 +111,10 @@ struct BatchExportView: View {
     }
 
     private func export(to destination: URL) {
-        let snapshot = settings
-        let files = sources
-        busy = true; completed = 0; failures = []; status = String(localized: "Preparing concurrent exports…")
-        sample = nil; sampleRecipe = nil
-        job = Task {
-            let access = destination.startAccessingSecurityScopedResource()
-            defer { if access { destination.stopAccessingSecurityScopedResource() }; busy = false }
-            await BatchExportRunner.run(files: files, destination: destination, settings: snapshot) { result, active in
-                if !result.cancelled {
-                    completed += 1
-                    if let error = result.error { failures.append("\(result.source.lastPathComponent): \(error)") }
-                }
-                status = String(localized: "Completed \(completed) of \(files.count) · \(active) running")
-            }
-            status = String(localized: "Exported \(completed - failures.count) of \(files.count) images.")
-            if Task.isCancelled { status = String(localized: "Cancelled.") + " " + status }
-            if !failures.isEmpty { status += " " + String(localized: "\(failures.count) failed.") }
-        }
+        let plan = ExportPlan(items: preparedItems, settings: settings, failures: failures)
+        sample = nil; sampleRecipe = nil; job = nil
+        queue.enqueue(plan, destination: .folder(destination))
+        dismiss()
     }
 }
 

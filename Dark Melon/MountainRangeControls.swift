@@ -172,14 +172,19 @@ struct LightnessHueControls: View {
 /// Normalized scope coordinates; repeats across the hue seam.
 struct ScopePixelMarker: View {
     let position: CGPoint?
+
+    static func draw(in context: inout GraphicsContext, at point: CGPoint, color: Color = .white) {
+        let ring = Path(ellipseIn: CGRect(x: point.x - 5, y: point.y - 5, width: 10, height: 10))
+        context.stroke(ring, with: .color(.black), lineWidth: 4)
+        context.stroke(ring, with: .color(color), lineWidth: 2)
+    }
+
     var body: some View {
         Canvas { context,size in
             guard let position else { return }
             for copy in -1...1 {
                 let point=CGPoint(x:(position.x+Double(copy))*size.width,y:min(1,max(0,position.y))*size.height)
-                let ring=Path(ellipseIn:CGRect(x:point.x-5,y:point.y-5,width:10,height:10))
-                context.stroke(ring,with:.color(.black),lineWidth:4)
-                context.stroke(ring,with:.color(.white),lineWidth:2)
+                Self.draw(in: &context, at: point)
             }
         }.allowsHitTesting(false)
     }

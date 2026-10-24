@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct EffectsControls: View {
+    @Environment(\.lockedFilmItems) private var lockedItems
     @Binding var channelContrast: [Double]
     @Binding var clarity: Double
     @Binding var radius: Double
@@ -20,7 +21,14 @@ struct EffectsControls: View {
                 Spacer()
                 HoldCompareButton(comparing: $comparing)
                     .disabled(channelContrast.dropFirst().allSatisfy { $0 == channelContrast[0] } && clarity == 0 && hdf == 0 && grain.strength == 0 && vignette.amount == 0 && (!hdrEnabled || halation.inputCurve == 0))
-                Button("Reset Effects") { channelContrast = [0, 0, 0]; clarity = 0; radius = 30; hdf = 0; hdfRadius = 100; grain = FilmGrainSettings(); halation = HalationSettings(); vignette = VignetteSettings() }
+                Button("Reset Effects") {
+                    if !lockedItems.contains(.dyeResponse) { channelContrast = [0, 0, 0] }
+                    if !lockedItems.contains(.grain) { grain = FilmGrainSettings() }
+                    if !lockedItems.contains(.halation) { halation = HalationSettings() }
+                    if !lockedItems.contains(.clarity) { clarity = 0; radius = 30 }
+                    if !lockedItems.contains(.hdf) { hdf = 0; hdfRadius = 100 }
+                    if !lockedItems.contains(.vignette) { vignette = VignetteSettings() }
+                }
                     .disabled(channelContrast.allSatisfy { $0 == 0 } && clarity == 0 && radius == 30 && hdf == 0 && hdfRadius == 100 && grain == FilmGrainSettings() && halation == HalationSettings() && vignette == VignetteSettings())
             }
             VStack(alignment: .leading, spacing: 8) {
@@ -42,29 +50,30 @@ struct EffectsControls: View {
                     }
                 }
             }
+            .filmLock(.dyeResponse)
             .help("Changes relative RGB contrast in the tone map. The shared average is ignored, so equal values have no effect.")
             Divider()
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
                     Text("Clarity")
-                    AdjustmentField(title: "Clarity", value: $clarity, range: -2...2, digits: 3, scale: 1, unit: "")
+                    AdjustmentField(title: "Clarity", value: $clarity, range: -2...2, digits: 3, scale: 1, unit: "").filmLock(.clarity)
 
                 }
                 HStack {
                     Image(systemName: "dial.medium")
-                    Slider(value: $clarity, in: -2...2) { Text("Clarity") }
+                    Slider(value: $clarity, in: -2...2) { Text("Clarity") }.filmLock(.clarity)
                         .labelsHidden()
                 }
             }
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
                     Text("Radius")
-                    AdjustmentField(title: "Radius", value: Binding(get: { radius / 30 }, set: { radius = $0 * 30 }), range: 0.5...3, digits: 2, scale: 1, unit: "×")
+                    AdjustmentField(title: "Radius", value: Binding(get: { radius / 30 }, set: { radius = $0 * 30 }), range: 0.5...3, digits: 2, scale: 1, unit: "×").filmLock(.clarity)
 
                 }
                 HStack {
                     Image(systemName: "circle.dashed")
-                    Slider(value: Binding(get: { radius / 30 }, set: { radius = $0 * 30 }), in: 0.5...3) { Text("Radius") }
+                    Slider(value: Binding(get: { radius / 30 }, set: { radius = $0 * 30 }), in: 0.5...3) { Text("Radius") }.filmLock(.clarity)
                         .labelsHidden()
                 }
             }
@@ -72,29 +81,29 @@ struct EffectsControls: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
                     Text("HDF")
-                    AdjustmentField(title: "HDF", value: $hdf, range: 0...0.2, digits: 3, scale: 1, unit: "")
+                    AdjustmentField(title: "HDF", value: $hdf, range: 0...0.2, digits: 3, scale: 1, unit: "").filmLock(.hdf)
 
                 }
                 HStack {
                     Image(systemName: "aqi.low")
-                    Slider(value: $hdf, in: 0...0.2) { Text("HDF") }
+                    Slider(value: $hdf, in: 0...0.2) { Text("HDF") }.filmLock(.hdf)
                         .labelsHidden()
                 }
             }
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
                     Text("Radius")
-                    AdjustmentField(title: "HDF radius", value: Binding(get: { hdfRadius / 100 }, set: { hdfRadius = $0 * 100 }), range: 0.5...2, digits: 2, scale: 1, unit: "×")
+                    AdjustmentField(title: "HDF radius", value: Binding(get: { hdfRadius / 100 }, set: { hdfRadius = $0 * 100 }), range: 0.5...2, digits: 2, scale: 1, unit: "×").filmLock(.hdf)
 
                 }
                 HStack {
                     Image(systemName: "circle.dashed")
-                    Slider(value: Binding(get: { hdfRadius / 100 }, set: { hdfRadius = $0 * 100 }), in: 0.5...2) { Text("HDF radius") }
+                    Slider(value: Binding(get: { hdfRadius / 100 }, set: { hdfRadius = $0 * 100 }), in: 0.5...2) { Text("HDF radius") }.filmLock(.hdf)
                         .labelsHidden()
                 }
             }
             Divider()
-            FilmGrainControls(settings: $grain)
+            FilmGrainControls(settings: $grain).filmLock(.grain)
             Divider()
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
@@ -124,7 +133,7 @@ struct EffectsControls: View {
                 Slider(value: $halation.transmission, in: 0...0.5) { Text("Transmission") }.labelsHidden()
                 }.disabled(monochrome)
             }
-            .disabled(!hdrEnabled)
+            .disabled(!hdrEnabled).filmLock(.halation)
             if !hdrEnabled {
                 Text("Enable HDR Gain to use Halation.").font(.caption).foregroundStyle(.secondary)
             }
@@ -133,16 +142,16 @@ struct EffectsControls: View {
                 Text("Vignette").font(.headline)
                 HStack {
                     Text("Amount")
-                    AdjustmentField(title: "Vignette amount", value: $vignette.amount, range: 0...4, digits: 2, scale: 1, unit: "stops")
+                    AdjustmentField(title: "Vignette amount", value: $vignette.amount, range: 0...4, digits: 2, scale: 1, unit: "stops").filmLock(.vignette)
 
                 }
-                Slider(value: $vignette.amount, in: 0...4) { Text("Vignette amount") }.labelsHidden()
+                Slider(value: $vignette.amount, in: 0...4) { Text("Vignette amount") }.filmLock(.vignette).labelsHidden()
                 HStack {
                     Text("Spread")
-                    AdjustmentField(title: "Vignette spread", value: $vignette.spread, range: 0...1, digits: 0, scale: 100, unit: "%")
+                    AdjustmentField(title: "Vignette spread", value: $vignette.spread, range: 0...1, digits: 0, scale: 100, unit: "%").filmLock(.vignette)
 
                 }
-                Slider(value: $vignette.spread, in: 0...1) { Text("Vignette spread") }.labelsHidden()
+                Slider(value: $vignette.spread, in: 0...1) { Text("Vignette spread") }.filmLock(.vignette).labelsHidden()
             }
         }
         .padding(12)

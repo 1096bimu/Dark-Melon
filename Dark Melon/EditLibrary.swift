@@ -109,12 +109,14 @@ struct LibraryEntry: Identifiable, Codable {
 }
 
 struct EditLibraryView: View {
+    @Environment(\.lockedFilmItems) private var lockedItems
     @State private var library = EditLibrary.shared
     @State private var folder: UUID?
     @State private var snapshot: DevelopmentRecipe?
     @State private var selection: SettingsPasteSelection?
     @State private var choosingParts = false
     @State private var choosingLUT = false
+    @State private var configuringLUT: LibraryEntry?
     @State private var namingFolder = false
     @State private var namingEdit = false
     @State private var deleting: LibraryEntry?
@@ -167,8 +169,13 @@ struct EditLibraryView: View {
                     }
                     .buttonStyle(.plain)
                     .listRowBackground(entry.lutID != nil && entry.lutID == selectedLUT ? Color.accentColor.opacity(0.2) : Color.clear)
-                    .disabled(!entry.isFolder && current == nil)
+                    .disabled((entry.recipe != nil && current == nil) || (entry.lutID != nil && lockedItems.contains(.lut)))
                     .contextMenu {
+                        if entry.lutID != nil {
+                            Button("Configure LUT…", systemImage: "slider.horizontal.3") { configuringLUT = entry }
+                                .disabled(lockedItems.contains(.lut))
+                            Divider()
+                        }
                         if !entry.isFolder {
                             Menu("Move to") {
                                 Button("Library") { library.move(entry.id, to: nil) }
@@ -182,6 +189,9 @@ struct EditLibraryView: View {
                 }
             }.listStyle(.sidebar)
             if let error = library.error { Text(error).foregroundStyle(.red).font(.caption).padding() }
+        }
+        .sheet(item: $configuringLUT) { entry in
+            if let id = entry.lutID { LUTConfigurationView(id: id, name: entry.name, hdrEnabled: current?.mapping.hdrEnabled) }
         }
         .fileImporter(isPresented: $choosingLUT, allowedContentTypes: [UTType(filenameExtension: "cube") ?? .data]) { (result: Result<URL, Error>) in
             switch result {

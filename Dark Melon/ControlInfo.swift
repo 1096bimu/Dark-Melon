@@ -3,16 +3,16 @@ import SwiftUI
 /// Short, accessible explanations shared by control headings and graph titles.
 struct ControlInfo: View {
     enum Topic {
-        case shadowBias, tone, contrast, hdrGain, hdrRolloff, autoTones, saturation, luminanceSaturation
+        case shadowBias, iso, tone, contrast, hdrGain, hdrRolloff, saturation, luminanceSaturation
 
         var title: String {
             switch self {
             case .shadowBias: String(localized: "Shadow Bias")
+            case .iso: String(localized: "ISO")
             case .tone: String(localized: "Tone")
             case .contrast: String(localized: "Contrast")
             case .hdrGain: String(localized: "HDR Gain")
             case .hdrRolloff: String(localized: "HDR Rolloff")
-            case .autoTones: String(localized: "Auto Tones")
             case .saturation: String(localized: "Chroma → Chroma")
             case .luminanceSaturation: String(localized: "Lightness → Chroma")
             }
@@ -21,6 +21,8 @@ struct ControlInfo: View {
             switch self {
             case .shadowBias:
                 String(localized: "Crops out the signal floor that would be irrelevant in normal photos. Set to zero if you need extreme shadow detail.")
+            case .iso:
+                String(localized: "Equivalent to the familiar \"Exposure\" slider, here it only moves the white point and Tone sliders by proxy. Due to the property of ISO Invariance in modern sensors, using this slider is in most ways identical to changing the ISO setting in-camera during capture.")
             case .tone:
                 String(localized: "Tone indicates the range of luminance that is of the most interest, usually set to skin tones, or 50% grey. Its luminance is generally protected when adjusting Contrast.")
             case .contrast:
@@ -29,8 +31,6 @@ struct ControlInfo: View {
                 String(localized: "Lowers HDR white below the calculated target while preserving the starting tangent. Zero keeps a straight continuation; 100% ends flat. HDR Gain multiplies the result and can be increased if the curves cross.")
             case .hdrGain:
                 String(localized: "HDR Gain multiplies the entire HDR curve. 1× keeps the automatically calculated rendition, 2× doubles its linear brightness, and 0 turns HDR off. Tone, Contrast, and white point update the hidden HDR Target without changing this multiplier.")
-            case .autoTones:
-                String(localized: "Auto Tones attempts to adjust the other settings based on a user-selected shade of interest, usually set to skin tones. Select shadows for lighter skin tones and highlights for darker skin tones.")
             case .saturation:
                 String(localized: "Four chroma multipliers joined by straight lines: zero, SDR midpoint, SDR gamut maximum, and HDR gamut maximum. The HDR endpoint follows the current HDR output ceiling. 1× is unchanged.")
             case .luminanceSaturation:

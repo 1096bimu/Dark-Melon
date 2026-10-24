@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct VectorscopeView: View {
+    @Environment(\.lockedFilmItems) private var lockedItems
     let source: CGImage?
     let hoverSource: CGImage?
     let hoverPosition: CGPoint?
@@ -11,8 +12,6 @@ struct VectorscopeView: View {
     @Binding var pickingWhiteBalance: Bool
     var resetRAWBalance: (() -> Void)? = nil
     var convertWhiteBalance: (() -> Void)? = nil
-    @FocusState private var focusedWBField: Int?
-    @State private var editedWBField = false
     var commitRAWBalance: () -> Void = {}
     private var balance: WhiteBalance {
         get { mapping.whiteBalance }
@@ -49,13 +48,7 @@ struct VectorscopeView: View {
             AdjustmentField(title: "Green gain", value: $mapping.whiteBalance.green, range: 0.000001...256, digits: 3, width: 60)
             Text("B")
             AdjustmentField(title: "Blue gain", value: $mapping.whiteBalance.blue, range: 0.000001...256, digits: 3, width: 60)
-        }
-    }
-
-    private func commitWBField() {
-        guard editedWBField else { return }
-        editedWBField = false
-        commitRAWBalance()
+        }.filmLock(.rgbWhiteBalance)
     }
 
     var body: some View {
@@ -72,7 +65,7 @@ struct VectorscopeView: View {
                         pickingWhiteBalance.toggle()
                     }
                     .labelStyle(.iconOnly)
-                    .disabled(mapping.blackAndWhite.isEnabled)
+                    .disabled(mapping.blackAndWhite.isEnabled).filmLock(.rgbWhiteBalance)
                     .tint(pickingWhiteBalance ? .accentColor : .primary)
                     .help("Click a center in the preview, drag a circle, then click again to set white balance. Shortcut: W.")
                     }
@@ -149,16 +142,7 @@ struct VectorscopeView: View {
                                 let point = CGPoint(x: center.x + x * scale * radius,
                                                     y: center.y + y * scale * radius)
                                 let color: Color = distance > 1 ? .orange : .white
-                                let ring = Path(ellipseIn: CGRect(x: point.x - 5, y: point.y - 5, width: 10, height: 10))
-                                context.stroke(ring, with: .color(.black), lineWidth: 4)
-                                context.stroke(ring, with: .color(color), lineWidth: 2)
-                                var cross = Path()
-                                cross.move(to: CGPoint(x: point.x - 9, y: point.y))
-                                cross.addLine(to: CGPoint(x: point.x + 9, y: point.y))
-                                cross.move(to: CGPoint(x: point.x, y: point.y - 9))
-                                cross.addLine(to: CGPoint(x: point.x, y: point.y + 9))
-                                context.stroke(cross, with: .color(.black), lineWidth: 3)
-                                context.stroke(cross, with: .color(color), lineWidth: 1)
+                                ScopePixelMarker.draw(in: &context, at: point, color: color)
                             }
                         }
                     }
@@ -166,6 +150,7 @@ struct VectorscopeView: View {
                     .gesture(DragGesture(minimumDistance: 0).onChanged { value in
                         guard !mapping.blackAndWhite.isEnabled, !mapping.color.monochrome else { return }
                         guard pinch == 1 else { lastTranslation = value.translation; return }
+                        guard !lockedItems.contains(.rgbWhiteBalance) else { return }
                         balance.nudge(dx: (value.translation.width - lastTranslation.width) / diameter,
                                       dy: (value.translation.height - lastTranslation.height) / diameter,
                                       colorSpace: colorSpace)
@@ -197,43 +182,34 @@ struct VectorscopeView: View {
                             HStack {
                                 Spacer()
                                 Button("Convert to WB", action: convertWhiteBalance)
-                                    .disabled(balance == WhiteBalance())
+                                    .disabled(balance == WhiteBalance() || lockedItems.contains(.rgbWhiteBalance) || lockedItems.contains(.rawWhiteBalance))
                             }
                         }
                     }
                     HStack {
                         Text("Temperature"); Spacer()
-                        TextField("Temperature", value: Binding(get: { Double(mapping.rawWhiteBalance?.temperature ?? 6500) }, set: {
-                            guard $0.isFinite else { return }
-                            mapping.rawWhiteBalance?.temperature = Float(min(10000, max(2000, $0)))
-                            editedWBField = true
-                        }), format: .number.precision(.fractionLength(0)))
-                            .labelsHidden().textFieldStyle(.roundedBorder).font(.body.monospacedDigit()).multilineTextAlignment(.trailing).frame(width: 72)
-                            .focused($focusedWBField, equals: 0)
-                            .onSubmit { commitWBField() }
-                        Text("K")
+                        AdjustmentField(title: "Temperature", value: Binding(
+                            get: { Double(mapping.rawWhiteBalance?.temperature ?? 6500) },
+                            set: { mapping.rawWhiteBalance?.temperature = Float($0) }),
+                            range: 2000...10000, digits: 0, unit: "K", commit: commitRAWBalance).filmLock(.rawWhiteBalance)
                     }
                     Slider(value: Binding(get: { Double(mapping.rawWhiteBalance?.temperature ?? 6500) }, set: {
                         mapping.rawWhiteBalance?.temperature = Float($0)
                     }), in: 2000...10000, onEditingChanged: { editing in
                         if !editing { commitRAWBalance() }
-                    })
+                    }).filmLock(.rawWhiteBalance)
                     HStack {
                         Text("Tint"); Spacer()
-                        TextField("Tint", value: Binding(get: { Double(mapping.rawWhiteBalance?.tint ?? 0) }, set: {
-                            guard $0.isFinite else { return }
-                            mapping.rawWhiteBalance?.tint = Float(min(50, max(-50, $0)))
-                            editedWBField = true
-                        }), format: .number.precision(.fractionLength(2)))
-                            .labelsHidden().textFieldStyle(.roundedBorder).font(.body.monospacedDigit()).multilineTextAlignment(.trailing).frame(width: 72)
-                            .focused($focusedWBField, equals: 1)
-                            .onSubmit { commitWBField() }
+                        AdjustmentField(title: "Tint", value: Binding(
+                            get: { Double(mapping.rawWhiteBalance?.tint ?? 0) },
+                            set: { mapping.rawWhiteBalance?.tint = Float($0) }),
+                            range: -50...50, digits: 2, commit: commitRAWBalance).filmLock(.rawWhiteBalance)
                     }
                     Slider(value: Binding(get: { Double(mapping.rawWhiteBalance?.tint ?? 0) }, set: {
                         mapping.rawWhiteBalance?.tint = Float($0)
                     }), in: -50...50, onEditingChanged: { editing in
                         if !editing { commitRAWBalance() }
-                    })
+                    }).filmLock(.rawWhiteBalance)
                 }
                 .disabled(mapping.blackAndWhite.isEnabled)
             } else if !mapping.color.monochrome {
@@ -242,9 +218,6 @@ struct VectorscopeView: View {
         }
         .font(.caption)
         .padding(12)
-        .onChange(of: focusedWBField) { old, _ in
-            if old != nil { commitWBField() }
-        }
         .task(id: ScopeHoverRequest(position: hoverPosition, revision: hoverRevision, space: colorSpace)) {
             guard !mapping.color.monochrome, let hoverPosition, let hoverSource else {
                 hoveredPoint = nil

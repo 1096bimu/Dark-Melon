@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct ColorControls: View {
+    @Environment(\.lockedFilmItems) private var lockedItems
     @Binding var settings: ColorAdjustments
     @Binding var vertices: [OKLabVertexAdjustment]
     var monochrome = false
@@ -9,22 +10,24 @@ struct ColorControls: View {
 
     var body: some View {
         VStack(spacing: 16) {
-            if !monochrome {
-                ChromaCurveEditor(title: "Chroma → Chroma", start: $settings.saturationStart,
-                    middle: $settings.saturationMid, sdr: $settings.saturationEnd, hdr: $settings.saturationHDR,
-                    sdrMaximum: OKLCHGamut.maxima[colorSpace]!, hdrMax: hdrMax, info: .saturation)
-                ChromaCurveEditor(title: "Lightness → Chroma", start: $settings.luminanceSaturationStart,
-                    middle: $settings.luminanceSaturationMid, sdr: $settings.luminanceSaturationEnd,
-                    hdr: $settings.luminanceSaturationHDR, sdrMaximum: 1, hdrMax: hdrMax, info: .luminanceSaturation)
-                Divider()
+            Group {
+                if !monochrome {
+                    ChromaCurveEditor(title: "Chroma → Chroma", start: $settings.saturationStart,
+                        middle: $settings.saturationMid, sdr: $settings.saturationEnd, hdr: $settings.saturationHDR,
+                        sdrMaximum: OKLCHGamut.maxima[colorSpace]!, hdrMax: hdrMax, info: .saturation).filmLock(.chromaCurve)
+                    ChromaCurveEditor(title: "Lightness → Chroma", start: $settings.luminanceSaturationStart,
+                        middle: $settings.luminanceSaturationMid, sdr: $settings.luminanceSaturationEnd,
+                        hdr: $settings.luminanceSaturationHDR, sdrMaximum: 1, hdrMax: hdrMax, info: .luminanceSaturation).filmLock(.lightnessChromaCurve)
+                    Divider()
+                }
             }
             HStack {
                 Text("Split Tone").font(.headline)
                 Spacer()
                 Button("Reset") { settings.splitTone = SplitToneSettings() }
-                    .disabled(settings.splitTone == SplitToneSettings())
+                    .disabled(settings.splitTone == SplitToneSettings()).filmLock(.splitTone)
             }
-            SplitToneGradientEditor(settings: $settings.splitTone, space: colorSpace, ceiling: hdrMax)
+            SplitToneGradientEditor(settings: $settings.splitTone, space: colorSpace, ceiling: hdrMax).filmLock(.splitTone)
 
 
         }
@@ -35,6 +38,7 @@ struct ColorControls: View {
 
 
 struct ColorPanelHeader: View {
+    @Environment(\.lockedFilmItems) private var lockedItems
     @Binding var settings: ColorAdjustments
     @Binding var vertices: [OKLabVertexAdjustment]
     @Binding var comparing: Bool
@@ -45,7 +49,7 @@ struct ColorPanelHeader: View {
             HoldCompareButton(comparing: $comparing)
                 .disabled(settings.isIdentity && vertices.allSatisfy(\.isIdentity))
             Button("Reset Color") { settings = ColorAdjustments(); vertices = OKLabVertexWarp.defaults; comparing = false }
-                .disabled(settings.isIdentity && vertices.allSatisfy(\.isIdentity))
+                .disabled(!lockedItems.isDisjoint(with: Set(PasteItem.colorItems)) || (settings.isIdentity && vertices.allSatisfy(\.isIdentity)))
         }
     }
 }

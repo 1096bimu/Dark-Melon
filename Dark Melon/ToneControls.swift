@@ -2,12 +2,13 @@ import SwiftUI
 
 struct HistogramPoints: View {
     @Binding var mapping: ToneMapping
+    var inputMaximum = 1.0
     var onWhitePointEditingChanged: (Bool) -> Void = { _ in }
     @State private var dragging = false
 
     var body: some View {
         GeometryReader { geometry in
-            let x = min(geometry.size.width - 1, max(1, geometry.size.width * mapping.white))
+            let x = min(geometry.size.width - 1, max(1, geometry.size.width * mapping.white / inputMaximum))
             ZStack {
                 Path { path in
                     path.move(to: CGPoint(x: x, y: 0))
@@ -30,7 +31,7 @@ struct HistogramPoints: View {
             .contentShape(Rectangle())
             .gesture(DragGesture(minimumDistance: 0).onChanged { value in
                 if !dragging { dragging = true; onWhitePointEditingChanged(true) }
-                update(value.location.x / max(1, geometry.size.width))
+                update(value.location.x / max(1, geometry.size.width) * inputMaximum)
             }.onEnded { _ in
                 onWhitePointEditingChanged(false)
                 dragging = false
@@ -48,16 +49,54 @@ struct HistogramPoints: View {
 
 struct SlopeEditor: View {
     @Binding var mapping: ToneMapping
-    @Binding var autoTones: Bool
+    var sourceISO: Double? = nil
+    var rawExposure = 0.0
+    var sourceHeadroom = 1.0
+    private var maximumHDRGain: Double { max(5, sourceHeadroom, mapping.hdrGain) }
     var onToneChanged: () -> Void = {}
     var onContrastChanged: () -> Void = {}
-    var onContrastAdjustment: () -> Void = {}
+    var onISOAdjustment: () -> Void = {}
     var onHDRGainAdjustment: () -> Void = {}
     var onToneEditingChanged: (Bool) -> Void = { _ in }
+    var onISOEditingChanged: (Bool) -> Void = { _ in }
     @State private var showLowContrastTip = false
+
+    private var isoExposure: Binding<Double> {
+        Binding(get: { ToneISOProxy.exposure(white: mapping.white).clamped(to: ToneISOProxy.range) }, set: { ev in
+            mapping = ToneISOProxy.applying(exposure: ev, to: mapping)
+            onToneChanged()
+            onISOAdjustment()
+        })
+    }
+
+    private var isoValue: Binding<Double> {
+        Binding(get: {
+            ToneISOProxy.displayValue(white: mapping.white, sourceISO: sourceISO, rawExposure: rawExposure)
+        }, set: { value in
+            isoExposure.wrappedValue = ToneISOProxy.adjustment(displayValue: value, sourceISO: sourceISO, rawExposure: rawExposure)
+        })
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text("ISO")
+                    ControlInfo(.iso)
+                    AdjustmentField(title: "ISO", value: isoValue,
+                        range: ToneISOProxy.displayRange(sourceISO: sourceISO, rawExposure: rawExposure),
+                        digits: sourceISO == nil ? 2 : 0, unit: sourceISO == nil ? "EV" : "",
+                        commit: { onISOEditingChanged(false) })
+                }
+                HStack {
+                    Image(systemName: "slider.horizontal.below.sun.min").frame(width: 22).accessibilityHidden(true)
+                    Slider(value: isoExposure, in: ToneISOProxy.range, onEditingChanged: onISOEditingChanged) { Text("ISO") }
+                        .labelsHidden()
+                }
+            }
+            .filmLock(.tone)
+            .filmLock(.whitePoint)
+            .help(ControlInfo.Topic.iso.explanation)
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
                     Text("Tone")
@@ -66,12 +105,6 @@ struct SlopeEditor: View {
                         mapping.tonePosition=min($0, mapping.white); mapping.setAutomaticHDRTarget(); onToneChanged()
                     }), range: 0...mapping.white, digits: 3, commit: { onToneEditingChanged(false) })
                     Spacer()
-                    Toggle("Auto Tones", isOn: $autoTones)
-                        #if os(macOS)
-                        .toggleStyle(.checkbox)
-                        #endif
-                        .help("Adjust white point when you release the Tone slider. The hidden HDR Target follows Tone and Contrast adjustments.")
-                    ControlInfo(.autoTones)
                 }
                 HStack {
                     Image(systemName: "swirl.circle.righthalf.filled")
@@ -98,12 +131,13 @@ struct SlopeEditor: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
+            .filmLock(.tone)
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
                     Text("Contrast")
                     ControlInfo(.contrast)
                     AdjustmentField(title: "Contrast", value: Binding(get: { mapping.concentration }, set: {
-                        mapping.concentration=$0; mapping.setAutomaticHDRTarget(); onContrastChanged(); onContrastAdjustment()
+                        mapping.concentration=$0; mapping.setAutomaticHDRTarget(); onContrastChanged()
                     }), range: -1...1, digits: 0, scale: 100, unit: "%")
                 }
                 HStack {
@@ -114,15 +148,12 @@ struct SlopeEditor: View {
                                               if mapping.concentration != $0 { onContrastChanged() }
                                               mapping.concentration = $0
                                               mapping.setAutomaticHDRTarget()
-                                              onContrastAdjustment()
                                           }), in: -1...1) { Text("Contrast") }
-                        onEditingChanged: { editing in
-                            if editing { onContrastAdjustment() }
-                        }
                         .labelsHidden()
                 }
                     .help("Zero is linear. Negative values reduce contrast around the tone position.")
             }
+            .filmLock(.contrast)
             Group {
                 if mapping.hdrEnabled && !mapping.hdrHasContinuationRoom {
                     Label("No room for HDR continuation. Move Tone or the SDR white point below 1.", systemImage: "exclamationmark.triangle")
@@ -142,19 +173,20 @@ struct SlopeEditor: View {
                     ControlInfo(.hdrGain)
                     AdjustmentField(title: "HDR Gain", value: Binding(get: { mapping.hdrGain }, set: {
                         mapping.hdrGain = $0 == 0 ? 0 : max(1,$0); onHDRGainAdjustment()
-                    }), range: 0...5, unit: "×")
+                    }), range: 0...maximumHDRGain, unit: "×")
                     if !mapping.hdrEnabled { Text("Off").foregroundStyle(.secondary) }
                 }
                 HStack {
                     Image(systemName: "sun.max")
                         .frame(width: 22).accessibilityHidden(true)
                     Slider(value: Binding(get: { mapping.hdrEnabled ? max(1.01, mapping.hdrGain) : 0 }, set: { value in
-                        mapping.hdrGain = value < 0.505 ? 0 : min(5, max(1.01, value))
+                        mapping.hdrGain = value < 0.505 ? 0 : min(maximumHDRGain, max(1.01, value))
                         onHDRGainAdjustment()
-                    }), in: 0...5) { Text("HDR Gain") }
+                    }), in: 0...maximumHDRGain) { Text("HDR Gain") }
                         .labelsHidden()
                 }
             }
+            .filmLock(.hdrGain)
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
                     Text("HDR Rolloff")
@@ -172,7 +204,7 @@ struct SlopeEditor: View {
                         .labelsHidden()
                 }
             }
-            .disabled(!mapping.hdrEnabled)
+            .disabled(!mapping.hdrEnabled).filmLock(.hdrRolloff)
         }
         .font(.callout.monospacedDigit())
         .padding()
@@ -185,14 +217,16 @@ struct SlopeEditor: View {
 
 struct HistogramToneCurve: View {
     let mapping: ToneMapping
+    let hdrPreview: Bool
+    var inputMaximum = 1.0
 
     var body: some View {
         Canvas { context, size in
             let sdrCurve = mapping.curve(hdr: false)
             let hdrCurve = mapping.curve(hdr: true)
-            let maximum = max(1.25, mapping.hdrMax * 1.08)
+            let maximum = hdrPreview ? max(1.25, mapping.hdrMax * 1.08) : 1.25
             func point(_ input: Double, _ output: Double) -> CGPoint {
-                CGPoint(x: input * size.width,
+                CGPoint(x: input / inputMaximum * size.width,
                         y: size.height * (1 - max(0, output) / maximum))
             }
             let whiteY = point(mapping.white, 1).y
@@ -207,7 +241,7 @@ struct HistogramToneCurve: View {
             for (curve, color) in (mapping.hdrEnabled ? [(hdrCurve, Color.orange), (sdrCurve, Color.mint)] : [(sdrCurve, Color.mint)]) {
                 var path = Path()
                 for index in 0...2000 {
-                    let input = Double(index) / 2000
+                    let input = Double(index) / 2000 * inputMaximum
                     let p = point(input, curve.value(at: input))
                     if index == 0 { path.move(to: p) } else { path.addLine(to: p) }
                 }
@@ -215,8 +249,8 @@ struct HistogramToneCurve: View {
                 context.stroke(path, with: .color(color), lineWidth: 2)
             }
             var peakLine = Path()
-            peakLine.move(to: CGPoint(x: mapping.peakPosition * size.width, y: 0))
-            peakLine.addLine(to: CGPoint(x: mapping.peakPosition * size.width, y: size.height))
+            peakLine.move(to: CGPoint(x: mapping.peakPosition / inputMaximum * size.width, y: 0))
+            peakLine.addLine(to: CGPoint(x: mapping.peakPosition / inputMaximum * size.width, y: size.height))
             context.stroke(peakLine, with: .color(.yellow.opacity(0.6)),
                            style: StrokeStyle(lineWidth: 1, dash: [2, 4]))
             let crossing = point(mapping.white, 1)
@@ -230,6 +264,7 @@ struct HistogramToneCurve: View {
             context.draw(Text("1.0 · SDR white").font(.caption2).foregroundStyle(.white),
                          at: CGPoint(x: size.width - 5, y: whiteY - 3), anchor: .bottomTrailing)
         }
+        .clipped()
         .accessibilityLabel("Two tone curves. SDR reaches one at the white point; HDR reaches its maximum at input one.")
     }
 }

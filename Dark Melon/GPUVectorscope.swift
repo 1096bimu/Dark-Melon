@@ -98,7 +98,7 @@ actor GPUVectorscope {
             command.commit()
         }
         try Task.checkCancellation()
-        return ScopeTexture(texture: output, gpuMilliseconds: (command.gpuEndTime - command.gpuStartTime) * 1000)
+        return ScopeTexture(texture: output, wrapsHue: hueChroma, gpuMilliseconds: (command.gpuEndTime - command.gpuStartTime) * 1000)
     }
 
     private static let shader = """
@@ -152,19 +152,8 @@ actor GPUVectorscope {
         if (p.x >= 513 || p.y >= 513) return;
         uint count = 0;
         for (uint shard = 0; shard < 16; ++shard) count += counts[shard * 513 * 513 + p.y * 513 + p.x];
-        // Both scopes share the same sample footprint and density brightness.
-        {
-            const int2 offsets[4]={int2(-1,0),int2(1,0),int2(0,-1),int2(0,1)};
-            for (uint i=0;i<4;++i) {
-                int2 q=int2(p)+offsets[i];
-                if (exposure<0.0) q.x=(q.x+513)%513; // Only hue wraps around.
-                if (q.x<0 || q.x>=513 || q.y<0 || q.y>=513) continue;
-                uint neighbor=0;
-                for (uint shard=0;shard<16;++shard)
-                    neighbor+=counts[shard*513*513+q.y*513+q.x];
-                count=max(count,neighbor);
-            }
-        }
+        // The display shader draws the sample cross in screen pixels so wide
+        // hue graphs do not stretch its horizontal arm.
         float brightness = min(1.0, log(1.0 + float(count) * abs(exposure)) / log(4097.0));
         brightness=min(1.0,brightness*2.0);
         output.write(float4(float3(brightness), 1.0), p);
@@ -179,5 +168,6 @@ private enum ScopeError: LocalizedError {
 
 nonisolated struct ScopeTexture: @unchecked Sendable {
     let texture: MTLTexture
+    var wrapsHue = false
     let gpuMilliseconds: Double
 }

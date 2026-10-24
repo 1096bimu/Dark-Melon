@@ -41,7 +41,13 @@ nonisolated struct ToneMapping: Codable, Equatable, Sendable {
 
     static func fresh(isRAW: Bool, sourceHeadroom: Double) -> ToneMapping {
         var result = ToneMapping()
-        if !isRAW && sourceHeadroom <= 1 { result.hdrGain = 0 }
+        if !isRAW {
+            result.concentration = 0
+            // Non-RAW decoding divides by headroom to fit our input domain.
+            // A linear curve and the inverse gain restore the decoded HDR pixels.
+            let headroom = sourceHeadroom.isFinite ? max(1, sourceHeadroom) : 1
+            result.hdrGain = headroom > 1 ? headroom : 0
+        }
         result.setAutomaticHDRTarget()
         return result
     }
@@ -99,7 +105,7 @@ nonisolated struct ToneMapping: Codable, Equatable, Sendable {
         // Updating the target preserves the user’s HDR Gain, including an explicit Off.
     }
 
-    private func sdrSlope(at join: Double, curve sdr: ToneCurve) -> Double {
+    func sdrSlope(at join: Double, curve sdr: ToneCurve) -> Double {
         // Use the actual sampled SDR segment's slope, including its left-hand
         // slope at white (the clipped segment to its right is not the tangent).
         let position = min(1, max(0, join / white))

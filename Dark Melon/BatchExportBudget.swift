@@ -1,4 +1,3 @@
-#if os(macOS)
 import Foundation
 
 /// Admission estimates, not a hard cap on Core Image/codec allocations.
@@ -16,5 +15,3 @@ nonisolated enum BatchExportBudget {
         return !pressured && active < cpuLimit && cost <= budget && reserved <= budget - cost
     }
 }
-
-#endif

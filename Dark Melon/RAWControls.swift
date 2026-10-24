@@ -43,6 +43,7 @@ nonisolated enum RAWAdjustment: String, CaseIterable, Identifiable, Codable, Sen
 }
 
 nonisolated struct RAWSettings: Codable, Equatable, Sendable {
+    static let maximizeRangePreferenceKey = "alwaysMaximizeRAWRange"
     var values: [RAWAdjustment: Float] = [:]
     var supported: Set<RAWAdjustment> = []
     var lensCorrection = false
@@ -88,28 +89,33 @@ nonisolated struct RAWSettings: Codable, Equatable, Sendable {
 }
 
 struct RAWControls: View {
+    @Environment(\.lockedFilmItems) private var lockedItems
     @Binding var settings: RAWSettings
     @Binding var offset: Double
     let isRAW: Bool
     let commit: () -> Void
     let reset: () -> Void
+    var maximizingRange = false
+    var maxRange: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             HStack {
                 Text("RAW").font(.headline)
                 Spacer()
-                Button("Reset RAW", action: reset).disabled(!isRAW)
+                if maximizingRange { ProgressView().controlSize(.small) }
+                Button("Max Range", action: maxRange).disabled(!isRAW || maximizingRange || lockedItems.contains(.exposure) || lockedItems.contains(.shadowBias))
+                Button("Reset RAW", action: reset).disabled(!isRAW || maximizingRange)
             }
             if isRAW {
                 Toggle("Lens Correction", isOn: Binding(get: { settings.lensCorrection }, set: {
                     settings.lensCorrection = $0; commit()
                 }))
-                .disabled(!settings.supportsLensCorrection)
+                .disabled(!settings.supportsLensCorrection).filmLock(.lensCorrection)
                 Toggle("Highlight Recovery", isOn: Binding(get: { settings.highlightRecovery }, set: {
                     settings.highlightRecovery = $0; commit()
                 }))
-                .disabled(!settings.supportsHighlightRecovery)
+                .disabled(!settings.supportsHighlightRecovery).filmLock(.highlightRecovery)
                 ForEach(RAWAdjustment.allCases) { control in
                     VStack(alignment: .leading, spacing: 6) {
                         HStack {
@@ -127,7 +133,7 @@ struct RAWControls: View {
                         })
                         .accessibilityLabel(LocalizedStringKey(control.rawValue))
                     }
-                    .disabled(!settings.supported.contains(control))
+                    .disabled(!settings.supported.contains(control) || lockedItems.contains(where: { $0.rawAdjustment == control }))
                     if control == .shadowBias {
                         VStack(alignment: .leading, spacing: 6) {
                             HStack {
@@ -140,6 +146,7 @@ struct RAWControls: View {
                                 Slider(value: $offset, in: -0.02...0.02) { Text("Offset") }
                                     .labelsHidden()
                             }
+                            .filmLock(.offset)
                             .help("Adds an equal offset to linear RGB before tone mapping. Negative values clip shadows; positive values lift black.")
                         }
                     }
@@ -148,6 +155,7 @@ struct RAWControls: View {
                 Text("Open a RAW image to adjust decoder settings.").foregroundStyle(.secondary)
             }
         }
+        .disabled(maximizingRange)
         .toggleStyle(.switch)
         .padding()
     }

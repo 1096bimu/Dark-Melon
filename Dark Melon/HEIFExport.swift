@@ -37,10 +37,12 @@ nonisolated struct HEIFSettings: Codable, Equatable, Sendable {
     var quality = 0.9
     var rgbGainMap = true
     var halfSizeGainMap = true
+    // Freeze the app preference with the export settings, including queued jobs.
+    var effectiveISO = ExportMetadata.effectiveISOEnabled
 
     init() {}
     private enum CodingKeys: String, CodingKey {
-        case format, heifHDRMode, jpegHDR, tiffHDR, tiff16Bit, scale, quality, rgbGainMap, halfSizeGainMap
+        case format, heifHDRMode, jpegHDR, tiffHDR, tiff16Bit, scale, quality, rgbGainMap, halfSizeGainMap, effectiveISO
     }
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
@@ -53,6 +55,7 @@ nonisolated struct HEIFSettings: Codable, Equatable, Sendable {
         quality = try values.decodeIfPresent(Double.self, forKey: .quality) ?? 0.9
         rgbGainMap = try values.decodeIfPresent(Bool.self, forKey: .rgbGainMap) ?? true
         halfSizeGainMap = try values.decodeIfPresent(Bool.self, forKey: .halfSizeGainMap) ?? true
+        effectiveISO = try values.decodeIfPresent(Bool.self, forKey: .effectiveISO) ?? ExportMetadata.effectiveISOEnabled
     }
 
     private static let defaultsKey = "heifExportSettings.v1"
@@ -61,6 +64,7 @@ nonisolated struct HEIFSettings: Codable, Equatable, Sendable {
         guard let data = UserDefaults.standard.data(forKey: defaultsKey),
               var settings = try? JSONDecoder().decode(Self.self, from: data),
               settings.scale.isFinite, settings.quality.isFinite else { return Self() }
+        settings.effectiveISO = ExportMetadata.effectiveISOEnabled
         settings.scale = min(1, max(0.000001, settings.scale))
         settings.quality = min(1, max(0, settings.quality))
         return settings
@@ -104,18 +108,34 @@ struct HEIFExportOptions: View {
     let colorSpace: ProcessingColorSpace
     let rawSettings: RAWSettings
     var percentageOnly = false
-    let save: () -> Void
+    let save: (RAWDeveloper) -> Void
+    @AppStorage(ExportMetadata.effectiveISOPreferenceKey) private var effectiveISO = true
     @Environment(\.dismiss) private var dismiss
     @State private var widthText = ""
     @State private var heightText = ""
     @State private var encodedBytes: Int?
+    @State private var worker: RAWDeveloper?
     @State private var measuredSettings: HEIFSettings?
     @State private var sizeError: String?
     @FocusState private var editingDimension: Dimension?
     private enum Dimension: Hashable { case width, height }
+    private var outputHDREnabled: Bool {
+        if percentageOnly { return hdrEnabled } // A batch can contain both HDR and log-LUT SDR outputs.
+        guard hdrEnabled else { return false }
+        guard let id = mapping.lutID, LUTStore.shared.configuration(for: id).input.isLog,
+              LUTStore.shared.cube(for: id) != nil else { return true }
+        return false
+    }
     private var baseSize: CGSize { mapping.transform?.resolution(width: width, height: height, estimate: .maximum) ?? CGSize(width: width, height: height) }
     private var outputWidth: Int { max(1, Int((Double(baseSize.width) * settings.scale).rounded())) }
     private var outputHeight: Int { max(1, Int((Double(baseSize.height) * settings.scale).rounded())) }
+
+    private func sessionWorker() -> RAWDeveloper {
+        if let worker { return worker }
+        let created = RAWDeveloper(colorSpace: colorSpace, rawSettings: rawSettings)
+        worker = created
+        return created
+    }
 
     private func syncDimensions() {
         if editingDimension != .width { widthText = String(outputWidth) }
@@ -172,17 +192,23 @@ struct HEIFExportOptions: View {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save…") { finishDimensionEditing(); dismiss(); save() }
+                    Button("Save…") {
+                        finishDimensionEditing()
+                        let worker = sessionWorker()
+                        dismiss()
+                        save(worker)
+                    }
                 }
             }
         }
-        .onAppear { syncDimensions() }
+        .onAppear { settings.effectiveISO = effectiveISO; syncDimensions() }
+        .onChange(of: effectiveISO) { _, value in settings.effectiveISO = value }
         .onChange(of: settings.scale) { _, _ in syncDimensions() }
         .onChange(of: editingDimension) { previous, _ in commitDimension(previous) }
         .task {
-            // One serial worker, rather than spawning another full encode for
-            // each slider event. Its decoded source is released with the sheet.
-            let worker = RAWDeveloper(colorSpace: colorSpace, rawSettings: rawSettings)
+            // This session retains developed buffers and the last encoded file.
+            // Save receives the same worker, including an encode still in flight.
+            let worker = sessionWorker()
             var attempted: HEIFSettings?
             while !Task.isCancelled {
                 do { try await Task.sleep(for: .seconds(1)) }
@@ -261,18 +287,22 @@ struct HEIFExportOptions: View {
                 .foregroundStyle(.secondary)
             }
             if format == .tiff {
-                Picker("Version", selection: $settings.tiffHDR) {
-                    Text("SDR").tag(false)
-                    Text("HDR").tag(true)
-                }.pickerStyle(.segmented)
+                if outputHDREnabled {
+                    Picker("Version", selection: $settings.tiffHDR) {
+                        Text("SDR").tag(false)
+                        Text("HDR").tag(true)
+                    }.pickerStyle(.segmented)
+                }
                 Picker("Bit depth", selection: $settings.tiff16Bit) {
                     Text("8 bit").tag(false)
                     Text("16 bit").tag(true)
                 }.pickerStyle(.segmented)
-                Text("LZW compression. HDR preserves the full rendition by scaling it down by HDR Gain to fit a standard SDR file.")
+                Text(outputHDREnabled
+                     ? "LZW compression. HDR preserves the full rendition by scaling it down by HDR Gain to fit a standard SDR file."
+                     : "LZW compression.")
                     .font(.caption).foregroundStyle(.secondary)
             }
-            if hdrEnabled && format == .heif {
+            if outputHDREnabled && format == .heif {
                 Picker("HDR encoding", selection: $settings.heifHDRMode) {
                     ForEach(HEIFHDRMode.allCases) { mode in
                         Text(mode.label).tag(mode)
@@ -283,11 +313,11 @@ struct HEIFExportOptions: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }
-            if hdrEnabled && format == .jpeg {
+            if outputHDREnabled && format == .jpeg {
                 Toggle("HDR gain map", isOn: $settings.jpegHDR)
                     .help("Save an SDR JPEG with an ISO HDR gain map for compatible viewers.")
             }
-            if hdrEnabled && ((format == .heif && settings.heifHDRMode == .gainMap) || (format == .jpeg && settings.jpegHDR)) {
+            if outputHDREnabled && ((format == .heif && settings.heifHDRMode == .gainMap) || (format == .jpeg && settings.jpegHDR)) {
                 Toggle("RGB gain map", isOn: $settings.rgbGainMap)
                 Text(settings.rgbGainMap ? "Color gain map" : "Monochrome gain map")
                     .foregroundStyle(.secondary)

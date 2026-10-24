@@ -375,6 +375,14 @@ struct ImageFileBrowser: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.bar)
+        #if os(macOS)
+        .background(BrowserSelectAllShortcut {
+            let urls = files.map(\.url)
+            if let selection { selection.wrappedValue = Set(urls) }
+            else { selectedFiles = Set(urls) }
+            selectionAnchor = urls.first
+        }.frame(width: 0, height: 0))
+        #endif
         .onChange(of: pendingURLs, initial: true) { _, urls in
             model.pendingURLs = urls
         }
