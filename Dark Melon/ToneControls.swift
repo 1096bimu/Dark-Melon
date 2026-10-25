@@ -193,8 +193,8 @@ struct SlopeEditor: View {
                 HStack {
                     Image(systemName: "sun.max")
                         .frame(width: 22).accessibilityHidden(true)
-                    Slider(value: Binding(get: { mapping.hdrEnabled ? min(5, max(1.01, mapping.hdrGain)) : 0 }, set: { value in
-                        mapping.hdrGain = value < 0.505 ? 0 : min(5, max(1.01, value))
+                    Slider(value: Binding(get: { mapping.hdrEnabled ? min(5, max(1, mapping.hdrGain)) : 0 }, set: { value in
+                        mapping.hdrGain = value < 0.5 ? 0 : min(5, max(1, value))
                         onHDRGainAdjustment()
                     }), in: 0...5, onEditingChanged: { editing in
                         if editing, mapping.hdrGain > 5 {
@@ -212,14 +212,14 @@ struct SlopeEditor: View {
                     ControlInfo(.hdrRolloff)
                     AdjustmentField(title: "HDR Rolloff", value: Binding(get: { mapping.hdrRolloff }, set: {
                         mapping.hdrRolloff=$0; onHDRGainAdjustment()
-                    }), range: 0...1, digits: 0, scale: 100, unit: "%")
+                    }), range: -1...1, digits: 0, scale: 100, unit: "%")
                 }
                 HStack {
                     Image(systemName: "line.diagonal").frame(width: 22).accessibilityHidden(true)
                     Slider(value: Binding(get: { mapping.hdrRolloff }, set: {
                         mapping.hdrRolloff = $0
                         onHDRGainAdjustment()
-                    }), in: 0...1) { Text("HDR Rolloff") }
+                    }), in: -1...1) { Text("HDR Rolloff") }
                         .labelsHidden()
                 }
             }

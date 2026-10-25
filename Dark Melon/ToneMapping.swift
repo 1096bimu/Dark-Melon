@@ -18,14 +18,17 @@ nonisolated struct ToneMapping: Codable, Equatable, Sendable {
     var vignette = VignetteSettings()
     var offset = 0.0
     var white = 1.0
-    var tonePosition = 0.183
+    var tonePosition = 0.040
     var toneUsesSourceLuminance = true
     var peakPosition: Double { tonePosition }
-    var concentration = 0.2
+    var concentration = 0.4
     var channelContrast = [0.0, 0.0, 0.0]
     var hdrTarget = 4.0
-    var hdrGain = 1.01
+    var hdrGain = 1.0
     var hdrRolloff = 0.0
+    // Negative rolloff doubles the available upward curvature. At -100%, the
+    // continuation's rise doubles, while its join and starting tangent stay fixed.
+    private var hdrCurvature: Double { hdrRolloff < 0 ? 2 * hdrRolloff : hdrRolloff }
     var hdrEnabled: Bool { hdrGain > 0 }
     /// Rendering headroom and effect ceilings must cover the multiplied curve.
     var hdrMax: Double {
@@ -35,7 +38,7 @@ nonisolated struct ToneMapping: Codable, Equatable, Sendable {
         }
         let start = curve(hdr: false).value(at: peakPosition)
         let endpoint = hdrHasContinuationRoom
-            ? start + (hdrTarget - start) * (1 - 0.5 * hdrRolloff) : 1
+            ? start + (hdrTarget - start) * (1 - 0.5 * hdrCurvature) : 1
         return max(1, endpoint * hdrGain)
     }
 
@@ -127,8 +130,8 @@ nonisolated struct ToneMapping: Codable, Equatable, Sendable {
                 base = sdr.value(at: input)
             } else {
                 let t = (input - join) / width
-                // The slope declines from its starting value to zero at full rolloff.
-                base = start + (hdrTarget - start) * (t - 0.5 * hdrRolloff * t * t)
+                // Positive curvature flattens; negative curvature increases the slope.
+                base = start + (hdrTarget - start) * (t - 0.5 * hdrCurvature * t * t)
             }
             return base * hdrGain
         }

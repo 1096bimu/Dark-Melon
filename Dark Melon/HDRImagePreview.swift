@@ -1,6 +1,7 @@
 #if os(macOS)
 import SwiftUI
 import QuartzCore
+import CoreImage
 
 enum PreviewSampleTool { case whiteBalance }
 
@@ -15,6 +16,8 @@ struct HDRImagePreview: NSViewRepresentable {
     let sdrImage: CGImage
     @Environment(\.hdrScreenSaverActive) private var screenSaverActive
     let image: CGImage
+    var surface: PreviewSurface? = nil
+    var sdrSurface: PreviewSurface? = nil
     let sourceSize: CGSize
     let detail: PreviewDetail?
     let regionChanged: (PreviewRegion?) -> Void
@@ -38,16 +41,18 @@ struct HDRImagePreview: NSViewRepresentable {
         view.configureCrop(ratio: cropRatio, saved: savedTransform)
         view.hover = hover
         view.regionChanged = regionChanged
-        view.display(image, sdrImage: sdrImage, sourceSize: sourceSize, detail: detail,
+        view.display(image, sdrImage: sdrImage, surface: surface, sdrSurface: sdrSurface, sourceSize: sourceSize, detail: detail,
                      hdr: hdr, sourceID: sourceID, screenSaverActive: screenSaverActive)
         view.sample = sample
         view.sampleTool = sampleTool
     }
 
     final class ImageDisplay: NSView {
-        private let imageLayer = CALayer()
-        private let sdrLayer = CALayer()
-        private let detailLayer = CALayer()
+        private let imageLayer = CAMetalLayer()
+        private let sdrLayer = CAMetalLayer()
+        private var detailLayer = CAMetalLayer()
+        private var detailGeneration = UUID()
+        private let renderer = MetalPreviewRenderer()
         private var displayedImage: CGImage?
         private var displayedSDR: CGImage?
         private var displayedDetail: CGImage?
@@ -160,6 +165,12 @@ struct HDRImagePreview: NSViewRepresentable {
             zoom = viewport.zoom
             offset = viewport.offset
             super.init(frame: .zero)
+            for imageLayer in [imageLayer, sdrLayer, detailLayer] {
+                imageLayer.device = renderer.device
+                imageLayer.pixelFormat = .rgba16Float
+                imageLayer.framebufferOnly = false
+                imageLayer.isOpaque = false
+            }
             let container = CALayer()
             container.masksToBounds = true
             // Keep the SDR base present throughout interrupted or reversed HDR fades.
@@ -195,7 +206,7 @@ struct HDRImagePreview: NSViewRepresentable {
         }
         required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
-        func display(_ image: CGImage, sdrImage: CGImage, sourceSize: CGSize, detail: PreviewDetail?,
+        func display(_ image: CGImage, sdrImage: CGImage, surface: PreviewSurface?, sdrSurface: PreviewSurface?, sourceSize: CGSize, detail: PreviewDetail?,
                      hdr: Bool, sourceID: UUID, screenSaverActive: Bool) {
             if self.sourceID != sourceID {
                 self.sourceID = sourceID
@@ -212,11 +223,11 @@ struct HDRImagePreview: NSViewRepresentable {
             imageLayer.contentsHeadroom = hdr ? CGFloat(image.contentHeadroom) : 1
             if displayedImage !== image {
                 displayedImage = image
-                imageLayer.contents = image
+                render(surface, fallback: image, on: imageLayer, hdr: hdr)
             }
             if displayedSDR !== sdrImage {
                 displayedSDR = sdrImage
-                sdrLayer.contents = sdrImage
+                render(sdrSurface, fallback: sdrImage, on: sdrLayer, hdr: false)
             }
             let targetOpacity: Float = hdr && screenSaverActive ? 0 : 1
             if imageLayer.opacity != targetOpacity {
@@ -231,14 +242,47 @@ struct HDRImagePreview: NSViewRepresentable {
             }
             if displayedDetail !== detail?.image {
                 displayedDetail = detail?.image
-                detailLayer.contents = detail?.image
+                let generation = UUID()
+                detailGeneration = generation
+                // Never move an old drawable into a new patch rectangle. Keep the old
+                // patch in place until the replacement texture and geometry are ready.
+                if let detail {
+                    let replacement = CAMetalLayer()
+                    replacement.device = renderer.device
+                    replacement.pixelFormat = .rgba16Float
+                    replacement.framebufferOnly = false
+                    replacement.isOpaque = false
+                    replacement.presentsWithTransaction = true
+                    replacement.preferredDynamicRange = hdr ? .high : .standard
+                    replacement.contentsHeadroom = hdr ? CGFloat(detail.image.contentHeadroom) : 1
+                    render(detail.surface, fallback: detail.image, on: replacement, hdr: hdr) { [weak self] in
+                        guard let self, self.detailGeneration == generation else { return false }
+                        self.detailLayer.removeFromSuperlayer()
+                        self.detailLayer = replacement
+                        self.detailRect = detail.rect
+                        self.imageLayer.addSublayer(replacement)
+                        replacement.isHidden = self.cropRatio != nil
+                        self.positionImage()
+                        return true
+                    }
+                } else {
+                    detailRect = nil
+                    detailLayer.isHidden = true
+                }
             }
-            detailLayer.isHidden = detail == nil || cropRatio != nil
-            detailLayer.preferredDynamicRange = hdr ? .high : .standard
-            detailLayer.contentsHeadroom = hdr ? CGFloat(detail?.image.contentHeadroom ?? 1) : 1
-            detailRect = detail?.rect
+            detailLayer.isHidden = detailRect == nil || cropRatio != nil
             positionImage()
             CATransaction.commit()
+        }
+
+        private func render(_ surface: PreviewSurface?, fallback: CGImage, on layer: CAMetalLayer, hdr: Bool,
+                            install: (@MainActor @Sendable () -> Bool)? = nil) {
+            let frame = surface ?? PreviewSurface(image: CIImage(cgImage: fallback),
+                colorSpace: fallback.colorSpace ?? CGColorSpace(name: CGColorSpace.extendedLinearSRGB)!, hdr: hdr)
+            layer.colorspace = frame.colorSpace
+            layer.wantsExtendedDynamicRangeContent = frame.hdr
+            layer.drawableSize = frame.image.extent.size
+            renderer.submit(frame, to: layer, install: install)
         }
 
         override func layout() {

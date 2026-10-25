@@ -10,7 +10,7 @@ nonisolated enum PasteItem: String, CaseIterable, Codable, Sendable, Identifiabl
     case chromaCurve, lightnessChromaCurve, vertices, hueTwister, splitTone
     case dyeResponse, clarity, hdf, grain, halation, vignette
     case transform, lut
-    case exposure, shadowBias, offset, luminanceNoise, colorNoise, sharpness, detail, edgeContrast, moire, lensCorrection, highlightRecovery
+    case rawDecoder, exposure, shadowBias, offset, luminanceNoise, colorNoise, sharpness, detail, edgeContrast, moire, lensCorrection, highlightRecovery
     var id: Self { self }
     var title: String {
         switch self {
@@ -34,6 +34,7 @@ nonisolated enum PasteItem: String, CaseIterable, Codable, Sendable, Identifiabl
         case .vignette: "Vignette"
         case .transform: "Transform"
         case .lut: "LUT"
+        case .rawDecoder: "RAW 9"
         case .exposure: "Exposure"
         case .shadowBias: "Shadow Bias"
         case .offset: "Offset"
@@ -64,7 +65,7 @@ nonisolated enum PasteItem: String, CaseIterable, Codable, Sendable, Identifiabl
     static let balanceItems: [Self] = [.rgbWhiteBalance,.rawWhiteBalance]
     static let colorItems: [Self] = [.chromaCurve,.lightnessChromaCurve,.vertices,.hueTwister,.splitTone]
     static let effectItems: [Self] = [.dyeResponse,.clarity,.hdf,.grain,.halation,.vignette]
-    static let rawItems: [Self] = [.exposure,.shadowBias,.offset,.luminanceNoise,.colorNoise,.sharpness,.detail,.edgeContrast,.moire,.lensCorrection,.highlightRecovery]
+    static let rawItems: [Self] = [.rawDecoder,.exposure,.shadowBias,.offset,.luminanceNoise,.colorNoise,.sharpness,.detail,.edgeContrast,.moire,.lensCorrection,.highlightRecovery]
 }
 
 /// Legacy group flags keep existing Library entries and internal reset callers compatible.
@@ -155,6 +156,10 @@ nonisolated struct SettingsPasteSelection: Codable, Sendable, Equatable {
         if destination == nil { result.selectedSwitches = [] }
         for item in PasteItem.rawItems where contains(item) {
             if let control = item.rawAdjustment, let value = source.values[control] { result.values[control] = value }
+        }
+        if contains(.rawDecoder), source.selectedSwitches == nil || source.selectedSwitches!.contains("decoder") {
+            result.decoderMode = source.decoderMode
+            result.selectedSwitches?.insert("decoder")
         }
         if contains(.lensCorrection), source.selectedSwitches == nil || source.selectedSwitches!.contains("lens") {
             result.lensCorrection = source.lensCorrection

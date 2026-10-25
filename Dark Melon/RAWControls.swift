@@ -42,8 +42,29 @@ nonisolated enum RAWAdjustment: String, CaseIterable, Identifiable, Codable, Sen
     }
 }
 
+nonisolated enum RAW9Mode: String, Codable, CaseIterable, Sendable {
+    case on, off, exportOnly
+
+    var title: String {
+        switch self {
+        case .on: "On"
+        case .off: "Off"
+        case .exportOnly: "Export Only"
+        }
+    }
+
+    func enabled(exporting: Bool) -> Bool { self == .on || (self == .exportOnly && exporting) }
+}
+
 nonisolated struct RAWSettings: Codable, Equatable, Sendable {
     static let maximizeRangePreferenceKey = "alwaysMaximizeRAWRange"
+    var useRAW9: Bool? = nil // Missing in older recipes means the legacy/default decoder.
+    var raw9Mode: RAW9Mode? = nil
+    var decoderMode: RAW9Mode {
+        get { raw9Mode ?? (useRAW9 == true ? .on : .off) }
+        set { raw9Mode = newValue; useRAW9 = nil }
+    }
+    var supportsRAW9 = false
     var values: [RAWAdjustment: Float] = [:]
     var supported: Set<RAWAdjustment> = []
     var lensCorrection = false
@@ -53,23 +74,31 @@ nonisolated struct RAWSettings: Codable, Equatable, Sendable {
     var highlightRecovery = true
     var supportsHighlightRecovery = false
 
-    private enum CodingKeys: String, CodingKey { case values, lensCorrection, highlightRecovery, selectedSwitches }
+    private enum CodingKeys: String, CodingKey { case values, lensCorrection, highlightRecovery, selectedSwitches, useRAW9, raw9Mode }
 
     static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.values == rhs.values && lhs.lensCorrection == rhs.lensCorrection && lhs.highlightRecovery == rhs.highlightRecovery && lhs.selectedSwitches == rhs.selectedSwitches
+        lhs.decoderMode == rhs.decoderMode && lhs.values == rhs.values && lhs.lensCorrection == rhs.lensCorrection && lhs.highlightRecovery == rhs.highlightRecovery && lhs.selectedSwitches == rhs.selectedSwitches
     }
 
     /// Capabilities always belong to the destination decoder, not the saved recipe.
     func resolved(using defaults: Self) -> Self {
         var result = defaults
+        if selectedSwitches == nil || selectedSwitches!.contains("decoder") { result.decoderMode = decoderMode }
         result.values.merge(values) { _, saved in saved }
         if selectedSwitches == nil || selectedSwitches!.contains("lens") { result.lensCorrection = lensCorrection }
         if selectedSwitches == nil || selectedSwitches!.contains("highlight") { result.highlightRecovery = highlightRecovery }
         return result
     }
 
+    /// Use the advertised identifiers so the macOS 26 build does not link to
+    /// RAW 9 constants that only exist in the macOS 27 Core Image framework.
+    static func raw9Version(_ raw: CIRAWFilter) -> CIRAWDecoderVersion? {
+        raw.supportedDecoderVersions.first { $0.rawValue == "9" || $0.rawValue == "9.dng" }
+    }
     init() {}
     init(_ raw: CIRAWFilter) {
+        supportsRAW9 = Self.raw9Version(raw) != nil
+
         for control in RAWAdjustment.allCases {
             values[control] = raw[keyPath: control.amount]
             if control.supported(by: raw) { supported.insert(control) }
@@ -108,6 +137,16 @@ struct RAWControls: View {
                 Button("Reset RAW", action: reset).disabled(!isRAW || maximizingRange)
             }
             if isRAW {
+                Picker("RAW 9", selection: Binding(get: { settings.decoderMode }, set: {
+                    settings.decoderMode = $0; commit()
+                })) {
+                    ForEach(RAW9Mode.allCases, id: \.self) { mode in
+                        Text(LocalizedStringKey(mode.title)).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .disabled(!settings.supportsRAW9).filmLock(.rawDecoder)
+                .help("Uses Apple's neural demosaic and denoise when supported. Changing the decoder may change detail and color.")
                 Toggle("Lens Correction", isOn: Binding(get: { settings.lensCorrection }, set: {
                     settings.lensCorrection = $0; commit()
                 }))

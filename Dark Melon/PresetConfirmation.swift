@@ -45,11 +45,11 @@ struct PresetPreview {
                         cachedBefore: PreviewImages?) async throws -> Self {
         let recipe = preset.applying(to: original, isRAW: development.isRAW)
         let worker = RAWDeveloper(colorSpace: recipe.colorSpace, rawSettings: recipe.rawSettings,
-                                  rawWhiteBalance: recipe.mapping.rawWhiteBalance)
+                                  rawWhiteBalance: recipe.mapping.rawWhiteBalance, interactive: true)
         let before: PreviewImages
         if let cachedBefore { before = cachedBefore }
         else {
-            let renderer = RAWDeveloper(colorSpace: original.colorSpace)
+            let renderer = RAWDeveloper(colorSpace: original.colorSpace, interactive: true)
             let source = try await renderer.overview(development, canvas: canvas)
             before = try await renderer.previews(source, mapping: original.mapping)
         }

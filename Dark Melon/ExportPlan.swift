@@ -46,7 +46,9 @@ nonisolated struct ExportPlan: Sendable {
         }
         let costs = pixels.map { BatchExportBudget.bytes(pixels: $0, scale: 0) }
         let budget = BatchExportBudget.limit(memory: ProcessInfo.processInfo.physicalMemory)
-        let cpuLimit = max(1, ProcessInfo.processInfo.activeProcessorCount)
+        let allocation = BatchExportBudget.allocation(costs: costs,
+            cpuCount: ProcessInfo.processInfo.activeProcessorCount, budget: budget)
+        let cpuLimit = allocation.parallelism
         #if os(macOS)
         let pressure = BatchMemoryPressure()
         #endif
@@ -69,7 +71,7 @@ nonisolated struct ExportPlan: Sendable {
                             try Task.checkCancellation()
                             let target = try await BrowserRecipeTarget.load(url)
                             let worker = RAWDeveloper(colorSpace: target.recipe.colorSpace, rawSettings: target.recipe.rawSettings,
-                                                      rawWhiteBalance: target.recipe.mapping.rawWhiteBalance)
+                                                      rawWhiteBalance: target.recipe.mapping.rawWhiteBalance, exporting: true, memoryLimitMB: allocation.megabytesPerFile)
                             let resolved = try await worker.resolveExportRecipe(url, recipe: target.recipe, isRAW: target.isRAW,
                                 maximizeRange: target.savedRecipe == nil && maximizeRAWRange)
                             try Task.checkCancellation()

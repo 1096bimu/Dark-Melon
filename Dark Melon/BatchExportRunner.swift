@@ -35,10 +35,12 @@ nonisolated enum BatchExportRunner {
                     progress: @escaping @MainActor @Sendable (Result, Int) -> Void) async {
         let pressure = BatchMemoryPressure()
         let budget = BatchExportBudget.limit(memory: ProcessInfo.processInfo.physicalMemory)
-        let cpuLimit = max(1, ProcessInfo.processInfo.activeProcessorCount)
         let items = plan.items
         let settings = plan.settings
         let costs = items.map { BatchExportBudget.bytes(pixels: $0.pixels, scale: settings.scale) }
+        let allocation = BatchExportBudget.allocation(costs: costs,
+            cpuCount: ProcessInfo.processInfo.activeProcessorCount, budget: budget)
+        let cpuLimit = allocation.parallelism
         await withTaskGroup(of: Result.self) { group in
             var next = 0, active = 0
             var reserved: UInt64 = 0
@@ -52,7 +54,8 @@ nonisolated enum BatchExportRunner {
                             try Task.checkCancellation()
                             let recipe = item.recipe
                             let worker = RAWDeveloper(colorSpace: recipe.colorSpace, rawSettings: recipe.rawSettings,
-                                                      rawWhiteBalance: recipe.mapping.rawWhiteBalance, lutConfiguration: item.lutConfiguration)
+                                                      rawWhiteBalance: recipe.mapping.rawWhiteBalance, lutConfiguration: item.lutConfiguration,
+                                                      exporting: true, memoryLimitMB: allocation.megabytesPerFile)
                             try await worker.exportBatch(source, mapping: recipe.mapping, settings: settings, destination: destination)
                             return Result(source: source, cost: cost, error: nil, cancelled: false)
                         } catch is CancellationError {

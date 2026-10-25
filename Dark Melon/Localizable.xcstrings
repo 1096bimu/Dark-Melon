@@ -1,6 +1,39 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Adjusts HDR curvature while preserving the starting tangent. Zero is straight; 100% ends flat; -100% bends upward to nearly twice the straight endpoint. HDR Gain multiplies the result and can be increased if the curves cross.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "调整 HDR 曲率，同时保持起点切线。0 为直线，100% 在末端变平，-100% 向上弯曲，使峰值接近直线末端的两倍。HDR 增益会缩放结果，曲线相交时可增加增益。"
+          }
+        }
+      }
+    },
+    "Export Only": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅导出"
+          }
+        }
+      }
+    },
+    "On": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "开启"
+          }
+        }
+      }
+    },
     "" : {
       "shouldTranslate" : false
     },
@@ -893,6 +926,7 @@
       }
     },
     "Clear RAW Default" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -991,6 +1025,7 @@
       }
     },
     "Color Nodes" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -1607,6 +1642,7 @@
       }
     },
     "Edit" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -2446,6 +2482,7 @@
       "shouldTranslate" : false
     },
     "Hold C" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -2638,9 +2675,6 @@
           }
         }
       }
-    },
-    "K" : {
-      "shouldTranslate" : false
     },
     "Keyboard Shortcuts" : {
       "extractionState" : "manual",
@@ -3417,6 +3451,7 @@
       }
     },
     "Orange" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -3666,6 +3701,7 @@
       }
     },
     "Previous / next file" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -3746,6 +3782,17 @@
     "RAW" : {
       "shouldTranslate" : false
     },
+    "RAW 9" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RAW 9"
+          }
+        }
+      }
+    },
     "RAW Default" : {
       "localizations" : {
         "zh-Hans" : {
@@ -3757,6 +3804,7 @@
       }
     },
     "RAW Kelvin White Balance" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -4001,6 +4049,7 @@
       }
     },
     "RGB White Balance" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -5115,6 +5164,7 @@
       }
     },
     "Use as RAW Default" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -5131,6 +5181,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "使用顶部的“预览：SDR”按钮（或 H 键）查看 HDR，然后切回 SDR，对比高光细节和整体效果。"
+          }
+        }
+      }
+    },
+    "Uses Apple's neural demosaic and denoise when supported. Changing the decoder may change detail and color." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在支持的相机上使用 Apple 神经网络去马赛克和降噪。更改解码器可能会改变细节和色彩。"
           }
         }
       }
@@ -5301,6 +5362,7 @@
       }
     },
     "White Point" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {

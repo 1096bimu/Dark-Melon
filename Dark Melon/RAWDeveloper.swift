@@ -3,10 +3,11 @@ import simd
 import Foundation
 import ImageIO
 import CoreVideo
+import Metal
 import UniformTypeIdentifiers
 
 nonisolated struct RAWDevelopment: @unchecked Sendable {
-    let id = UUID()
+    var id = UUID()
     let preview: CGImage
     let linearSource: CIImage
     let url: URL
@@ -17,6 +18,7 @@ nonisolated struct RAWDevelopment: @unchecked Sendable {
     let isRAW: Bool
     let rawDefaults: RAWSettings?
     let sourceHeadroom: Double
+    var fullResolutionReady = true
 }
 
 nonisolated struct HistogramData: Sendable {
@@ -52,26 +54,68 @@ nonisolated struct PreviewImages: @unchecked Sendable {
     let hdr: CGImage
     let fullSDR: CGImage
     let fullHDR: CGImage
+    var surfaceSDR: PreviewSurface? = nil
+    var surfaceHDR: PreviewSurface? = nil
+    var fullSurfaceSDR: PreviewSurface? = nil
+    var fullSurfaceHDR: PreviewSurface? = nil
 }
 
 actor RAWDeveloper {
+    private let exporting: Bool
     private let colorSpace: ProcessingColorSpace
     private var linearSpace: CGColorSpace { colorSpace.linear }
 
-    private let rawSettings: RAWSettings?
-    private let rawWhiteBalance: RAWWhiteBalance?
+    private var rawSettings: RAWSettings?
+    private var rawWhiteBalance: RAWWhiteBalance?
+    private let interactive: Bool
+    private let memoryLimitMB: Int?
+    private var decoderSession: (url: URL, raw9: Bool, filter: CIRAWFilter, defaults: RAWSettings, temperature: Float, tint: Float)?
 
-    init(colorSpace: ProcessingColorSpace = .sRGB, rawSettings: RAWSettings? = nil, rawWhiteBalance: RAWWhiteBalance? = nil, lutStore: LUTStore = .shared, lutConfiguration: LUTConfiguration? = nil) {
+    func updateRAWSettings(_ settings: RAWSettings?, whiteBalance: RAWWhiteBalance?) {
+        rawSettings = settings
+        rawWhiteBalance = whiteBalance
+        overviewCache = nil
+    }
+
+
+    init(colorSpace: ProcessingColorSpace = .sRGB, rawSettings: RAWSettings? = nil, rawWhiteBalance: RAWWhiteBalance? = nil, lutStore: LUTStore = .shared, lutConfiguration: LUTConfiguration? = nil, interactive: Bool = false, exporting: Bool = false, memoryLimitMB: Int? = nil) {
+        self.exporting = exporting
+        self.memoryLimitMB = memoryLimitMB
+        self.interactive = interactive
         self.rawSettings = rawSettings
         self.rawWhiteBalance = rawWhiteBalance
         self.lutPipeline = LUTPipeline(store: lutStore, configuration: lutConfiguration)
         self.colorSpace = colorSpace
     }
-    private lazy var context = CIContext(options: [
-        .workingColorSpace: linearSpace,
-        .workingFormat: CIFormat.RGBAf,
-        .cacheIntermediates: false
-    ])
+    private lazy var previewDevice = MTLCreateSystemDefaultDevice()
+    private lazy var previewCommands = previewDevice?.makeCommandQueue()
+    private lazy var context: CIContext = {
+        var options: [CIContextOption: Any] = [.workingColorSpace: linearSpace,
+            .workingFormat: CIFormat.RGBAf, .cacheIntermediates: interactive]
+        if let memoryLimitMB { options[.memoryTarget] = memoryLimitMB }
+        if interactive, let device = previewDevice { return CIContext(mtlDevice: device, options: options) }
+        return CIContext(options: options)
+    }()
+
+    // RAW 9 currently changes colors when evaluated directly in a custom working gamut.
+    // Isolate decoding in linear sRGB, then let Core Image convert the tagged result.
+    private lazy var raw9Context: CIContext = {
+        var options: [CIContextOption: Any] = [
+            .workingColorSpace: CGColorSpace(name: CGColorSpace.extendedLinearSRGB)!,
+            .workingFormat: CIFormat.RGBAf, .cacheIntermediates: interactive]
+        if let memoryLimitMB { options[.memoryTarget] = memoryLimitMB }
+        return CIContext(options: options)
+    }()
+
+    private func decodedRAWImage(_ raw: CIRAWFilter) throws -> CIImage {
+        guard let image = raw.outputImage else { throw DevelopmentError.decode }
+        guard raw.decoderVersion.rawValue == "9" || raw.decoderVersion.rawValue == "9.dng" else { return image }
+        let space = CGColorSpace(name: CGColorSpace.extendedLinearSRGB)!
+        guard let bitmap = raw9Context.createCGImage(image, from: image.extent,
+            format: .RGBAh, colorSpace: space, deferred: true) else { throw DevelopmentError.decode }
+        return CIImage(cgImage: bitmap).transformed(by:
+            CGAffineTransform(translationX: image.extent.minX, y: image.extent.minY))
+    }
 
     private let lutPipeline: LUTPipeline
     func useLUTConfiguration(_ value: LUTConfiguration?) { lutPipeline.configurationOverride = value }
@@ -160,11 +204,13 @@ actor RAWDeveloper {
         guard !rect.isEmpty else { throw DevelopmentError.decode }
         try Task.checkCancellation()
         let outputHDR = hdr && !lutPipeline.outputsSDR(mapping)
-        let image = try displayPreview(mapped.cropped(to: rect), hdr: outputHDR, headroom: outputHDR ? mapping.hdrMax : 1)
+        let surface = try displaySurface(mapped.cropped(to: rect), hdr: outputHDR)
+        let image = try displayPreview(surface.image, hdr: outputHDR, headroom: outputHDR ? mapping.hdrMax : 1)
         return PreviewDetail(image: image,
             rect: CGRect(x: (rect.minX - extent.minX) / extent.width, y: (rect.minY - extent.minY) / extent.height,
                          width: rect.width / extent.width, height: rect.height / extent.height),
-            scale: scale, sourceID: development.id, mapping: mapping, hdr: hdr)
+            scale: scale, sourceID: development.id, mapping: mapping, hdr: hdr,
+            surface: surface)
     }
 
     func previews(_ source: CGImage, mapping: ToneMapping) throws -> PreviewImages {
@@ -176,19 +222,27 @@ actor RAWDeveloper {
         let sdr = try finishDevelopment(input, mapping: mapping, hdr: logLUT)
         let hdr = mapping.hdrEnabled && !logLUT ? try finishDevelopment(input, mapping: mapping, hdr: true) : sdr
         let full = try finalLUTPair(sdr: sdr, hdr: hdr, mapping: mapping)
-        let fullSDR = try displayPreview(full.sdr, hdr: false, headroom: mapping.hdrMax)
+        let fullSDRSurface = try displaySurface(full.sdr, hdr: false)
+        let fullHDRSurface = outputHDR ? try displaySurface(full.hdr, hdr: true) : fullSDRSurface
+        let fullSDR = try displayPreview(fullSDRSurface.image, hdr: false, headroom: mapping.hdrMax)
         let fullHDR = outputHDR
-            ? try displayPreview(full.hdr, hdr: true, headroom: mapping.hdrMax) : fullSDR
+            ? try displayPreview(fullHDRSurface.image, hdr: true, headroom: mapping.hdrMax) : fullSDR
         guard let transform = mapping.transform else {
-            return PreviewImages(source: source, sdr: fullSDR, hdr: fullHDR, fullSDR: fullSDR, fullHDR: fullHDR)
+            return PreviewImages(source: source, sdr: fullSDR, hdr: fullHDR, fullSDR: fullSDR, fullHDR: fullHDR,
+                surfaceSDR: fullSDRSurface, surfaceHDR: fullHDRSurface,
+                fullSurfaceSDR: fullSDRSurface, fullSurfaceHDR: fullHDRSurface)
         }
         let cropped = try finalLUTPair(sdr: transform.apply(to: sdr),
                                       hdr: mapping.hdrEnabled ? transform.apply(to: hdr) : sdr, mapping: mapping)
-        let croppedSDR = try displayPreview(cropped.sdr, hdr: false, headroom: mapping.hdrMax)
+        let croppedSDRSurface = try displaySurface(cropped.sdr, hdr: false)
+        let croppedHDRSurface = outputHDR ? try displaySurface(cropped.hdr, hdr: true) : croppedSDRSurface
+        let croppedSDR = try displayPreview(croppedSDRSurface.image, hdr: false, headroom: mapping.hdrMax)
         let croppedHDR = outputHDR
-            ? try displayPreview(cropped.hdr, hdr: true, headroom: mapping.hdrMax) : croppedSDR
+            ? try displayPreview(croppedHDRSurface.image, hdr: true, headroom: mapping.hdrMax) : croppedSDR
         try Task.checkCancellation()
-        return PreviewImages(source: source, sdr: croppedSDR, hdr: croppedHDR, fullSDR: fullSDR, fullHDR: fullHDR)
+        return PreviewImages(source: source, sdr: croppedSDR, hdr: croppedHDR, fullSDR: fullSDR, fullHDR: fullHDR,
+            surfaceSDR: croppedSDRSurface, surfaceHDR: croppedHDRSurface,
+            fullSurfaceSDR: fullSDRSurface, fullSurfaceHDR: fullHDRSurface)
     }
 
     private func finalLUTPair(sdr: CIImage, hdr: CIImage, mapping: ToneMapping) throws -> (sdr: CIImage, hdr: CIImage) {
@@ -432,6 +486,32 @@ actor RAWDeveloper {
         return mapped
     }
 
+    private func displaySurface(_ image: CIImage, hdr: Bool) throws -> PreviewSurface {
+        let bounded = hdr ? image : image.applyingFilter("CIColorClamp", parameters: [
+            "inputMinComponents": CIVector(x: 0, y: 0, z: 0, w: 0),
+            "inputMaxComponents": CIVector(x: 1, y: 1, z: 1, w: 1)])
+        guard interactive, let device = previewDevice, let command = previewCommands?.makeCommandBuffer() else {
+            return PreviewSurface(image: bounded, colorSpace: linearSpace, hdr: hdr)
+        }
+        // Evaluate effects once into a GPU texture. Both the display and deferred
+        // scope bitmaps reuse it; neither has to rerun the development graph.
+        let extent = bounded.extent.integral
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .rgba16Float,
+            width: Int(extent.width), height: Int(extent.height), mipmapped: false)
+        descriptor.storageMode = .private
+        descriptor.usage = [.shaderRead, .shaderWrite, .renderTarget]
+        guard let texture = device.makeTexture(descriptor: descriptor) else { throw DevelopmentError.decode }
+        let normalized = bounded.transformed(by: CGAffineTransform(translationX: -extent.minX, y: -extent.minY))
+        context.render(normalized, to: texture, commandBuffer: command,
+                       bounds: CGRect(origin: .zero, size: extent.size), colorSpace: linearSpace)
+        command.commit()
+        command.waitUntilCompleted()
+        try Task.checkCancellation()
+        guard command.status == .completed,
+              let cached = CIImage(mtlTexture: texture, options: [.colorSpace: linearSpace]) else { throw DevelopmentError.decode }
+        return PreviewSurface(image: cached, colorSpace: linearSpace, hdr: hdr)
+    }
+
     private func displayPreview(_ image: CIImage, hdr: Bool, headroom: Double) throws -> CGImage {
         // SDR is a separate, bounded bitmap tagged with the selected output space.
         let displayImage = hdr ? image.settingContentHeadroom(Float(headroom)) : image.applyingFilter("CIColorClamp", parameters: [
@@ -441,7 +521,7 @@ actor RAWDeveloper {
         let space = hdr ? linearSpace : colorSpace.encoded
         guard let result = context.createCGImage(displayImage, from: image.extent,
                                                  format: hdr ? .RGBAh : .RGBA8,
-                                                 colorSpace: space) else {
+                                                 colorSpace: space, deferred: interactive) else {
             throw DevelopmentError.decode
         }
         try Task.checkCancellation()
@@ -462,12 +542,30 @@ actor RAWDeveloper {
     }
 
     private func configuredRAW(_ url: URL, whiteBalance: RAWWhiteBalance? = nil) throws -> (filter: CIRAWFilter, defaults: RAWSettings) {
-        guard let raw = CIRAWFilter(imageURL: url) else { throw DevelopmentError.unsupported }
-        raw.baselineExposure = 0
-        raw.shadowBias = 2
-        if raw.isLuminanceNoiseReductionSupported { raw.luminanceNoiseReductionAmount = 0 }
-        raw.exposure = 0
-        let defaults = RAWSettings(raw)
+        let wantsRAW9 = rawSettings?.decoderMode.enabled(exporting: exporting) == true
+        let raw: CIRAWFilter
+        let defaults: RAWSettings
+        if interactive, let cached = decoderSession, cached.url == url, cached.raw9 == wantsRAW9 {
+            raw = cached.filter
+            defaults = cached.defaults
+            defaults.apply(to: raw)
+            raw.neutralTemperature = cached.temperature
+            raw.neutralTint = cached.tint
+            raw.scaleFactor = 1
+        } else {
+            guard let created = CIRAWFilter(imageURL: url) else { throw DevelopmentError.unsupported }
+            raw = created
+            if wantsRAW9, let version = RAWSettings.raw9Version(raw) { raw.decoderVersion = version }
+            raw.baselineExposure = 0
+            raw.shadowBias = 2
+            if raw.isLuminanceNoiseReductionSupported { raw.luminanceNoiseReductionAmount = 0 }
+            if raw.isSharpnessSupported { raw.sharpnessAmount = 0.5 }
+            raw.exposure = 0
+            defaults = RAWSettings(raw)
+            if interactive {
+                decoderSession = (url, wantsRAW9, raw, defaults, raw.neutralTemperature, raw.neutralTint)
+            }
+        }
         rawSettings?.apply(to: raw)
         (whiteBalance ?? rawWhiteBalance)?.apply(to: raw)
         raw.boostAmount = 0
@@ -518,7 +616,7 @@ actor RAWDeveloper {
         raw.shadowBias = 0
         func highlightPeak() throws -> Double {
             try Task.checkCancellation()
-            guard let image = raw.outputImage else { throw DevelopmentError.decode }
+            let image = try decodedRAWImage(raw)
             // Sample rather than average: an isolated hot pixel must not be
             // smeared into neighboring samples before trimming the tails.
             let scale = min(1, 1024 / max(image.extent.width, image.extent.height))
@@ -550,7 +648,7 @@ actor RAWDeveloper {
         return result
     }
 
-    private func sourceImage(_ url: URL, whiteBalance: RAWWhiteBalance? = nil) throws -> (image: CIImage, headroom: Double, whitePoint: RAWWhitePoint?, isRAW: Bool, rawDefaults: RAWSettings?) {
+    private func sourceImage(_ url: URL, whiteBalance: RAWWhiteBalance? = nil, previewLimit: CGFloat? = nil) throws -> (image: CIImage, headroom: Double, whitePoint: RAWWhitePoint?, isRAW: Bool, rawDefaults: RAWSettings?) {
         let image: CIImage
         var rawDefaults: RAWSettings?
         var headroom = 1.0
@@ -565,8 +663,19 @@ actor RAWDeveloper {
             rawDefaults = configured.defaults
             whitePoint = RAWWhitePoint(chromaticity: raw.neutralChromaticity,
                                        temperature: Double(raw.neutralTemperature), tint: Double(raw.neutralTint))
-            guard let decoded = raw.outputImage else { throw DevelopmentError.decode }
-            image = decoded
+            guard let fullExtent = raw.outputImage?.extent else { throw DevelopmentError.decode }
+            let fullSize = fullExtent.size
+            if let previewLimit {
+                raw.scaleFactor = Float(min(1, previewLimit / max(fullSize.width, fullSize.height)))
+            }
+            let decoded = try decodedRAWImage(raw)
+            if previewLimit != nil {
+                // Preserve full-image coordinates and effect radii while using a cheap proxy.
+                let oriented = decoded.extent.size
+                image = decoded.transformed(by: CGAffineTransform(translationX: -decoded.extent.minX, y: -decoded.extent.minY))
+                    .transformed(by: CGAffineTransform(scaleX: fullSize.width / oriented.width, y: fullSize.height / oriented.height))
+                    .transformed(by: CGAffineTransform(translationX: fullExtent.minX, y: fullExtent.minY))
+            } else { image = decoded }
         } else {
             // Respect embedded profiles and orientation. Expand supported Apple/ISO
             // gain maps and retain native HDR rather than tone mapping it to SDR.
@@ -901,10 +1010,10 @@ actor RAWDeveloper {
         return result
     }
 
-    func develop(_ url: URL, previewCanvas: CGSize = CGSize(width: 2560, height: 2560)) throws -> RAWDevelopment {
+    func develop(_ url: URL, previewCanvas: CGSize = CGSize(width: 2560, height: 2560), progressive: Bool = false) throws -> RAWDevelopment {
         let accessed = url.startAccessingSecurityScopedResource()
         defer { if accessed { url.stopAccessingSecurityScopedResource() } }
-        let source = try sourceImage(url)
+        let source = try sourceImage(url, previewLimit: progressive ? 2560 : nil)
         let image = source.image
         let bounds = image.extent.integral
         let scale = PreviewResolution.overviewScale(source: bounds.size, canvas: previewCanvas)
@@ -915,9 +1024,27 @@ actor RAWDeveloper {
         }
         let container = CGImageSourceCreateWithURL(url as CFURL, nil)
         let properties = container.flatMap { CGImageSourceCopyPropertiesAtIndex($0, 0, nil) } as? [CFString: Any] ?? [:]
-        let development = RAWDevelopment(preview: preview, linearSource: image, url: url, width: Int(bounds.width), height: Int(bounds.height), whitePoint: source.whitePoint, metadata: CameraMetadata(properties: properties), isRAW: source.isRAW, rawDefaults: source.rawDefaults, sourceHeadroom: source.headroom)
+        var development = RAWDevelopment(preview: preview, linearSource: image, url: url, width: Int(bounds.width), height: Int(bounds.height), whitePoint: source.whitePoint, metadata: CameraMetadata(properties: properties), isRAW: source.isRAW, rawDefaults: source.rawDefaults, sourceHeadroom: source.headroom)
+        development.fullResolutionReady = !progressive || !source.isRAW
         overviewCache = (development.id, CGSize(width: floor(image.extent.width * scale), height: floor(image.extent.height * scale)), preview)
         return development
+    }
+
+    /// Materialize only the current photo. Ordinary detail renders no longer revisit RAW decoding.
+    func prepareFullResolution(_ development: RAWDevelopment) throws -> RAWDevelopment {
+        try Task.checkCancellation()
+        let access = development.url.startAccessingSecurityScopedResource()
+        defer { if access { development.url.stopAccessingSecurityScopedResource() } }
+        let source = try sourceImage(development.url).image
+        guard let bitmap = context.createCGImage(source, from: source.extent,
+            format: .RGBAh, colorSpace: linearSpace, deferred: false) else { throw DevelopmentError.decode }
+        try Task.checkCancellation()
+        var result = RAWDevelopment(preview: development.preview, linearSource: CIImage(cgImage: bitmap),
+            url: development.url, width: development.width, height: development.height,
+            whitePoint: development.whitePoint, metadata: development.metadata, isRAW: development.isRAW,
+            rawDefaults: development.rawDefaults, sourceHeadroom: development.sourceHeadroom)
+        result.id = development.id
+        return result
     }
 
     private var gpuHistogram: GPUHistogram?

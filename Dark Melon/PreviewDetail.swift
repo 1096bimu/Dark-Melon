@@ -14,6 +14,7 @@ nonisolated struct PreviewDetail: @unchecked Sendable {
     let sourceID: UUID
     let mapping: ToneMapping
     let hdr: Bool
+    var surface: PreviewSurface? = nil
 
     func covers(_ region: PreviewRegion, sourceID: UUID, mapping: ToneMapping, hdr: Bool,
                 outputSize: CGSize) -> Bool {

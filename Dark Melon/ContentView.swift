@@ -11,6 +11,8 @@ struct ContentView: View {
     @State private var previewRegion: PreviewRegion?
     @State private var previewDetails: [PreviewDetail] = []
     @State private var detailWorker = RAWDeveloper()
+    @State private var fullSourceWorker = RAWDeveloper(interactive: true)
+    @State private var interactiveSpace: ProcessingColorSpace?
     #if os(macOS)
     @State private var previewViewport = PreviewViewport()
     #endif
@@ -180,7 +182,7 @@ struct ContentView: View {
             : ([.color, .effects].contains(panel) ? comparisonMapping(panel) : originalMapping)
         return DetailPreviewRequest(sourceID: previewDevelopment?.id, mapping: previewMapping,
             counterpart: counterpart, comparing: comparing || confirmingPreset != nil, hdr: hdrPreview,
-            region: previewRegion, enabled: !loading && !cropping && !adjustingTone && !adjustingWhitePoint
+            region: previewRegion, enabled: previewDevelopment?.fullResolutionReady == true && !loading && !cropping && !adjustingTone && !adjustingWhitePoint
                 && (!editHistory.interacting || comparing))
     }
 
@@ -347,6 +349,10 @@ struct ContentView: View {
                 #if os(macOS)
                 HDRImagePreview(sdrImage: cropping ? previewImages.fullSDR : previewImages.sdr,
                                 image: ((adjustingTone || adjustingWhitePoint) ? toneLocatorImage : nil) ?? (cropping ? (hdrPreview ? previewImages.fullHDR : previewImages.fullSDR) : (hdrPreview ? previewImages.hdr : previewImages.sdr)),
+                                surface: (adjustingTone || adjustingWhitePoint) ? nil : (cropping
+                                    ? (hdrPreview ? previewImages.fullSurfaceHDR : previewImages.fullSurfaceSDR)
+                                    : (hdrPreview ? previewImages.surfaceHDR : previewImages.surfaceSDR)),
+                                sdrSurface: cropping ? previewImages.fullSurfaceSDR : previewImages.surfaceSDR,
                                 sourceSize: previewOutputSize, detail: visibleDetail,
                                 regionChanged: { previewRegion = $0 },
                                 hdr: hdrPreview, sourceID: previewDevelopment?.id ?? previewRevision,
@@ -637,6 +643,19 @@ struct ContentView: View {
                     // A newer drag position supersedes this render.
                 } catch { errorMessage = error.localizedDescription }
             }
+            .task(id: FullSourceRequest(source: development?.id, previewReady: renderedPreviewImages != nil, loading: loading)) {
+                guard !loading, renderedPreviewImages != nil, let current = development,
+                      !current.fullResolutionReady else { return }
+                // A separate actor keeps decoding from blocking overview edits and hover work.
+                let worker = fullSourceWorker
+                do {
+                    let full = try await worker.prepareFullResolution(current)
+                    try Task.checkCancellation()
+                    guard development?.id == current.id else { return }
+                    development = full
+                } catch is CancellationError {
+                } catch { errorMessage = error.localizedDescription }
+            }
             .task(id: detailRequest) {
                 let request = detailRequest
                 guard request.enabled, let development = previewDevelopment, let region = request.region else { return }
@@ -873,12 +892,16 @@ struct ContentView: View {
         sourceURL = url
         loading = true
         if resetEdits { mapping = ToneMapping(); savedRecipe = nil; recipeSourceURL = nil; baselineRecipe = nil; namedSnapshots = []; savedSnapshotDate = nil }
-        development = nil
-        renderedPreviewImages = nil
-        previewDetails.removeAll()
-        renderedMapping = nil
-        histogram = nil
-        previewRevision = UUID()
+        // A same-file RAW rebuild keeps the existing display alive. The preview
+        // task replaces it only after the new source has been decoded and rendered.
+        if resetEdits {
+            development = nil
+            renderedPreviewImages = nil
+            previewDetails.removeAll()
+            renderedMapping = nil
+            histogram = nil
+            previewRevision = UUID()
+        }
         Task {
             defer {
                 if recipeSourceURL == url, development != nil {
@@ -926,13 +949,20 @@ struct ContentView: View {
                     options = recipe.rawSettings
                     mapping = recipe.mapping
                 }
-                developer = RAWDeveloper(colorSpace: colorSpace, rawSettings: options, rawWhiteBalance: mapping.rawWhiteBalance)
+                if resetEdits || interactiveSpace != colorSpace {
+                    developer = RAWDeveloper(colorSpace: colorSpace, rawSettings: options, rawWhiteBalance: mapping.rawWhiteBalance, interactive: true)
+                    fullSourceWorker = RAWDeveloper(colorSpace: colorSpace, rawSettings: options, rawWhiteBalance: mapping.rawWhiteBalance, interactive: true)
+                    detailWorker = RAWDeveloper(colorSpace: colorSpace, interactive: true)
+                    interactiveSpace = colorSpace
+                } else {
+                    await developer.updateRAWSettings(options, whiteBalance: mapping.rawWhiteBalance)
+                    await fullSourceWorker.updateRAWSettings(options, whiteBalance: mapping.rawWhiteBalance)
+                }
                 histogramWorker = RAWDeveloper(colorSpace: colorSpace, rawSettings: options, rawWhiteBalance: mapping.rawWhiteBalance)
-                detailWorker = RAWDeveloper(colorSpace: colorSpace)
-                let loaded = try await developer.develop(url, previewCanvas: previewCanvas)
+                let loaded = try await developer.develop(url, previewCanvas: CGSize(width: 2560, height: 2560), progressive: true)
+                let defaults = loaded.rawDefaults ?? RAWSettings()
+                rawSettings = options?.resolved(using: defaults) ?? defaults
                 if resetEdits {
-                    let defaults = loaded.rawDefaults ?? RAWSettings()
-                    rawSettings = options?.resolved(using: defaults) ?? defaults
                     if var saved = savedRecipe, loaded.isRAW {
                         saved.rawSettings = rawSettings
                         savedRecipe = saved
@@ -963,6 +993,7 @@ struct ContentView: View {
                     baselineRecipe = draft?.baseline ?? currentRecipe
                 }
                 if resetEdits { asShotBalance = loaded.isRAW ? try? RAWWhiteBalance.asShot(url) : nil }
+                previewDetails.removeAll()
                 development = loaded
 
                 filename = url.lastPathComponent
@@ -1875,4 +1906,10 @@ private struct HistogramZoomRequest: Equatable {
     let bins: Int
     let upper: Double
     let space: ProcessingColorSpace
+}
+
+private struct FullSourceRequest: Equatable {
+    let source: UUID?
+    let previewReady: Bool
+    let loading: Bool
 }

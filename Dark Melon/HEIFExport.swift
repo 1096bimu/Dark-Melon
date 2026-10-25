@@ -132,7 +132,7 @@ struct HEIFExportOptions: View {
 
     private func sessionWorker() -> RAWDeveloper {
         if let worker { return worker }
-        let created = RAWDeveloper(colorSpace: colorSpace, rawSettings: rawSettings)
+        let created = RAWDeveloper(colorSpace: colorSpace, rawSettings: rawSettings, exporting: true, memoryLimitMB: BatchExportBudget.singleFileMegabytes)
         worker = created
         return created
     }

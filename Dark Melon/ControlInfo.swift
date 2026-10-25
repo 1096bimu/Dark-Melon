@@ -28,7 +28,7 @@ struct ControlInfo: View {
             case .contrast:
                 String(localized: "Contrast indicates the level of contrast centered around the luminance indicated by Tone.")
             case .hdrRolloff:
-                String(localized: "Lowers HDR white below the calculated target while preserving the starting tangent. Zero keeps a straight continuation; 100% ends flat. HDR Gain multiplies the result and can be increased if the curves cross.")
+                String(localized: "Adjusts HDR curvature while preserving the starting tangent. Zero is straight; 100% ends flat; -100% bends upward to nearly twice the straight endpoint. HDR Gain multiplies the result and can be increased if the curves cross.")
             case .hdrGain:
                 String(localized: "HDR Gain multiplies the entire HDR curve. 1× keeps the automatically calculated rendition, 2× doubles its linear brightness, and 0 turns HDR off. Tone, Contrast, and white point update the hidden HDR Target without changing this multiplier.")
             case .saturation:
