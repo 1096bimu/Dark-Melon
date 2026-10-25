@@ -4,7 +4,6 @@ struct VectorscopeView: View {
     @Environment(\.lockedFilmItems) private var lockedItems
     let source: CGImage?
     let hoverSource: CGImage?
-    let hoverPosition: CGPoint?
     let hoverRevision: UUID
     let revision: UUID
     let colorSpace: ProcessingColorSpace
@@ -16,12 +15,6 @@ struct VectorscopeView: View {
     private var balance: WhiteBalance {
         get { mapping.whiteBalance }
         nonmutating set { mapping.whiteBalance = newValue }
-    }
-    @State private var hoverSampler = ScopeHoverSampler()
-    @State private var hoveredPoint: CGPoint?
-    @State private var sampledRevision: UUID?
-    private var hoverMarker: CGPoint? {
-        hoverPosition != nil && sampledRevision == hoverRevision ? hoveredPoint : nil
     }
     @State private var zoom = 2.0
     @GestureState private var pinch = 1.0
@@ -135,15 +128,21 @@ struct VectorscopeView: View {
                                 context.draw(Text(LocalizedStringKey(label)).font(.caption2).foregroundStyle(color),
                                              at: CGPoint(x: center.x + dx * radius * 0.65, y: center.y + dy * radius * 0.65))
                             }
-                            if let marker = hoverMarker {
-                                let x = marker.x * magnification, y = marker.y * magnification
-                                let distance = hypot(x, y)
-                                let scale = distance > 1 ? 0.97 / distance : 1
-                                let point = CGPoint(x: center.x + x * scale * radius,
-                                                    y: center.y + y * scale * radius)
-                                let color: Color = distance > 1 ? .orange : .white
-                                ScopePixelMarker.draw(in: &context, at: point, color: color)
-                            }
+
+                        }
+                        HoverPixelOverlay(source: hoverSource, revision: hoverRevision, space: colorSpace) { context, size, rgb in
+                            let bounded = SIMD3(min(1,max(0,rgb.x)), min(1,max(0,rgb.y)), min(1,max(0,rgb.z)))
+                            let lab = ScopeProjection.lab(bounded, space: colorSpace)
+                            let marker = CGPoint(x: lab.y / ScopeProjection.radius, y: -lab.z / ScopeProjection.radius)
+                            let center = CGPoint(x: size.width / 2, y: size.height / 2)
+                            let radius = diameter / 2
+                            let x = marker.x * magnification, y = marker.y * magnification
+                            let distance = hypot(x, y)
+                            let scale = distance > 1 ? 0.97 / distance : 1
+                            let point = CGPoint(x: center.x + x * scale * radius,
+                                                y: center.y + y * scale * radius)
+                            let color: Color = distance > 1 ? .orange : .white
+                            ScopePixelMarker.draw(in: &context, at: point, color: color)
                         }
                     }
                     .contentShape(Rectangle())
@@ -218,20 +217,6 @@ struct VectorscopeView: View {
         }
         .font(.caption)
         .padding(12)
-        .task(id: ScopeHoverRequest(position: hoverPosition, revision: hoverRevision, space: colorSpace)) {
-            guard !mapping.color.monochrome, let hoverPosition, let hoverSource else {
-                hoveredPoint = nil
-                return
-            }
-            do {
-                let point = try await hoverSampler.sample(hoverSource, revision: hoverRevision,
-                                                          position: hoverPosition, space: colorSpace)
-                try Task.checkCancellation()
-                hoveredPoint = point
-                sampledRevision = hoverRevision
-            } catch is CancellationError {
-            } catch { hoveredPoint = nil }
-        }
         .task(id: ScopeRequest(revision: source == nil ? nil : revision, mapping: mapping, zoom: magnification, space: colorSpace)) {
             guard !mapping.color.monochrome, let source else { scope = nil; return }
             do {
@@ -250,12 +235,5 @@ private struct ScopeRequest: Equatable {
     let revision: UUID?
     let mapping: ToneMapping
     let zoom: Double
-    let space: ProcessingColorSpace
-}
-
-
-private struct ScopeHoverRequest: Equatable {
-    let position: CGPoint?
-    let revision: UUID
     let space: ProcessingColorSpace
 }

@@ -48,11 +48,14 @@ struct HDRImagePreview: NSViewRepresentable {
         private let imageLayer = CALayer()
         private let sdrLayer = CALayer()
         private let detailLayer = CALayer()
+        private var displayedImage: CGImage?
+        private var displayedSDR: CGImage?
+        private var displayedDetail: CGImage?
         private var detailRect: CGRect?
         var regionChanged: ((PreviewRegion?) -> Void)?
         private var pendingRegion: PreviewRegion?
         private var reportedRegion: PreviewRegion?
-        private var regionUpdateScheduled = false
+        private var regionUpdate: DispatchWorkItem?
         private let circle = CAShapeLayer()
         private let cropShade = CAShapeLayer()
         private let cropBorder = CAShapeLayer()
@@ -207,8 +210,14 @@ struct HDRImagePreview: NSViewRepresentable {
             CATransaction.setDisableActions(true)
             imageLayer.preferredDynamicRange = hdr ? .high : .standard
             imageLayer.contentsHeadroom = hdr ? CGFloat(image.contentHeadroom) : 1
-            imageLayer.contents = image
-            sdrLayer.contents = sdrImage
+            if displayedImage !== image {
+                displayedImage = image
+                imageLayer.contents = image
+            }
+            if displayedSDR !== sdrImage {
+                displayedSDR = sdrImage
+                sdrLayer.contents = sdrImage
+            }
             let targetOpacity: Float = hdr && screenSaverActive ? 0 : 1
             if imageLayer.opacity != targetOpacity {
                 let from = imageLayer.presentation()?.opacity ?? imageLayer.opacity
@@ -220,7 +229,10 @@ struct HDRImagePreview: NSViewRepresentable {
                 fade.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
                 imageLayer.add(fade, forKey: "screenSaverFade")
             }
-            detailLayer.contents = detail?.image
+            if displayedDetail !== detail?.image {
+                displayedDetail = detail?.image
+                detailLayer.contents = detail?.image
+            }
             detailLayer.isHidden = detail == nil || cropRatio != nil
             detailLayer.preferredDynamicRange = hdr ? .high : .standard
             detailLayer.contentsHeadroom = hdr ? CGFloat(detail?.image.contentHeadroom ?? 1) : 1
@@ -336,16 +348,18 @@ struct HDRImagePreview: NSViewRepresentable {
         }
 
         private func reportRegion(_ region: PreviewRegion?) {
+            guard pendingRegion != region else { return }
             pendingRegion = region
-            guard !regionUpdateScheduled else { return }
-            regionUpdateScheduled = true
-            DispatchQueue.main.async { [weak self] in
-                guard let self else { return }
-                self.regionUpdateScheduled = false
-                guard self.pendingRegion != self.reportedRegion else { return }
+            regionUpdate?.cancel()
+            // Layer geometry updates immediately. Only settled geometry enters SwiftUI,
+            // avoiding editor/browser rebuilds and detail-task churn on every gesture event.
+            let update = DispatchWorkItem { [weak self] in
+                guard let self, self.pendingRegion != self.reportedRegion else { return }
                 self.reportedRegion = self.pendingRegion
                 self.regionChanged?(self.reportedRegion)
             }
+            regionUpdate = update
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2, execute: update)
         }
 
         private func rememberViewport() {

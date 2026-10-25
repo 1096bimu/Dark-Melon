@@ -102,12 +102,12 @@ struct MountainRangeHandles: View {
     }
 }
 
-struct LightnessHueControls: View {
+struct LightnessHueControls<Hover: View>: View {
     @Binding var controls: [OKLabVertexAdjustment]
     @Binding var selected: Int?
     let space: ProcessingColorSpace
     var texture: ScopeTexture?
-    var hover: CGPoint?
+    var hover: Hover
     var gradient: ScopeGradient
     @State private var outline: [ColorSliceGeometry.Slice] = []
     var body: some View {
@@ -139,7 +139,7 @@ struct LightnessHueControls: View {
                     context.draw(Text("1").font(.caption2).foregroundStyle(.secondary),at:CGPoint(x:6,y:8))
                     context.draw(Text("0").font(.caption2).foregroundStyle(.secondary),at:CGPoint(x:6,y:size.height-8))
                 }.allowsHitTesting(false)
-                ScopePixelMarker(position:hover)
+                hover
                 MountainRangeHandles(controls:$controls,selected:$selected,space:space,
                     maximumChroma:1,scale:1,lightnessMode:true)
             }.aspectRatio(1.6,contentMode:.fit)

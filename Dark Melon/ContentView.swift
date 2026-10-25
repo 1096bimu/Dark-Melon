@@ -95,7 +95,7 @@ struct ContentView: View {
     @AppStorage("guidedTutorialPresented") private var tutorialPresented = false
     @State private var tutorial = EditingTutorial()
     @State private var pendingPicker: EditorPickerTool?
-    @State private var hoveredPreviewPixel: CGPoint?
+    @State private var previewHover = PreviewHoverState()
     @State private var displayMode = PreviewHistogramMode.hdrLinear
     private var hdrPreview: Bool {
         get { !comparingOriginal && displayMode.hdr }
@@ -153,13 +153,11 @@ struct ContentView: View {
 
     @State private var asShotBalance: RAWWhiteBalance?
 
+    @State private var defaultsCache = EditorDefaultsCache()
     private var resetDefaults: DevelopmentRecipe {
-        var fallback = DevelopmentRecipe(colorSpace: colorSpace,
-            mapping: .fresh(isRAW: development?.isRAW == true, sourceHeadroom: development?.sourceHeadroom ?? 1),
-            rawSettings: development?.rawDefaults)
-        fallback.mapping.rawWhiteBalance = asShotBalance
-        guard development?.isRAW == true, let preset = EditLibrary.shared.rawDefaultPreset else { return fallback }
-        return preset.applying(to: fallback)
+        defaultsCache.resolve(space: colorSpace, isRAW: development?.isRAW == true,
+            headroom: development?.sourceHeadroom ?? 1, raw: development?.rawDefaults,
+            balance: asShotBalance, preset: EditLibrary.shared.rawDefaultPreset)
     }
 
     private var comparingOriginal: Bool { comparingOriginalMouse || comparingOriginalKey }
@@ -358,7 +356,7 @@ struct ContentView: View {
                                 savedTransform: previewMapping.transform,
                                 cropChanged: { cropPolygon = $0 },
                                 sampleTool: pickingWhiteBalance ? .whiteBalance : nil,
-                                hover: { hoveredPreviewPixel = $0 }) { center, radius in
+                                hover: { previewHover.position = $0 }) { center, radius in
                     let sampleCenter = originalPreviewPoint(center)
                     let sampleEdge = originalPreviewPoint(CGPoint(x: center.x + radius, y: center.y))
                     let sourceRadius = hypot(sampleEdge.x - sampleCenter.x, sampleEdge.y - sampleCenter.y)
@@ -495,7 +493,7 @@ struct ContentView: View {
                     HueChromaScope(controls: $mapping.vertexWarp, monochrome: $mapping.color.monochrome, source: mapping.color.monochrome ? development?.preview : (hdrPreview ? previewImages?.hdr : previewImages?.sdr),
                         revision: mapping.color.monochrome ? development?.id ?? previewRevision : previewRevision, space: colorSpace,
                         headroom: previewMapping.hdrMax, hdr: hdrPreview,
-                        hoverPosition: mapping.color.monochrome ? hoveredPreviewPixel.map(originalPreviewPoint) : hoveredPreviewPixel)
+                        hoverTransform: mapping.color.monochrome && !cropping ? previewMapping.transform : nil)
                     Divider()
                 }
                 if panel == .transform {
@@ -684,6 +682,7 @@ struct ContentView: View {
                 } catch is CancellationError {
                 } catch { histogramError = error.localizedDescription }
             }
+            .environment(previewHover)
             .background(EditGestureBoundary(began: {
                 editHistory.flush()
                 editHistory.interacting = true
@@ -1237,7 +1236,7 @@ struct ContentView: View {
                         revision: previewRevision, colorSpace: colorSpace, hdrPreview: hdrPreview,
                         comparingOriginal: $comparingOriginalMouse,
                         showingSDR: $displayMode.sdrHistogram,
-                        hoverPosition: displayMode.sdrHistogram ? hoveredPreviewPixel : hoveredPreviewPixel.map(originalPreviewPoint),
+                        hoverTransform: !displayMode.sdrHistogram && !cropping ? previewMapping.transform : nil,
                         onWhitePointEditingChanged: { editing in
                             adjustingWhitePoint = editing
                             toneLocatorImage = nil
@@ -1268,7 +1267,7 @@ struct ContentView: View {
         if !mapping.color.monochrome || mapping.rawWhiteBalance != nil {
         Divider()
         VectorscopeView(source: development?.preview,
-                        hoverSource: previewImages?.sdr, hoverPosition: hoveredPreviewPixel,
+                        hoverSource: previewImages?.sdr,
                         hoverRevision: previewRevision,
                         revision: development?.id ?? previewRevision,
                         colorSpace: colorSpace, mapping: Binding(
@@ -1638,22 +1637,8 @@ private struct LinearHistogram: View {
     let hdrPreview: Bool
     @Binding var comparingOriginal: Bool
     @Binding var showingSDR: Bool
-    let hoverPosition: CGPoint?
+    let hoverTransform: TransformSettings?
     var onWhitePointEditingChanged: (Bool) -> Void = { _ in }
-    @State private var hoverSampler = ScopeHoverSampler()
-    @State private var hoveredRGB: SIMD3<Double>?
-    @State private var sampledHover: HistogramHoverRequest?
-    private var hoverRequest: HistogramHoverRequest {
-        HistogramHoverRequest(position: hoverPosition,
-                              revision: showingSDR ? revision : development?.id,
-                              encoded: showingSDR, space: colorSpace)
-    }
-    private var hoverLuminance: Double? {
-        guard sampledHover == hoverRequest, hoverPosition != nil, let rgb = hoveredRGB else { return nil }
-        let weights = colorSpace.luminance
-        // Linear Y for the source; encoded luma for SDR, matching its histogram statistics.
-        return rgb.x * weights.x + rgb.y * weights.y + rgb.z * weights.z
-    }
     @State private var sdrHistogram: HistogramData?
     @State private var sdrError: String?
     @State private var sdrWorker: GPUHistogram?
@@ -1742,8 +1727,11 @@ private struct LinearHistogram: View {
                 if !showingSDR { HistogramToneCurve(mapping: mapping, hdrPreview: hdrPreview, inputMaximum: inputMaximum).allowsHitTesting(false) }
             }
             .overlay {
-                Canvas { context, size in
-                    guard let value = hoverLuminance else { return }
+                HoverPixelOverlay(source: showingSDR ? sdrSource : development?.preview,
+                    revision: showingSDR ? revision : development?.id, space: colorSpace,
+                    encoded: showingSDR, transform: hoverTransform) { context, size, rgb in
+                    let weights = colorSpace.luminance
+                    let value = rgb.x * weights.x + rgb.y * weights.y + rgb.z * weights.z
                     let x = min(size.width - 1, max(1, min(1, max(0, value / inputMaximum)) * size.width))
                     var line = Path()
                     line.move(to: CGPoint(x: x, y: 0))
@@ -1803,22 +1791,6 @@ private struct LinearHistogram: View {
         .font(.caption.monospacedDigit())
         .padding(12)
         .background(.bar)
-        .task(id: hoverRequest) {
-            let request = hoverRequest
-            guard let position = request.position, let id = request.revision,
-                  let source = showingSDR ? sdrSource : development?.preview else {
-                hoveredRGB = nil
-                return
-            }
-            do {
-                let rgb = try await hoverSampler.sampleRGB(source, revision: id, position: position,
-                                                           space: colorSpace, encoded: showingSDR)
-                try Task.checkCancellation()
-                hoveredRGB = rgb
-                sampledHover = request
-            } catch is CancellationError {
-            } catch { hoveredRGB = nil }
-        }
         .task(id: zoomRequest) {
             let request = zoomRequest
             guard request.upper < 1, !showingSDR, let source = development?.preview, let id = request.sourceID else { return }
@@ -1896,12 +1868,7 @@ private struct ToneLocatorRequest: Equatable {
 }
 
 
-private struct HistogramHoverRequest: Equatable {
-    let position: CGPoint?
-    let revision: UUID?
-    let encoded: Bool
-    let space: ProcessingColorSpace
-}
+
 
 private struct HistogramZoomRequest: Equatable {
     let sourceID: UUID?

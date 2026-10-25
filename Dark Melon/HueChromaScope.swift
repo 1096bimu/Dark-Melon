@@ -52,9 +52,7 @@ struct HueChromaScope: View {
     let space: ProcessingColorSpace
     let headroom: Double
     let hdr: Bool
-    let hoverPosition: CGPoint?
-    @State private var sampler = ScopeHoverSampler()
-    @State private var hoveredLab: SIMD3<Double>?
+    let hoverTransform: TransformSettings?
     @State private var lightnessTexture: ScopeTexture?
     @AppStorage("showHueTwister") private var showHueTwister = false
     @AppStorage(ScopeGradient.preferenceKey) private var gradient = ScopeGradient.inferno
@@ -74,19 +72,9 @@ struct HueChromaScope: View {
         let showHueTwister: Bool
         let monochrome: Bool
     }
-    private struct HoverRequest: Equatable {
-        let position: CGPoint?
-        let revision: UUID
-        let hdr: Bool
-        let monochrome: Bool
-        let space: ProcessingColorSpace
-    }
-    private func hoverPoint(lightness: Bool) -> CGPoint? {
-        guard let lab=hoveredLab else { return nil }
-        let chroma=hypot(lab.y,lab.z)
-        guard chroma>0.00001 else { return nil }
-        let hue=atan2(lab.z,lab.y)/(2 * .pi)
-        return CGPoint(x:hue-floor(hue),y:1-(lightness ? lab.x/(monochrome ? 1 : scale) : chroma/maximum))
+    private func marker(lightness: Bool) -> some View {
+        HuePixelOverlay(source: source, revision: revision, space: space, transform: hoverTransform,
+                        lightness: lightness, maximum: maximum, scale: monochrome ? 1 : scale)
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -137,7 +125,7 @@ struct HueChromaScope: View {
                         }
                     }
                 }.allowsHitTesting(false)
-                ScopePixelMarker(position:hoverPoint(lightness:monochrome))
+                marker(lightness: monochrome)
                 MountainRangeHandles(controls:$controls,selected:$selected,space:space,maximumChroma:maximum,scale:scale,boundary:boundary,movementEnabled:!monochrome,densityMode:monochrome).filmLock(.vertices)
             }.aspectRatio(1.6, contentMode: .fit)
             Canvas { context, size in
@@ -194,7 +182,7 @@ struct HueChromaScope: View {
             }.filmLock(.vertices)
             if showsTwister {
                 Divider()
-                LightnessHueControls(controls:$controls,selected:$selected,space:space,texture:lightnessTexture,hover:hoverPoint(lightness:true),gradient:gradient).filmLock(.hueTwister)
+                LightnessHueControls(controls:$controls,selected:$selected,space:space,texture:lightnessTexture,hover: marker(lightness: true),gradient:gradient).filmLock(.hueTwister)
             }
             if let error { Text(error).font(.caption).foregroundStyle(.secondary) }
         }
@@ -202,16 +190,6 @@ struct HueChromaScope: View {
         .help(monochrome
             ? "Source pixel density by OKLCH hue and lightness. Drag color nodes vertically to adjust Density."
             : "Pixel density by OKLCH hue and chroma. Outlines show the selected gamut’s maximum chroma across all lightness values. Neutral pixels have no hue and are omitted.")
-        .task(id: HoverRequest(position:hoverPosition,revision:revision,hdr:hdr,monochrome:monochrome,space:space)) {
-            hoveredLab=nil
-            guard let source,let hoverPosition else { return }
-            do {
-                guard let rgb=try await sampler.sampleRGB(source,revision:revision,position:hoverPosition,space:space) else { return }
-                try Task.checkCancellation()
-                let matrix=ScopeProjection.matrix(.sRGB).inverse * ScopeProjection.matrix(space)
-                hoveredLab=OKLabVertexWarp.lab(matrix*rgb)
-            } catch {}
-        }
         .task(id: space) { boundary = await HueChromaBoundary.shared.values(space) }
         .task(id: Request(revision: revision, space: space, maximum: maximum, hdr: hdr, hasSource: source != nil, showHueTwister: showsTwister, monochrome: monochrome)) {
             guard let source else { texture = nil; lightnessTexture = nil; return }

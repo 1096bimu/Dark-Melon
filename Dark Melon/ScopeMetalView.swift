@@ -69,6 +69,8 @@ final class ScopeDisplay: MTKView, MTKViewDelegate {
     }
     required init(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     func display(_ frame: ScopeTexture, gradient: ScopeGradient? = nil) {
+        guard image !== frame.texture || palette == nil || gradient != paletteGradient
+                || wrapsHue != (frame.wrapsHue ? 1 : 0) else { return }
         if palette == nil || gradient != paletteGradient {
             let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .rgba8Unorm,
                 width: 256, height: 1, mipmapped: false)
