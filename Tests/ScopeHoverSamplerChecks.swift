@@ -3,6 +3,18 @@ import CoreImage
 
 @main struct ScopeHoverSamplerChecks {
     static func main() async throws {
+        #if arch(arm64)
+        for value in UInt32(0)...UInt32(UInt16.max) {
+            let bits = UInt16(value)
+            let expected = Double(Float16(bitPattern: bits))
+            let actual = ScopeHoverSampler.decodeHalf(bits)
+            if expected.isNaN { assert(actual.isNaN) }
+            else {
+                assert(actual == expected)
+                if expected == 0 { assert(actual.sign == expected.sign) }
+            }
+        }
+        #endif
         let context = CIContext()
         let sampler = ScopeHoverSampler()
         let revision = UUID()

@@ -62,6 +62,7 @@ nonisolated struct PreviewImages: @unchecked Sendable {
 
 actor RAWDeveloper {
     private let exporting: Bool
+    private let exportReservation: RAWImageCache.Reservation?
     private let colorSpace: ProcessingColorSpace
     private var linearSpace: CGColorSpace { colorSpace.linear }
 
@@ -69,6 +70,7 @@ actor RAWDeveloper {
     private var rawWhiteBalance: RAWWhiteBalance?
     private let interactive: Bool
     private let memoryLimitMB: Int?
+    private var cacheStamp: RAWImageCache.FileStamp?
     private var decoderSession: (url: URL, raw9: Bool, filter: CIRAWFilter, defaults: RAWSettings, temperature: Float, tint: Float)?
 
     func updateRAWSettings(_ settings: RAWSettings?, whiteBalance: RAWWhiteBalance?) {
@@ -80,6 +82,8 @@ actor RAWDeveloper {
 
     init(colorSpace: ProcessingColorSpace = .sRGB, rawSettings: RAWSettings? = nil, rawWhiteBalance: RAWWhiteBalance? = nil, lutStore: LUTStore = .shared, lutConfiguration: LUTConfiguration? = nil, interactive: Bool = false, exporting: Bool = false, memoryLimitMB: Int? = nil) {
         self.exporting = exporting
+        self.exportReservation = exporting ? RAWImageCache.shared.reserve(
+            UInt64(memoryLimitMB ?? BatchExportBudget.singleFileMegabytes) * 1_048_576) : nil
         self.memoryLimitMB = memoryLimitMB
         self.interactive = interactive
         self.rawSettings = rawSettings
@@ -610,6 +614,10 @@ actor RAWDeveloper {
     func maximumRAWRange(_ url: URL) throws -> RAWSettings {
         let accessed = url.startAccessingSecurityScopedResource()
         defer { if accessed { url.stopAccessingSecurityScopedResource() } }
+        let stamp = RAWImageCache.FileStamp(url)
+        if let stamp, let cached = RAWImageCache.shared.range(stamp, space: colorSpace, settings: rawSettings, balance: rawWhiteBalance) {
+            return cached
+        }
         let configured = try configuredRAW(url)
         let raw = configured.filter
         raw.exposure = -2.5
@@ -645,6 +653,9 @@ actor RAWDeveloper {
         var result = rawSettings ?? configured.defaults
         result.values[.exposure] = raw.exposure
         result.values[.shadowBias] = raw.shadowBias
+        if let stamp, stamp == RAWImageCache.FileStamp(url) {
+            RAWImageCache.shared.rememberRange(result, stamp: stamp, space: colorSpace, settings: rawSettings, balance: rawWhiteBalance)
+        }
         return result
     }
 
@@ -1013,6 +1024,19 @@ actor RAWDeveloper {
     func develop(_ url: URL, previewCanvas: CGSize = CGSize(width: 2560, height: 2560), progressive: Bool = false) throws -> RAWDevelopment {
         let accessed = url.startAccessingSecurityScopedResource()
         defer { if accessed { url.stopAccessingSecurityScopedResource() } }
+        let stamp = interactive && !exporting ? RAWImageCache.FileStamp(url) : nil
+        if let stamp, let cached = RAWImageCache.shared.lookup(stamp, space: colorSpace, settings: rawSettings, balance: rawWhiteBalance) {
+            cacheStamp = stamp
+            let size = cached.linearSource.extent.size
+            let scale = PreviewResolution.overviewScale(source: size, canvas: previewCanvas)
+            let requestedSize = CGSize(width: floor(size.width * scale), height: floor(size.height * scale))
+            if abs(CGFloat(cached.preview.width) - requestedSize.width) <= 1,
+               abs(CGFloat(cached.preview.height) - requestedSize.height) <= 1 {
+                overviewCache = (cached.id, requestedSize, cached.preview)
+            }
+            return cached
+        }
+        cacheStamp = stamp
         let source = try sourceImage(url, previewLimit: progressive ? 2560 : nil)
         let image = source.image
         let bounds = image.extent.integral
@@ -1035,6 +1059,12 @@ actor RAWDeveloper {
         try Task.checkCancellation()
         let access = development.url.startAccessingSecurityScopedResource()
         defer { if access { development.url.stopAccessingSecurityScopedResource() } }
+        let stamp = interactive && !exporting ? RAWImageCache.FileStamp(development.url) : nil
+        if let stamp, var cached = RAWImageCache.shared.lookup(stamp, space: colorSpace, settings: rawSettings, balance: rawWhiteBalance) {
+            cached.id = development.id
+            return cached
+        }
+        cacheStamp = stamp
         let source = try sourceImage(development.url).image
         guard let bitmap = context.createCGImage(source, from: source.extent,
             format: .RGBAh, colorSpace: linearSpace, deferred: false) else { throw DevelopmentError.decode }
@@ -1044,6 +1074,9 @@ actor RAWDeveloper {
             whitePoint: development.whitePoint, metadata: development.metadata, isRAW: development.isRAW,
             rawDefaults: development.rawDefaults, sourceHeadroom: development.sourceHeadroom)
         result.id = development.id
+        if interactive, !exporting, let stamp = cacheStamp, stamp == RAWImageCache.FileStamp(development.url) {
+            RAWImageCache.shared.insert(result, stamp: stamp, space: colorSpace, settings: rawSettings, balance: rawWhiteBalance)
+        }
         return result
     }
 

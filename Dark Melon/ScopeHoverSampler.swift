@@ -12,6 +12,19 @@ actor ScopeHoverSampler {
     private var rowBytes = 0
     private var halfFloat = false
 
+    /// Decode IEEE binary16 without Swift.Float16, which is unavailable on Intel Macs.
+    nonisolated static func decodeHalf(_ bits: UInt16) -> Double {
+        let sign = UInt32(bits & 0x8000) << 16
+        let exponent = UInt32((bits >> 10) & 0x1f)
+        let fraction = UInt32(bits & 0x03ff)
+        if exponent == 0 {
+            let value = Double(fraction) * 0x1p-24
+            return sign == 0 ? value : -value
+        }
+        let floatExponent: UInt32 = exponent == 31 ? 255 : exponent + 112
+        return Double(Float(bitPattern: sign | (floatExponent << 23) | (fraction << 13)))
+    }
+
     private func prepare(_ source: CGImage, space: ProcessingColorSpace, encoded: Bool) throws {
         if sourceImage === source, cachedSpace == space, cachedEncoded == encoded, pixels != nil { return }
         let target = encoded ? space.encoded : space.linear
@@ -65,7 +78,7 @@ actor ScopeHoverSampler {
             if halfFloat {
                 let offset = index * 2
                 let bits = UInt16(pixel[offset]) | (UInt16(pixel[offset + 1]) << 8)
-                return Double(Float16(bitPattern: bits))
+                return Self.decodeHalf(bits)
             }
             return Double(pixel[index]) / 255
         }

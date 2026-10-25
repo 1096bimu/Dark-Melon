@@ -130,14 +130,20 @@ struct EditorSettingsView: View {
             Section("Preview") {
                 Toggle("Screen Saver", isOn: $screenSaver)
                     .help("Fade the HDR preview to SDR when the app loses focus or after one minute without mouse or keyboard input. Activity restores HDR without changing the selected preview mode.")
+                Text("Dims the screen from HDR brightness to avoid burn-in.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
             Section("Export") {
                 Toggle("Effective ISO", isOn: $effectiveISO)
                     .help("Replace the exported capture ISO with the effective ISO shown by the ISO slider. The original file is unchanged.")
+                Text("Record the effective ISO in exports, taking exposure adjustments into account, rather than the capture ISO.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
             Section("RAW") {
                 Toggle("Always maximize RAW range", isOn: $alwaysMaximizeRAWRange)
                     .help("Run Max Range automatically for RAW files without saved or pending edits.")
+                Text("Automatically fit the maximum RAW highlight data into the editing space when opening new files.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
             Section("Color Scope") {
                 Toggle("HUE Twister", isOn: $showHueTwister)
