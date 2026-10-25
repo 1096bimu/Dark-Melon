@@ -4,7 +4,7 @@ A SwiftUI image development app for RAW, SDR, and HDR images, with tone and colo
 
 ## Download
 
-**[Download Dark Melon for macOS](https://github.com/1096bimu/Dark-Melon/releases/latest)** — the current build requires **Apple Silicon and macOS 27 or later**. Unzip the download and drag Dark Melon into Applications. The app is Developer ID signed and notarized.
+**[Download Dark Melon for macOS](https://github.com/1096bimu/Dark-Melon/releases/latest)** — the current build requires **macOS 26 or later** and includes support for **Apple Silicon and Intel Macs**. **Intel is untested**. Unzip the download and drag Dark Melon into Applications. The app is Developer ID signed and notarized.
 
 ## HDR in formats people actually use
 
