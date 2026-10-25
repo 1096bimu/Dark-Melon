@@ -15,6 +15,10 @@ nonisolated struct BrowserRecipeTarget: Sendable {
         return try await metadata(url, restored: override ?? saved, saved: saved)
     }
 
+    static func fresh(_ url: URL) async throws -> Self {
+        try await metadata(url, restored: nil, saved: nil)
+    }
+
     @concurrent
     private static func metadata(_ url: URL, restored: DevelopmentRecipe?, saved: DevelopmentRecipe?) async throws -> Self {
         let accessed = url.startAccessingSecurityScopedResource()

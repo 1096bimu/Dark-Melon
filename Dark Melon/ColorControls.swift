@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct ColorControls: View {
+    @Environment(\.resetMapping) private var defaults
     @Environment(\.lockedFilmItems) private var lockedItems
     @Binding var settings: ColorAdjustments
     @Binding var vertices: [OKLabVertexAdjustment]
@@ -24,8 +25,8 @@ struct ColorControls: View {
             HStack {
                 Text("Split Tone").font(.headline)
                 Spacer()
-                Button("Reset") { settings.splitTone = SplitToneSettings() }
-                    .disabled(settings.splitTone == SplitToneSettings()).filmLock(.splitTone)
+                Button("Reset") { settings.splitTone = defaults.color.splitTone }
+                    .disabled(settings.splitTone == defaults.color.splitTone).filmLock(.splitTone)
             }
             SplitToneGradientEditor(settings: $settings.splitTone, space: colorSpace, ceiling: hdrMax).filmLock(.splitTone)
 
@@ -38,6 +39,7 @@ struct ColorControls: View {
 
 
 struct ColorPanelHeader: View {
+    @Environment(\.resetMapping) private var defaults
     @Environment(\.lockedFilmItems) private var lockedItems
     @Binding var settings: ColorAdjustments
     @Binding var vertices: [OKLabVertexAdjustment]
@@ -48,8 +50,8 @@ struct ColorPanelHeader: View {
             Spacer()
             HoldCompareButton(comparing: $comparing)
                 .disabled(settings.isIdentity && vertices.allSatisfy(\.isIdentity))
-            Button("Reset Color") { settings = ColorAdjustments(); vertices = OKLabVertexWarp.defaults; comparing = false }
-                .disabled(!lockedItems.isDisjoint(with: Set(PasteItem.colorItems)) || (settings.isIdentity && vertices.allSatisfy(\.isIdentity)))
+            Button("Reset Color") { settings = defaults.color; vertices = defaults.vertexWarp; comparing = false }
+                .disabled(!lockedItems.isDisjoint(with: Set(PasteItem.colorItems)) || (settings == defaults.color && vertices == defaults.vertexWarp))
         }
     }
 }

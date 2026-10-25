@@ -169,7 +169,9 @@ struct EditorSettingsView: View {
                 shortcut("Export…", "⇧⌘E")
                 shortcut("Original", "Hold C")
                 shortcut("Toggle HDR preview", "H")
-                shortcut("Toggle left panel", "F")
+                shortcut("Folder", "F")
+                shortcut("Library", "L")
+                shortcut("Previous / next file", "← / →")
                 shortcut("Select All", "⌘A")
                 shortcut("Toggle white balance picker", "W")
             }

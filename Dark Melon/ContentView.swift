@@ -151,16 +151,27 @@ struct ContentView: View {
         rememberCurrentEdits()
     }
 
+    @State private var asShotBalance: RAWWhiteBalance?
+
+    private var resetDefaults: DevelopmentRecipe {
+        var fallback = DevelopmentRecipe(colorSpace: colorSpace,
+            mapping: .fresh(isRAW: development?.isRAW == true, sourceHeadroom: development?.sourceHeadroom ?? 1),
+            rawSettings: development?.rawDefaults)
+        fallback.mapping.rawWhiteBalance = asShotBalance
+        guard development?.isRAW == true, let preset = EditLibrary.shared.rawDefaultPreset else { return fallback }
+        return preset.applying(to: fallback)
+    }
+
     private var comparingOriginal: Bool { comparingOriginalMouse || comparingOriginalKey }
     private var comparing: Bool { comparingOriginal || comparingColor || comparingEffects }
     private var originalMapping: ToneMapping {
-        var result = ToneMapping.fresh(isRAW: development?.isRAW == true,
-                                       sourceHeadroom: development?.sourceHeadroom ?? 1)
-        result.color.monochrome = mapping.color.monochrome
+        var result = resetDefaults.mapping
         if mapping.color.monochrome {
+            result.color.monochrome = true
             OKLabVertexWarp.setMonochrome(true, controls: &result.vertexWarp)
         }
-        result.hdrGain = 0 // Original comparison always uses the SDR rendition.
+        // hdrPreview selects SDR while comparing; retain the preset's gain for
+        // effects and LUTs that depend on HDR even when viewing their SDR result.
         result.rawWhiteBalance = mapping.rawWhiteBalance
         result.transform = mapping.transform
         return result
@@ -222,11 +233,12 @@ struct ContentView: View {
     }
 
     private func resetTransform() {
-        mapping.transform = nil
-        cropTransform = CropTransform()
-        cropPolygon = [CGPoint(x: 0, y: 0), CGPoint(x: 1, y: 0), CGPoint(x: 1, y: 1), CGPoint(x: 0, y: 1)]
+        let transform = resetDefaults.mapping.transform
+        mapping.transform = transform
+        cropTransform = CropTransform(rotation: transform?.rotation ?? 0, horizontal: transform?.horizontal ?? 0, vertical: transform?.vertical ?? 0)
+        cropPolygon = transform?.points ?? [CGPoint(x: 0, y: 0), CGPoint(x: 1, y: 0), CGPoint(x: 1, y: 1), CGPoint(x: 0, y: 1)]
         cropping = false
-        cropRatioPosition = 5
+        cropRatioPosition = transform?.ratioPosition ?? 5
         #if os(macOS)
         previewViewport.zoom = 1
         previewViewport.offset = .zero
@@ -494,15 +506,15 @@ struct ContentView: View {
                         maximumResolution: (cropping ? draftTransform : mapping.transform)?.resolution(width: development?.width ?? 1, height: development?.height ?? 1, estimate: .maximum)
                             ?? CGSize(width: development?.width ?? 1, height: development?.height ?? 1),
                         toggle: toggleTransform,
-                        resetPerspective: { if !cropping { toggleTransform() }; cropTransform.horizontal = 0; cropTransform.vertical = 0 },
-                        resetRotation: { if !cropping { toggleTransform() }; cropTransform.rotation = 0 },
+                        resetPerspective: { if !cropping { toggleTransform() }; cropTransform.horizontal = resetDefaults.mapping.transform?.horizontal ?? 0; cropTransform.vertical = resetDefaults.mapping.transform?.vertical ?? 0 },
+                        resetRotation: { if !cropping { toggleTransform() }; cropTransform.rotation = resetDefaults.mapping.transform?.rotation ?? 0 },
                         resetAll: resetTransform).filmLock(.transform)
                 } else if panel == .raw {
                     RAWControls(settings: $rawSettings, offset: $mapping.offset, isRAW: development?.isRAW == true, commit: {
                         if let sourceURL { load(sourceURL, resetEdits: false) }
                     }, reset: {
-                        if let defaults = development?.rawDefaults, let sourceURL {
-                            mapping.offset = 0
+                        if let defaults = resetDefaults.rawSettings, let sourceURL {
+                            mapping.offset = resetDefaults.mapping.offset
                             rawSettings = defaults
                             load(sourceURL, resetEdits: false)
                         }
@@ -525,6 +537,7 @@ struct ContentView: View {
         NavigationStack {
             editorColumns
             .environment(\.lockedFilmItems, lockedFilm?.selection.selectedItems ?? [])
+            .environment(\.resetMapping, resetDefaults.mapping)
             .task {
                 editHistory.restore = restoreHistory
                 editHistory.captureSession = { snapshotSession }
@@ -680,7 +693,10 @@ struct ContentView: View {
             }))
             .background(OriginalCompareShortcut(active: $comparingOriginalKey,
                 enabled: development != nil && !loading && !cropping))
-            .background(fileBrowserToggle.opacity(0).frame(width: 0, height: 0).accessibilityHidden(true))
+            .background(leftPanelShortcuts.opacity(0).frame(width: 0, height: 0).accessibilityHidden(true))
+            #if os(macOS)
+            .background(FileNavigationShortcut(navigate: navigateFile).frame(width: 0, height: 0))
+            #endif
             .navigationTitle(filename)
             .focusedSceneValue(\.editorUndo, undoActions)
             .focusedSceneValue(\.editorPanel, $panel)
@@ -899,8 +915,17 @@ struct ContentView: View {
                 }
                 let initializeEdits = resetEdits && restored == nil && draft == nil
                 var options: RAWSettings? = resetEdits ? (draft?.recipe ?? restored)?.rawSettings : rawSettings
-                if initializeEdits, !FileManager.default.fileExists(atPath: RecipeStore.sidecarURL(for: url).path) {
-                    options = try await RAWDeveloper(colorSpace: colorSpace).initialRAWSettings(url)
+                var initialRecipe: DevelopmentRecipe?
+                if initializeEdits {
+                    let preset = EditLibrary.shared.rawDefaultPreset
+                    let target = try await BrowserRecipeTarget.fresh(url)
+                    let resolver = RAWDeveloper(colorSpace: colorSpace)
+                    var recipe = try await resolver.resolveExportRecipe(url, recipe: target.recipe, isRAW: target.isRAW,
+                        maximizeRange: UserDefaults.standard.bool(forKey: RAWSettings.maximizeRangePreferenceKey))
+                    if target.isRAW, let preset { recipe = preset.applying(to: recipe) }
+                    initialRecipe = recipe
+                    options = recipe.rawSettings
+                    mapping = recipe.mapping
                 }
                 developer = RAWDeveloper(colorSpace: colorSpace, rawSettings: options, rawWhiteBalance: mapping.rawWhiteBalance)
                 histogramWorker = RAWDeveloper(colorSpace: colorSpace, rawSettings: options, rawWhiteBalance: mapping.rawWhiteBalance)
@@ -915,7 +940,7 @@ struct ContentView: View {
                     }
                 }
                 if initializeEdits {
-                    mapping = ToneMapping.fresh(isRAW: loaded.isRAW, sourceHeadroom: loaded.sourceHeadroom)
+                    mapping = initialRecipe?.mapping ?? ToneMapping.fresh(isRAW: loaded.isRAW, sourceHeadroom: loaded.sourceHeadroom)
                 }
                 if loaded.isRAW, mapping.rawWhiteBalance == nil, let reference = loaded.whitePoint {
                     mapping.rawWhiteBalance = RAWWhiteBalance(reference)
@@ -938,6 +963,7 @@ struct ContentView: View {
                         draftModifiedAt: storedDraft?.modifiedAt ?? draft?.modifiedAt)
                     baselineRecipe = draft?.baseline ?? currentRecipe
                 }
+                if resetEdits { asShotBalance = loaded.isRAW ? try? RAWWhiteBalance.asShot(url) : nil }
                 development = loaded
 
                 filename = url.lastPathComponent
@@ -972,6 +998,7 @@ struct ContentView: View {
         let original = mapping
         let originalRAW = rawSettings
         let maximizeRange = UserDefaults.standard.bool(forKey: RAWSettings.maximizeRangePreferenceKey)
+        let preset = development.isRAW ? EditLibrary.shared.rawDefaultPreset : nil
         let worker = RAWDeveloper(colorSpace: colorSpace, rawSettings: originalRAW, rawWhiteBalance: mapping.rawWhiteBalance)
         resettingTone = true
         Task {
@@ -981,10 +1008,16 @@ struct ContentView: View {
                 if development.isRAW {
                     if maximizeRange { resetRAW = try await worker.maximumRAWRange(development.url) }
                     else { resetRAW.values[.exposure] = 0 }
+                    if let preset, preset.selection.contains(.exposure), let exposure = preset.recipe.rawSettings?.values[.exposure] {
+                        resetRAW.values[.exposure] = exposure
+                    }
                 }
                 guard self.development?.id == development.id, mapping == original,
                       rawSettings == originalRAW else { return }
-                let automatic = ToneMapping.fresh(isRAW: development.isRAW, sourceHeadroom: development.sourceHeadroom)
+                var baseline = DevelopmentRecipe(colorSpace: colorSpace,
+                    mapping: .fresh(isRAW: development.isRAW, sourceHeadroom: development.sourceHeadroom))
+                if let preset { baseline = preset.applying(to: baseline) }
+                let automatic = baseline.mapping
                 mapping = SettingsPasteSelection(tone: true, whiteBalance: false, color: false,
                                                  effects: false, raw: false).applying(automatic, to: mapping)
                 rawSettings = resetRAW
@@ -1220,7 +1253,6 @@ struct ContentView: View {
         }.padding(12)
         SlopeEditor(mapping: $mapping, sourceISO: development?.metadata.iso,
            rawExposure: development?.isRAW == true ? Double(rawSettings.values[.exposure] ?? 0) : 0,
-           sourceHeadroom: development?.sourceHeadroom ?? 1,
            onToneChanged: { tutorial.record(.tone) },
            onContrastChanged: { tutorial.record(.contrast) },
            onISOAdjustment: { hdrPreview = false },
@@ -1253,8 +1285,8 @@ struct ContentView: View {
         return {
             guard let sourceURL else { return }
             do {
-                mapping.rawWhiteBalance = try RAWWhiteBalance.asShot(sourceURL)
-                mapping.whiteBalance = WhiteBalance()
+                mapping.rawWhiteBalance = try resetDefaults.mapping.rawWhiteBalance ?? RAWWhiteBalance.asShot(sourceURL)
+                mapping.whiteBalance = resetDefaults.mapping.whiteBalance
                 commitRAWWhiteBalance()
             } catch { errorMessage = error.localizedDescription }
         }
@@ -1327,14 +1359,26 @@ struct ContentView: View {
         }.pickerStyle(.segmented).labelsHidden().fixedSize()
     }
 
-    private var fileBrowserToggle: some View {
-        Button(showingFileBrowser ? "Hide Left Panel" : "Show Left Panel", systemImage: "sidebar.left") {
-            showingFileBrowser.toggle()
+    private func navigateFile(_ direction: Int) -> Bool {
+        guard !loading, !fileActionBusy, !cropping else { return false }
+        browserModel.pendingURLs = Set(pendingEdits.entries.map { $0.url.standardizedFileURL })
+        guard let url = browserModel.adjacentFile(to: sourceURL, direction: direction) else { return false }
+        load(url, resetEdits: true)
+        return true
+    }
+
+    private func toggleLeftPanel(library: Bool) {
+        showingFileBrowser = !showingFileBrowser || showingLibrary != library
+        showingLibrary = library
+    }
+
+    private var leftPanelShortcuts: some View {
+        HStack {
+            Button("Folder") { toggleLeftPanel(library: false) }
+                .keyboardShortcut("f", modifiers: [])
+            Button("Library") { toggleLeftPanel(library: true) }
+                .keyboardShortcut("l", modifiers: [])
         }
-        .labelStyle(.iconOnly)
-        .keyboardShortcut("f", modifiers: [])
-        .help(showingFileBrowser ? "Hide left panel (F)" : "Show left panel (F)")
-        .accessibilityValue(showingFileBrowser ? "Shown" : "Hidden")
     }
 
     private func startTutorial() {

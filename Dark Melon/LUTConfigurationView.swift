@@ -22,7 +22,7 @@ struct LUTConfigurationView: View {
                     else { ProgressView().controlSize(.small) }
                 }
                 Picker("Intended output gamma/gamut", selection: $configuration.output) {
-                    ForEach(LUTProfile.allCases) { Text($0.name).tag($0) }
+                    ForEach(LUTProfile.outputChoices) { Text($0.name).tag($0) }
                 }
             }.formStyle(.grouped)
             if configuration.input.isLog {
@@ -54,6 +54,7 @@ struct LUTConfigurationView: View {
         .task {
             let result = await Task.detached { (LUTStore.shared.cube(for: id)?.dimension, LUTStore.shared.configuration(for: id)) }.value
             dimension = result.0; configuration = result.1
+            if !LUTProfile.outputChoices.contains(configuration.output) { configuration.output = .sRGB }
             if dimension == nil { error = String(localized: "Invalid or unsupported .cube LUT.") }
         }
     }

@@ -15,24 +15,21 @@ struct BrowserFileDevelopment {
         let space: ProcessingColorSpace
         if let restored { space = restored.colorSpace }
         else { space = try await RAWDeveloper().suggestedColorSpace(for: url) }
-        var rawOptions = restored?.rawSettings
-        var worker = RAWDeveloper(colorSpace: space, rawSettings: restored?.rawSettings, rawWhiteBalance: restored?.mapping.rawWhiteBalance)
-        if restored == nil, let settings = try await worker.initialRAWSettings(url) {
-            rawOptions = settings
-            worker = RAWDeveloper(colorSpace: space, rawSettings: settings)
+        var recipe = restored ?? DevelopmentRecipe(colorSpace: space, mapping: .fresh(isRAW: false, sourceHeadroom: 1))
+        if restored == nil {
+            let target = try await BrowserRecipeTarget.fresh(url)
+            let resolver = RAWDeveloper(colorSpace: space)
+            recipe = try await resolver.resolveExportRecipe(url, recipe: target.recipe, isRAW: target.isRAW,
+                maximizeRange: UserDefaults.standard.bool(forKey: RAWSettings.maximizeRangePreferenceKey))
+            if target.isRAW, let defaults = EditLibrary.shared.rawDefaultPreset { recipe = defaults.applying(to: recipe) }
         }
+        var worker = RAWDeveloper(colorSpace: space, rawSettings: recipe.rawSettings, rawWhiteBalance: recipe.mapping.rawWhiteBalance)
         var development = try await worker.develop(url)
-        var recipe: DevelopmentRecipe
-        if let restored { recipe = restored }
-        else {
-            let mapping = try await worker.automaticMapping(for: development, bins: bins)
-            recipe = DevelopmentRecipe(colorSpace: space, mapping: mapping)
-        }
         if development.isRAW, recipe.mapping.rawWhiteBalance == nil, let reference = development.whitePoint {
             recipe.mapping.rawWhiteBalance = RAWWhiteBalance(reference)
         }
         if let defaults = development.rawDefaults {
-            recipe.rawSettings = rawOptions?.resolved(using: defaults) ?? defaults
+            recipe.rawSettings = recipe.rawSettings?.resolved(using: defaults) ?? defaults
         }
         if let film {
             let updated = film.applying(to: recipe)

@@ -47,12 +47,25 @@ struct HistogramPoints: View {
     }
 }
 
+/// A shifted logarithm keeps zero reachable while spreading out low luminances.
+nonisolated enum ToneSliderScale {
+    private static let knee = 0.001
+    private static let span = log1p(1 / knee)
+
+    static func position(for tone: Double) -> Double {
+        1 - log1p(tone.clamped(to: 0...1) / knee) / span
+    }
+
+    static func tone(at position: Double) -> Double {
+        (knee * expm1((1 - position.clamped(to: 0...1)) * span)).clamped(to: 0...1)
+    }
+}
+
 struct SlopeEditor: View {
     @Binding var mapping: ToneMapping
     var sourceISO: Double? = nil
     var rawExposure = 0.0
-    var sourceHeadroom = 1.0
-    private var maximumHDRGain: Double { max(5, sourceHeadroom, mapping.hdrGain) }
+
     var onToneChanged: () -> Void = {}
     var onContrastChanged: () -> Void = {}
     var onISOAdjustment: () -> Void = {}
@@ -109,20 +122,21 @@ struct SlopeEditor: View {
                 HStack {
                     Image(systemName: "swirl.circle.righthalf.filled")
                         .frame(width: 22).accessibilityHidden(true)
-                Slider(value: Binding(get: { 1 - min(mapping.tonePosition, mapping.white) },
+                Slider(value: Binding(get: { ToneSliderScale.position(for: min(mapping.tonePosition, mapping.white)) },
                                       set: {
-                                          let tone = min(1 - $0, mapping.white)
+                                          let tone = min(ToneSliderScale.tone(at: $0), mapping.white)
                                           if mapping.tonePosition != tone { onToneChanged() }
                                           mapping.tonePosition = tone
                                           mapping.setAutomaticHDRTarget()
                                           showLowContrastTip = abs(mapping.concentration) <= 0.1
                                       }),
-                       in: (1 - mapping.white)...1) {
+                       in: ToneSliderScale.position(for: mapping.white)...1) {
                     Text("Tone")
                 } onEditingChanged: { editing in
                     onToneEditingChanged(editing)
                 }
                         .labelsHidden()
+                        .accessibilityValue(mapping.tonePosition.formatted(.number.precision(.fractionLength(3))))
                 }
                 if showLowContrastTip {
                     Label("Tone adjustment is ineffective at low contrast.", systemImage: "info.circle")
@@ -173,16 +187,21 @@ struct SlopeEditor: View {
                     ControlInfo(.hdrGain)
                     AdjustmentField(title: "HDR Gain", value: Binding(get: { mapping.hdrGain }, set: {
                         mapping.hdrGain = $0 == 0 ? 0 : max(1,$0); onHDRGainAdjustment()
-                    }), range: 0...maximumHDRGain, unit: "×")
+                    }), range: 0...Double.greatestFiniteMagnitude, unit: "×")
                     if !mapping.hdrEnabled { Text("Off").foregroundStyle(.secondary) }
                 }
                 HStack {
                     Image(systemName: "sun.max")
                         .frame(width: 22).accessibilityHidden(true)
-                    Slider(value: Binding(get: { mapping.hdrEnabled ? max(1.01, mapping.hdrGain) : 0 }, set: { value in
-                        mapping.hdrGain = value < 0.505 ? 0 : min(maximumHDRGain, max(1.01, value))
+                    Slider(value: Binding(get: { mapping.hdrEnabled ? min(5, max(1.01, mapping.hdrGain)) : 0 }, set: { value in
+                        mapping.hdrGain = value < 0.505 ? 0 : min(5, max(1.01, value))
                         onHDRGainAdjustment()
-                    }), in: 0...maximumHDRGain) { Text("HDR Gain") }
+                    }), in: 0...5, onEditingChanged: { editing in
+                        if editing, mapping.hdrGain > 5 {
+                            mapping.hdrGain = 5
+                            onHDRGainAdjustment()
+                        }
+                    }) { Text("HDR Gain") }
                         .labelsHidden()
                 }
             }

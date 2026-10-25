@@ -45,6 +45,18 @@ final class ImageBrowserModel {
             }
         }
     }
+    /// Follow the displayed filter/order, stop at either end, and skip folders.
+    func adjacentFile(to current: URL?, direction: Int) -> URL? {
+        guard !loading, direction == -1 || direction == 1 else { return nil }
+        let files = visibleFiles
+        guard !files.isEmpty else { return nil }
+        guard let current, let index = files.firstIndex(where: { $0.url.standardizedFileURL == current.standardizedFileURL }) else {
+            return direction > 0 ? files.first?.url : files.last?.url
+        }
+        let next = index + direction
+        return files.indices.contains(next) ? files[next].url : nil
+    }
+
     var batchFiles: [BrowserEntry] {
         let files = visibleFiles
         return files.filter(\.hasSavedSettings) + files.filter { !$0.hasSavedSettings }
@@ -317,6 +329,11 @@ struct ImageFileBrowser: View {
                         .padding(BrowserGridLayout.padding)
                         .frame(maxWidth: .infinity)
                     }
+                    .onChange(of: selectedURL) { _, url in
+                        guard selection == nil, let url,
+                              files.contains(where: { $0.url.standardizedFileURL == url.standardizedFileURL }) else { return }
+                        proxy.scrollTo(url.standardizedFileURL, anchor: .center)
+                    }
                     .task(id: listingRevision) {
                         let current = selectedURL?.standardizedFileURL
                         let target: URL?
@@ -389,6 +406,11 @@ struct ImageFileBrowser: View {
         .onReceive(NotificationCenter.default.publisher(for: .developmentSettingsChanged)
             .receive(on: DispatchQueue.main)) { notification in
             if let url = notification.object as? URL { model.refreshSavedSettingsFlag(for: url) }
+        }
+        .onChange(of: selectedURL) { _, url in
+            guard selection == nil, selectedFiles.count <= 1 else { return }
+            selectedFiles = url.map { [$0] } ?? []
+            selectionAnchor = url
         }
         .onChange(of: model.directory) { _, _ in
             selectedFiles.removeAll(); selectionAnchor = nil

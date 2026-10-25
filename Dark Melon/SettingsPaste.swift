@@ -77,6 +77,8 @@ nonisolated struct SettingsPasteSelection: Codable, Sendable, Equatable {
     var raw = true
     var items: Set<PasteItem>? = nil
 
+    private enum CodingKeys: String, CodingKey { case tone, whiteBalance, color, effects, raw, items }
+
     func contains(_ item: PasteItem) -> Bool {
         if let items { return items.contains(item) }
         if PasteItem.toneItems.contains(item) { return tone }
@@ -163,6 +165,23 @@ nonisolated struct SettingsPasteSelection: Codable, Sendable, Equatable {
             result.selectedSwitches?.insert("highlight")
         }
         return result
+    }
+}
+
+// Ignore removed/unknown selection leaves without losing an entire preset or
+// saved preference. Declared separately to preserve the memberwise initializer.
+extension SettingsPasteSelection {
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        self.init()
+        tone = try values.decodeIfPresent(Bool.self, forKey: .tone) ?? true
+        whiteBalance = try values.decodeIfPresent(Bool.self, forKey: .whiteBalance) ?? true
+        color = try values.decodeIfPresent(Bool.self, forKey: .color) ?? true
+        effects = try values.decodeIfPresent(Bool.self, forKey: .effects) ?? true
+        raw = try values.decodeIfPresent(Bool.self, forKey: .raw) ?? true
+        items = try values.decodeIfPresent([String].self, forKey: .items).map {
+            Set($0.compactMap(PasteItem.init(rawValue:)))
+        }
     }
 }
 

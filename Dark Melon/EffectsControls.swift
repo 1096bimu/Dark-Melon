@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct EffectsControls: View {
+    @Environment(\.resetMapping) private var defaults
     @Environment(\.lockedFilmItems) private var lockedItems
     @Binding var channelContrast: [Double]
     @Binding var clarity: Double
@@ -22,14 +23,14 @@ struct EffectsControls: View {
                 HoldCompareButton(comparing: $comparing)
                     .disabled(channelContrast.dropFirst().allSatisfy { $0 == channelContrast[0] } && clarity == 0 && hdf == 0 && grain.strength == 0 && vignette.amount == 0 && (!hdrEnabled || halation.inputCurve == 0))
                 Button("Reset Effects") {
-                    if !lockedItems.contains(.dyeResponse) { channelContrast = [0, 0, 0] }
-                    if !lockedItems.contains(.grain) { grain = FilmGrainSettings() }
-                    if !lockedItems.contains(.halation) { halation = HalationSettings() }
-                    if !lockedItems.contains(.clarity) { clarity = 0; radius = 30 }
-                    if !lockedItems.contains(.hdf) { hdf = 0; hdfRadius = 100 }
-                    if !lockedItems.contains(.vignette) { vignette = VignetteSettings() }
+                    if !lockedItems.contains(.dyeResponse) { channelContrast = defaults.channelContrast }
+                    if !lockedItems.contains(.grain) { grain = defaults.grain }
+                    if !lockedItems.contains(.halation) { halation = defaults.halation }
+                    if !lockedItems.contains(.clarity) { clarity = defaults.clarity; radius = defaults.clarityRadius }
+                    if !lockedItems.contains(.hdf) { hdf = defaults.hdf; hdfRadius = defaults.hdfRadius }
+                    if !lockedItems.contains(.vignette) { vignette = defaults.vignette }
                 }
-                    .disabled(channelContrast.allSatisfy { $0 == 0 } && clarity == 0 && radius == 30 && hdf == 0 && hdfRadius == 100 && grain == FilmGrainSettings() && halation == HalationSettings() && vignette == VignetteSettings())
+                    .disabled(channelContrast == defaults.channelContrast && clarity == defaults.clarity && radius == defaults.clarityRadius && hdf == defaults.hdf && hdfRadius == defaults.hdfRadius && grain == defaults.grain && halation == defaults.halation && vignette == defaults.vignette)
             }
             VStack(alignment: .leading, spacing: 8) {
                 Text("Dye Response").fontWeight(.medium)

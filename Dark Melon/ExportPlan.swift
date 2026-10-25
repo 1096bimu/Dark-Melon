@@ -37,7 +37,9 @@ nonisolated struct ExportPlan: Sendable {
 
     @concurrent
     static func prepare(files: [URL], film: FilmSettings?, maximizeRAWRange: Bool,
+                        rawDefault: RAWDefaultPreset? = nil,
                         progress: @escaping @MainActor @Sendable (Int, Int) -> Void) async throws -> (items: [PreparedExportItem], failures: [String]) {
+        let rawDefault = if let rawDefault { rawDefault } else { await EditLibrary.shared.rawDefaultPreset }
         let pixels = try files.map {
             try Task.checkCancellation()
             return PreparedExportItem.pixelCount(of: $0)
@@ -71,7 +73,9 @@ nonisolated struct ExportPlan: Sendable {
                             let resolved = try await worker.resolveExportRecipe(url, recipe: target.recipe, isRAW: target.isRAW,
                                 maximizeRange: target.savedRecipe == nil && maximizeRAWRange)
                             try Task.checkCancellation()
-                            let recipe = film?.applying(to: resolved) ?? resolved
+                            let defaults = target.isRAW && target.savedRecipe == nil
+                                ? rawDefault?.applying(to: resolved) ?? resolved : resolved
+                            let recipe = film?.applying(to: defaults) ?? defaults
                             return PreparationResult(index: index, cost: cost,
                                 item: PreparedExportItem(source: url, recipe: recipe, pixels: pixels[index]), error: nil)
                         } catch is CancellationError {

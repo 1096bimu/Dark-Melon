@@ -43,6 +43,7 @@ private actor HueChromaBoundary {
 }
 
 struct HueChromaScope: View {
+    @Environment(\.resetMapping) private var defaults
     @Binding var controls: [OKLabVertexAdjustment]
     @Binding var monochrome: Bool
     @State private var selected: Int?
@@ -164,7 +165,7 @@ struct HueChromaScope: View {
                 })).toggleStyle(.switch).filmLock(.vertices)
                 Spacer()
                 Button("Reset") {
-                    controls = OKLabVertexWarp.defaults
+                    controls = defaults.vertexWarp
                     if monochrome { OKLabVertexWarp.setMonochrome(true, controls: &controls) }
                 }
             }

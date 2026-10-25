@@ -18,8 +18,24 @@ struct LibraryEntry: Identifiable, Codable {
     var importingLUT = false
     private let url: URL
     private let lutStore: LUTStore
+    private let preferences: UserDefaults
+    private let defaultKey: String
+    private(set) var rawDefaultID: UUID?
+    var rawDefaultPreset: RAWDefaultPreset? {
+        guard let entry = entries.first(where: { $0.id == rawDefaultID }),
+              let recipe = entry.recipe, let selection = entry.selection else { return nil }
+        return RAWDefaultPreset(recipe: recipe, selection: selection)
+    }
+    func useAsRAWDefault(_ id: UUID?) {
+        guard id == nil || entries.contains(where: { $0.id == id && $0.recipe != nil }) else { return }
+        rawDefaultID = id
+        preferences.set(id?.uuidString, forKey: defaultKey)
+    }
     private var readable = true
-    init(url: URL? = nil, lutStore: LUTStore = .shared) {
+    init(url: URL? = nil, lutStore: LUTStore = .shared, preferences: UserDefaults = .standard) {
+        self.preferences = preferences
+        defaultKey = url.map { "rawDefaultPreset:" + $0.path } ?? "rawDefaultPreset"
+        rawDefaultID = preferences.string(forKey: defaultKey).flatMap(UUID.init(uuidString:))
         self.lutStore = lutStore
         self.url = url ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Dark Melon/EditLibrary.json")
@@ -30,6 +46,9 @@ struct LibraryEntry: Identifiable, Codable {
                 ?? Bundle.main.url(forResource: "BundledLUTLibrary", withExtension: "json") {
                 entries = try Self.decode(Data(contentsOf: bundled))
                 save(entries)
+            }
+            if let rawDefaultID, !entries.contains(where: { $0.id == rawDefaultID && $0.recipe != nil }) {
+                useAsRAWDefault(nil)
             }
         } catch { readable = false; self.error = error.localizedDescription }
     }
@@ -65,6 +84,9 @@ struct LibraryEntry: Identifiable, Codable {
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
             try JSONEncoder().encode(updated).write(to: url, options: .atomic)
             entries = updated
+            if let rawDefaultID, !entries.contains(where: { $0.id == rawDefaultID && $0.recipe != nil }) {
+                useAsRAWDefault(nil)
+            }
         } catch { self.error = error.localizedDescription }
     }
     func addFolder(_ name: String, parent: UUID?) {
@@ -105,6 +127,15 @@ struct LibraryEntry: Identifiable, Codable {
         if !failures.isEmpty { error = ([error].compactMap { $0 } + failures).joined(separator: "\n") }
     }
 
+    func rename(_ id: UUID, to name: String) {
+        let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty, let index = entries.firstIndex(where: { $0.id == id }),
+              entries[index].name != name else { return }
+        var updated = entries
+        updated[index].name = name
+        save(updated)
+    }
+
     func move(_ id: UUID, to parent: UUID?) {
         guard let index = entries.firstIndex(where: { $0.id == id }), !entries[index].isFolder else { return }
         var updated = entries; updated[index].parent = parent; save(updated)
@@ -134,6 +165,7 @@ struct EditLibraryView: View {
     @State private var namingFolder = false
     @State private var namingEdit = false
     @State private var deleting: LibraryEntry?
+    @State private var renaming: LibraryEntry?
     @State private var name = ""
     let current: DevelopmentRecipe?
     @Binding var selectedLUT: UUID?
@@ -179,12 +211,23 @@ struct EditLibraryView: View {
                             Spacer()
                             if entry.isFolder { Image(systemName: "chevron.right").foregroundStyle(.secondary) }
                             else if let id = entry.lutID, id == selectedLUT { Image(systemName: "checkmark") }
+                            else if entry.id == library.rawDefaultID {
+                                Image(systemName: "camera.aperture").foregroundStyle(.secondary)
+                                    .help("RAW Default")
+                            }
                         }.contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .listRowBackground(entry.lutID != nil && entry.lutID == selectedLUT ? Color.accentColor.opacity(0.2) : Color.clear)
                     .disabled((entry.recipe != nil && current == nil) || (entry.lutID != nil && lockedItems.contains(.lut)))
                     .contextMenu {
+                        Button("Rename…", systemImage: "pencil") { name = entry.name; renaming = entry }
+                        if entry.recipe != nil {
+                            Button(LocalizedStringKey(library.rawDefaultID == entry.id ? "Clear RAW Default" : "Use as RAW Default"),
+                                   systemImage: "camera.aperture") {
+                                library.useAsRAWDefault(library.rawDefaultID == entry.id ? nil : entry.id)
+                            }
+                        }
                         if entry.lutID != nil {
                             Button("Configure LUT…", systemImage: "slider.horizontal.3") { configuringLUT = entry }
                                 .disabled(lockedItems.contains(.lut))
@@ -235,6 +278,14 @@ struct EditLibraryView: View {
                     library.addEdit(name.trimmingCharacters(in: .whitespacesAndNewlines), parent: folder, recipe: snapshot, selection: selection)
                 }
             }.disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }
+        .alert("Rename", isPresented: Binding(
+            get: { renaming != nil }, set: { if !$0 { renaming = nil } }
+        ), presenting: renaming) { entry in
+            TextField("Name", text: $name)
+            Button("Cancel", role: .cancel) { renaming = nil }
+            Button("Rename") { library.rename(entry.id, to: name); renaming = nil }
+                .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
         .alert("Delete", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })) {
             Button("Cancel", role: .cancel) { deleting = nil }

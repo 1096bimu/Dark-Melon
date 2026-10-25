@@ -5,6 +5,7 @@ import simd
 /// Bundled gamma/gamut choices, using full-range normalized LUT coordinates.
 nonisolated enum LUTProfile: String, CaseIterable, Codable, Identifiable, Sendable {
     case sRGB, rec709, sLog3, vLog, cLog3, fLog, fLog2
+    static let outputChoices: [Self] = [.sRGB, .rec709]
     var id: Self { self }
     var isLog: Bool { self == .sLog3 || self == .vLog || self == .cLog3 || self == .fLog || self == .fLog2 }
     var name: String {
