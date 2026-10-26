@@ -14,7 +14,7 @@ import Foundation
         assert(fitted.values[.luminance] == settings.values[.luminance])
         assert(fitted.lensCorrection == settings.lensCorrection)
         let exposure = fitted.values[.exposure]!, bias = fitted.values[.shadowBias]!
-        assert((-5...5).contains(exposure) && bias == 0)
+        assert((-5...0).contains(exposure) && bias == 0)
         let raw = CIRAWFilter(imageURL: url)!
         raw.baselineExposure = 0; fitted.apply(to: raw)
         raw.boostAmount = 0; raw.localToneMapAmount = 0; raw.isGamutMappingEnabled = false
@@ -28,7 +28,8 @@ import Foundation
         context.render(sampled,toBitmap:&pixels,rowBytes:width*16,bounds:CGRect(x:0,y:0,width:width,height:height),format:.RGBAf,colorSpace:space)
         let maximum = RAWSignalRange.highlight(pixels)!
         assert(maximum.isFinite)
-        if exposure > -5 && exposure < 5 { assert(abs(maximum-1)<0.002, "Peak did not fit: \(maximum)") }
+        if exposure > -5 && exposure < 0 { assert(abs(maximum-1)<0.002, "Peak did not fit: \(maximum)") }
+        if exposure == 0 { assert(maximum <= 1.002, "Capped exposure should leave highlight headroom") }
         print("Max Range: \(url.lastPathComponent), exposure \(exposure), bias \(bias), trimmed highlight \(maximum), \(Date().timeIntervalSince(started)) s. Other RAW settings retained.")
     }
 }

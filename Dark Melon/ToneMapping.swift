@@ -13,6 +13,7 @@ nonisolated struct ToneMapping: Codable, Equatable, Sendable {
     var clarityRadius = 30.0
     var hdf = 0.0
     var hdfRadius = 100.0
+    var badHDR = BadHDRSettings()
     var grain = FilmGrainSettings()
     var halation = HalationSettings()
     var vignette = VignetteSettings()

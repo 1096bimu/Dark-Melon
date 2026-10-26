@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDocumentTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleTypeName</key>
+            <string>Camera RAW Image</string>
+            <key>CFBundleTypeRole</key>
+            <string>Editor</string>
+            <key>LSHandlerRank</key>
+            <string>Alternate</string>
+            <key>LSItemContentTypes</key>
+            <array>
+                <string>public.camera-raw-image</string>
+            </array>
+        </dict>
+        <dict>
+            <key>CFBundleTypeName</key>
+            <string>Image</string>
+            <key>CFBundleTypeRole</key>
+            <string>Editor</string>
+            <key>LSHandlerRank</key>
+            <string>Alternate</string>
+            <key>LSItemContentTypes</key>
+            <array>
+                <string>public.jpeg</string>
+                <string>public.png</string>
+                <string>public.tiff</string>
+                <string>public.heic</string>
+                <string>public.heif</string>
+                <string>public.heics</string>
+                <string>public.avif</string>
+                <string>public.avis</string>
+                <string>public.jpeg-xl</string>
+                <string>public.jpeg-2000</string>
+                <string>org.webmproject.webp</string>
+                <string>com.compuserve.gif</string>
+                <string>com.microsoft.bmp</string>
+                <string>com.microsoft.ico</string>
+                <string>com.microsoft.cur</string>
+                <string>com.apple.icns</string>
+                <string>com.adobe.photoshop-image</string>
+                <string>com.truevision.tga-image</string>
+                <string>com.ilm.openexr-image</string>
+                <string>public.radiance</string>
+                <string>public.pbm</string>
+                <string>public.mpo-image</string>
+                <string>com.sgi.sgi-image</string>
+                <string>com.apple.pict</string>
+            </array>
+        </dict>
+    </array>
+</dict>
+</plist>

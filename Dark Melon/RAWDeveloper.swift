@@ -127,6 +127,7 @@ actor RAWDeveloper {
     private lazy var halation = Halation()
     private lazy var vignette = Vignette()
 
+    private lazy var badHDR = BadHDR()
     private lazy var hdfKernel = CIColorKernel(source: """
         kernel vec4 hdfAdd(__sample pixel, __sample blurred, float amount) {
             vec4 p = unpremultiply(pixel);
@@ -414,7 +415,8 @@ actor RAWDeveloper {
             image = try filmGrain!.apply(to: image, source: image, settings: mapping.grain,
                                         weights: colorSpace.luminance, ceiling: 0)
         }
-        return image
+        return try badHDR.apply(to: image, settings: mapping.badHDR, whitePoint: mapping.white,
+                                weights: colorSpace.luminance)
     }
 
     private func developedImage(_ source: CIImage, mapping: ToneMapping, hdr: Bool) throws -> CIImage {
@@ -428,7 +430,7 @@ actor RAWDeveloper {
             color.saturationStart = 1; color.saturationEnd = 1; color.saturationMid = 1; color.saturationHDR = 1
             color.luminanceSaturationStart = 1; color.luminanceSaturationEnd = 1; color.luminanceSaturationMid = 1; color.luminanceSaturationHDR = 1
         }
-        // Shared by preview/export: offset → HDF → vignette → halation → grain → tone → RGB WB → OKLab → clarity.
+        // Shared by preview/export: offset → HDF → vignette → halation → grain → BadHDR → tone → RGB WB → OKLab → clarity.
         // RAW decoder white balance is already part of the decoded source.
         let toned = try applyTone(image, curves: mapping.channelCurves(hdr: hdr))
         let balanced = try applyWhiteBalance(toned, mapping: mapping)
@@ -610,7 +612,7 @@ actor RAWDeveloper {
     }
 
     /// Fits the decoded RGB signal, before all development effects and tone mapping.
-    /// Shadow Bias stays at zero; only the robust highlight peak is fitted.
+    /// Shadow Bias stays at zero. Fit highlights without raising exposure above 0 EV.
     func maximumRAWRange(_ url: URL) throws -> RAWSettings {
         let accessed = url.startAccessingSecurityScopedResource()
         defer { if accessed { url.stopAccessingSecurityScopedResource() } }
@@ -643,7 +645,7 @@ actor RAWDeveloper {
         // Exposure is measured in stops. Verify after changing it, since the
         // decoder can alter highlight recovery as exposure changes.
         for _ in 0..<3 {
-            let exposure = min(RAWAdjustment.exposure.maximum, max(RAWAdjustment.exposure.minimum,
+            let exposure = min(Float(0), max(RAWAdjustment.exposure.minimum,
                 Float(Double(raw.exposure) - log2(peak))))
             if abs(peak - 1) < 0.0001 || exposure == raw.exposure { break }
             raw.exposure = exposure
@@ -1048,13 +1050,19 @@ actor RAWDeveloper {
         }
         let container = CGImageSourceCreateWithURL(url as CFURL, nil)
         let properties = container.flatMap { CGImageSourceCopyPropertiesAtIndex($0, 0, nil) } as? [CFString: Any] ?? [:]
-        var development = RAWDevelopment(preview: preview, linearSource: image, url: url, width: Int(bounds.width), height: Int(bounds.height), whitePoint: source.whitePoint, metadata: CameraMetadata(properties: properties), isRAW: source.isRAW, rawDefaults: source.rawDefaults, sourceHeadroom: source.headroom)
-        development.fullResolutionReady = !progressive || !source.isRAW
+        let type = container.flatMap { CGImageSourceGetType($0) }.flatMap { UTType($0 as String) }
+        let metadata = CameraMetadata(properties: properties, url: url, isRAW: source.isRAW, type: type)
+        var development = RAWDevelopment(preview: preview, linearSource: image, url: url, width: Int(bounds.width), height: Int(bounds.height), whitePoint: source.whitePoint, metadata: metadata, isRAW: source.isRAW, rawDefaults: source.rawDefaults, sourceHeadroom: source.headroom)
+        let isHEIF = type?.conforms(to: .heif) == true || type?.conforms(to: .heic) == true
+        // HDR HEIF's lazy decoder can return incomplete tiles for cropped ROI requests.
+        // Show the overview first, then use one fully decoded bitmap for all detail patches.
+        let needsFullDecode = source.isRAW || (isHEIF && source.headroom > 1)
+        development.fullResolutionReady = !progressive || !needsFullDecode
         overviewCache = (development.id, CGSize(width: floor(image.extent.width * scale), height: floor(image.extent.height * scale)), preview)
         return development
     }
 
-    /// Materialize only the current photo. Ordinary detail renders no longer revisit RAW decoding.
+    /// Materialize only the current photo. Detail requests reuse decoded RAW/HDR HEIF pixels.
     func prepareFullResolution(_ development: RAWDevelopment) throws -> RAWDevelopment {
         try Task.checkCancellation()
         let access = development.url.startAccessingSecurityScopedResource()

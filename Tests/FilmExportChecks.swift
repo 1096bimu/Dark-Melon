@@ -17,14 +17,24 @@ import ImageIO
             try context.writePNGRepresentation(of: source, to: file, format: .RGBA8, colorSpace: ProcessingColorSpace.sRGB.encoded)
         }
         var saved = ToneMapping(); saved.concentration = 0; saved.hdrGain = 0
+        saved.badHDR = BadHDRSettings(strength: -0.4, radius: 0.75)
         try await RecipeStore.shared.save(DevelopmentRecipe(colorSpace: .sRGB, mapping: saved), for: files[0])
         let sidecar = RecipeStore.sidecarURL(for: files[0])
         let originalData = try Data(contentsOf: sidecar)
+        let noDefault = RAWDefaultPreset(recipe: DevelopmentRecipe(colorSpace: .sRGB, mapping: ToneMapping()),
+                                        selection: SettingsPasteSelection(items: []))
+        let unlocked = try await ExportPlan.prepare(files: files, film: nil, maximizeRAWRange: false,
+                                                   rawDefault: noDefault) { _, _ in }
+        assert(unlocked.failures.isEmpty && unlocked.items.count == files.count)
+        assert(unlocked.items[0].recipe.mapping.badHDR == saved.badHDR)
+        assert(unlocked.items[1].recipe.mapping.badHDR == BadHDRSettings())
         var capture = ToneMapping(); capture.concentration = 0.65
-        let lock = FilmSettings(capture, selection: SettingsPasteSelection(items: [.contrast]))
+        capture.badHDR = BadHDRSettings(strength: 0.8, radius: 1.5)
+        let lock = FilmSettings(capture, selection: SettingsPasteSelection(items: [.contrast, .badHDR]))
         var settings = HEIFSettings(); settings.format = .jpeg; settings.quality = 1
         var failures: [String] = []
-        let prepared = try await ExportPlan.prepare(files: files, film: lock, maximizeRAWRange: false) { _, _ in }
+        let prepared = try await ExportPlan.prepare(files: files, film: lock, maximizeRAWRange: false,
+                                                   rawDefault: noDefault) { _, _ in }
         let plan = ExportPlan(items: prepared.items, settings: settings, failures: prepared.failures)
         await BatchExportRunner.run(plan: plan, destination: output) { result, _ in
             if let error = result.error { failures.append(error) }
@@ -37,6 +47,7 @@ import ImageIO
         for file in files {
             let prepared = try await BrowserFileDevelopment.load(file, bins: 128, film: lock)
             assert(prepared.recipe.mapping.concentration == capture.concentration)
+            assert(prepared.recipe.mapping.badHDR == capture.badHDR)
             let expected = try await prepared.worker.exportHEIF(file, mapping: prepared.recipe.mapping, settings: settings)
             let actual = try Data(contentsOf: output.appendingPathComponent(file.deletingPathExtension().lastPathComponent + ".jpg"))
             assert(pixels(expected) == pixels(actual))

@@ -3,6 +3,7 @@ import SwiftUI
 struct EffectsControls: View {
     @Environment(\.resetMapping) private var defaults
     @Environment(\.lockedFilmItems) private var lockedItems
+    @Binding var badHDR: BadHDRSettings
     @Binding var channelContrast: [Double]
     @Binding var clarity: Double
     @Binding var radius: Double
@@ -21,8 +22,9 @@ struct EffectsControls: View {
                 Text("Effects").font(.headline)
                 Spacer()
                 HoldCompareButton(comparing: $comparing)
-                    .disabled(channelContrast.dropFirst().allSatisfy { $0 == channelContrast[0] } && clarity == 0 && hdf == 0 && grain.strength == 0 && vignette.amount == 0 && (!hdrEnabled || halation.inputCurve == 0))
+                    .disabled(channelContrast.dropFirst().allSatisfy { $0 == channelContrast[0] } && clarity == 0 && hdf == 0 && grain.strength == 0 && vignette.amount == 0 && (!hdrEnabled || halation.inputCurve == 0) && badHDR.strength == 0)
                 Button("Reset Effects") {
+                    if !lockedItems.contains(.badHDR) { badHDR = defaults.badHDR }
                     if !lockedItems.contains(.dyeResponse) { channelContrast = defaults.channelContrast }
                     if !lockedItems.contains(.grain) { grain = defaults.grain }
                     if !lockedItems.contains(.halation) { halation = defaults.halation }
@@ -30,7 +32,7 @@ struct EffectsControls: View {
                     if !lockedItems.contains(.hdf) { hdf = defaults.hdf; hdfRadius = defaults.hdfRadius }
                     if !lockedItems.contains(.vignette) { vignette = defaults.vignette }
                 }
-                    .disabled(channelContrast == defaults.channelContrast && clarity == defaults.clarity && radius == defaults.clarityRadius && hdf == defaults.hdf && hdfRadius == defaults.hdfRadius && grain == defaults.grain && halation == defaults.halation && vignette == defaults.vignette)
+                    .disabled(channelContrast == defaults.channelContrast && clarity == defaults.clarity && radius == defaults.clarityRadius && hdf == defaults.hdf && hdfRadius == defaults.hdfRadius && grain == defaults.grain && halation == defaults.halation && vignette == defaults.vignette && badHDR == defaults.badHDR)
             }
             VStack(alignment: .leading, spacing: 8) {
                 Text("Dye Response").fontWeight(.medium)
@@ -154,6 +156,27 @@ struct EffectsControls: View {
                 }
                 Slider(value: $vignette.spread, in: 0...1) { Text("Vignette spread") }.filmLock(.vignette).labelsHidden()
             }
+            Divider()
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text("BadHDR")
+                    AdjustmentField(title: "BadHDR", value: $badHDR.strength, range: -4...4, digits: 0, scale: 100, unit: "%")
+                }
+                HStack {
+                    Image(systemName: "burn")
+                    Slider(value: $badHDR.strength, in: -4...4) { Text("BadHDR") }.labelsHidden()
+                }
+                HStack {
+                    Text("Radius")
+                    AdjustmentField(title: "BadHDR radius", value: $badHDR.radius, range: 0.5...3, digits: 2, unit: "×")
+                }
+                HStack {
+                    Image(systemName: "circle.dashed")
+                    Slider(value: $badHDR.radius, in: 0.5...3) { Text("BadHDR radius") }.labelsHidden()
+                }
+            }
+            .filmLock(.badHDR)
+            .help("Uses blurred luminance to reduce highlights before tone mapping while preserving color ratios. Negative strength reverses the effect.")
         }
         .padding(12)
     }

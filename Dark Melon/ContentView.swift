@@ -47,6 +47,7 @@ struct ContentView: View {
     @State private var resettingTone = false
     @State private var browserModel = ImageBrowserModel()
     @State private var showingFileBrowser = true
+    @State private var showingMetadata = true
     @State private var leftPanelWidth: CGFloat = BrowserGridLayout.twoColumnWidth
     @AppStorage("leftPanel.library") private var showingLibrary = false
     #if os(macOS)
@@ -261,7 +262,7 @@ struct ContentView: View {
             result.blackAndWhite = BlackAndWhiteSettings()
             result.blackAndWhite.isEnabled = mapping.blackAndWhite.isEnabled
         }
-        if panel == .effects { result.channelContrast = [0, 0, 0]; result.clarity = 0; result.hdf = 0; result.grain.strength = 0; result.halation.inputCurve = 0; result.vignette.amount = 0 }
+        if panel == .effects { result.channelContrast = [0, 0, 0]; result.clarity = 0; result.hdf = 0; result.grain.strength = 0; result.halation.inputCurve = 0; result.vignette.amount = 0; result.badHDR = BadHDRSettings() }
         return result
     }
 
@@ -473,7 +474,7 @@ struct ContentView: View {
             }
         }
         .overlay(alignment: .topTrailing) {
-            if let development {
+            if showingMetadata, let development {
                 CameraMetadataOverlay(metadata: development.metadata, whitePoint: development.whitePoint)
             }
         }
@@ -526,7 +527,7 @@ struct ContentView: View {
                 } else if panel == .color {
                     ColorControls(settings: $mapping.color, vertices: $mapping.vertexWarp, monochrome: mapping.blackAndWhite.isEnabled || mapping.color.monochrome, hdrMax: mapping.hdrMax, colorSpace: colorSpace)
                 } else if panel == .effects {
-                    EffectsControls(channelContrast: $mapping.channelContrast, clarity: $mapping.clarity, radius: $mapping.clarityRadius, hdf: $mapping.hdf, hdfRadius: $mapping.hdfRadius, grain: $mapping.grain, halation: $mapping.halation, vignette: $mapping.vignette, hdrEnabled: mapping.hdrEnabled, monochrome: mapping.color.monochrome, comparing: $comparingEffects)
+                    EffectsControls(badHDR: $mapping.badHDR, channelContrast: $mapping.channelContrast, clarity: $mapping.clarity, radius: $mapping.clarityRadius, hdf: $mapping.hdf, hdfRadius: $mapping.hdfRadius, grain: $mapping.grain, halation: $mapping.halation, vignette: $mapping.vignette, hdrEnabled: mapping.hdrEnabled, monochrome: mapping.color.monochrome, comparing: $comparingEffects)
                 } else {
                     tonePanel
                 }
@@ -537,9 +538,21 @@ struct ContentView: View {
     }
     }
 
+    private var editorScene: some View {
+        editorColumns
+            .focusedSceneValue(\.editorUndo, undoActions)
+            .focusedSceneValue(\.editorPanel, $panel)
+            .focusedSceneValue(\.imageInfoVisible, $showingMetadata)
+            .focusedSceneValue(\.startTutorial, { startTutorial() })
+            .focusedSceneValue(\.toggleEditorPicker, pickerShortcutAction)
+            #if os(macOS)
+            .focusedSceneValue(\.batchExport, browserModel.directory == nil ? nil : { showingBatchExport = true })
+            #endif
+    }
+
     var body: some View {
         NavigationStack {
-            editorColumns
+            editorScene
             .environment(\.lockedFilmItems, lockedFilm?.selection.selectedItems ?? [])
             .environment(\.resetMapping, resetDefaults.mapping)
             .task {
@@ -716,12 +729,7 @@ struct ContentView: View {
             .background(FileNavigationShortcut(navigate: navigateFile).frame(width: 0, height: 0))
             #endif
             .navigationTitle(filename)
-            .focusedSceneValue(\.editorUndo, undoActions)
-            .focusedSceneValue(\.editorPanel, $panel)
-            .focusedSceneValue(\.startTutorial, { startTutorial() })
-            .focusedSceneValue(\.toggleEditorPicker, pickerShortcutAction)
             #if os(macOS)
-            .focusedSceneValue(\.batchExport, browserModel.directory == nil ? nil : { showingBatchExport = true })
             .sheet(isPresented: $showingBatchExport) {
                 if let directory = browserModel.directory { BatchExportView(directory: directory, film: lockedFilm, queue: exportQueue) }
             }
@@ -850,6 +858,12 @@ struct ContentView: View {
                 case .failure(let error): errorMessage = error.localizedDescription
                 }
             }
+            #if !os(macOS)
+            .onOpenURL { url in
+                guard url.isFileURL else { return }
+                requestDiscard { load(url, resetEdits: true) }
+            }
+            #endif
             .alert("Dark Melon", isPresented: Binding(
                 get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } }
             )) {
@@ -876,7 +890,9 @@ struct ContentView: View {
             Text("There are unsaved edits for \(pendingEdits.entries.count) file(s). Save them or discard them before continuing.")
         }
         #if os(macOS)
-        .background(FileSaveLifecycle(approveClose: confirmClose).frame(width: 0, height: 0))
+        .background(FileSaveLifecycle(approveClose: confirmClose, openFile: { url in
+            requestDiscard { load(url, resetEdits: true) }
+        }).frame(width: 0, height: 0))
         #endif
         #if os(macOS)
         .frame(minWidth: 1000, minHeight: 600)

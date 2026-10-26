@@ -161,6 +161,7 @@ nonisolated struct DevelopmentRecipe: Codable, Equatable, Sendable {
               within(m.clarity, -2...2), within(m.clarityRadius, 15...90),
               within(m.hdf, 0...0.2), within(m.hdfRadius, 50...200),
               within(m.vignette.amount, 0...4), within(m.vignette.spread, 0...1),
+              within(m.badHDR.strength, -4...4), within(m.badHDR.radius, 0.5...3),
               within(m.halation.inputCurve, 0...1), within(m.halation.radius, 0.5...3), within(m.halation.transmission, 0...0.5),
               within(m.grain.size, 0.2...3), within(m.grain.strength, 0...5), within(m.grain.distribution, 0...1),
               [m.whiteBalance.red, m.whiteBalance.green, m.whiteBalance.blue].allSatisfy({ within($0, 0.000001...10000) }),

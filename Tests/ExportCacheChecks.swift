@@ -30,6 +30,7 @@ import UniformTypeIdentifiers
         mapping.hdf = 0.03
         mapping.clarity = 0.1
         mapping.vignette.amount = 0.5
+        mapping.badHDR = BadHDRSettings(strength: 0.6, radius: 0.75)
         let worker = RAWDeveloper(colorSpace: .sRGB, lutStore: store)
         var settings = HEIFSettings()
         settings.format = .jpeg

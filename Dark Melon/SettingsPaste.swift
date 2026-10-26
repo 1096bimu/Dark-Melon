@@ -8,7 +8,7 @@ import UIKit
 nonisolated enum PasteItem: String, CaseIterable, Codable, Sendable, Identifiable {
     case tone, contrast, whitePoint, hdrGain, hdrRolloff, rgbWhiteBalance, rawWhiteBalance
     case chromaCurve, lightnessChromaCurve, vertices, hueTwister, splitTone
-    case dyeResponse, clarity, hdf, grain, halation, vignette
+    case dyeResponse, clarity, hdf, grain, halation, vignette, badHDR
     case transform, lut
     case rawDecoder, exposure, shadowBias, offset, luminanceNoise, colorNoise, sharpness, detail, edgeContrast, moire, lensCorrection, highlightRecovery
     var id: Self { self }
@@ -32,6 +32,7 @@ nonisolated enum PasteItem: String, CaseIterable, Codable, Sendable, Identifiabl
         case .grain: "Film Grain"
         case .halation: "Halation"
         case .vignette: "Vignette"
+        case .badHDR: "BadHDR"
         case .transform: "Transform"
         case .lut: "LUT"
         case .rawDecoder: "RAW 9"
@@ -64,7 +65,7 @@ nonisolated enum PasteItem: String, CaseIterable, Codable, Sendable, Identifiabl
     static let toneItems: [Self] = [.tone,.contrast,.whitePoint,.hdrGain,.hdrRolloff]
     static let balanceItems: [Self] = [.rgbWhiteBalance,.rawWhiteBalance]
     static let colorItems: [Self] = [.chromaCurve,.lightnessChromaCurve,.vertices,.hueTwister,.splitTone]
-    static let effectItems: [Self] = [.dyeResponse,.clarity,.hdf,.grain,.halation,.vignette]
+    static let effectItems: [Self] = [.dyeResponse,.clarity,.hdf,.grain,.halation,.vignette,.badHDR]
     static let rawItems: [Self] = [.rawDecoder,.exposure,.shadowBias,.offset,.luminanceNoise,.colorNoise,.sharpness,.detail,.edgeContrast,.moire,.lensCorrection,.highlightRecovery]
 }
 
@@ -143,6 +144,7 @@ nonisolated struct SettingsPasteSelection: Codable, Sendable, Equatable {
         if contains(.grain) { result.grain = source.grain }
         if contains(.halation) { result.halation = source.halation }
         if contains(.vignette) { result.vignette = source.vignette }
+        if contains(.badHDR) { result.badHDR = source.badHDR }
         if contains(.transform) { result.transform = source.transform }
         if contains(.lut) { result.lutID = source.lutID }
         return result

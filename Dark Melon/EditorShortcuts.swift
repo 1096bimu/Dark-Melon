@@ -22,6 +22,9 @@ private struct EditorPickerFocus: FocusedValueKey {
 private struct EditorPanelFocus: FocusedValueKey {
     typealias Value = Binding<EditorPanel>
 }
+private struct ImageInfoFocus: FocusedValueKey {
+    typealias Value = Binding<Bool>
+}
 private struct TutorialFocus: FocusedValueKey {
     typealias Value = () -> Void
 }
@@ -29,6 +32,10 @@ private struct BatchExportFocus: FocusedValueKey {
     typealias Value = () -> Void
 }
 extension FocusedValues {
+    var imageInfoVisible: Binding<Bool>? {
+        get { self[ImageInfoFocus.self] }
+        set { self[ImageInfoFocus.self] = newValue }
+    }
     var toggleEditorPicker: ((EditorPickerTool) -> Void)? {
         get { self[EditorPickerFocus.self] }
         set { self[EditorPickerFocus.self] = newValue }
@@ -49,9 +56,11 @@ extension FocusedValues {
 
 #if os(macOS)
 struct EditorCommands: Commands {
+    @Environment(\.openURL) private var openURL
     @FocusedValue(\.editorUndo) private var editUndo
     @FocusedValue(\.toggleEditorPicker) private var togglePicker
     @FocusedBinding(\.editorPanel) private var panel
+    @FocusedBinding(\.imageInfoVisible) private var imageInfoVisible
     @FocusedValue(\.batchExport) private var batchExport
     @FocusedValue(\.startTutorial) private var startTutorial
     private var textCanUndo: Bool { (NSApp.keyWindow?.firstResponder as? NSTextView)?.undoManager?.canUndo ?? false }
@@ -79,6 +88,11 @@ struct EditorCommands: Commands {
             SettingsLink { Text("Settings…") }
         }
         CommandGroup(replacing: .help) {
+            Button("Getting Started…") {
+                if let url = Bundle.main.url(forResource: "GettingStarted", withExtension: "html") {
+                    openURL(url)
+                }
+            }
             Button("Guided Tutorial…") { startTutorial?() }
                 .disabled(startTutorial == nil)
         }
@@ -98,6 +112,10 @@ struct EditorCommands: Commands {
                         .disabled(panel == nil)
                 }
             }
+            Divider()
+            Toggle("Image Info", isOn: Binding(get: { imageInfoVisible ?? true }, set: { imageInfoVisible = $0 }))
+                .keyboardShortcut("i", modifiers: [])
+                .disabled(imageInfoVisible == nil)
         }
     }
 }
@@ -175,6 +193,7 @@ struct EditorSettingsView: View {
                 shortcut("Export…", "⇧⌘E")
                 shortcut("Original", "Hold C")
                 shortcut("Toggle HDR preview", "H")
+                shortcut("Image Info", "I")
                 shortcut("Folder", "F")
                 shortcut("Library", "L")
                 shortcut("Previous / next file", "← / →")

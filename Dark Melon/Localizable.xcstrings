@@ -1,72 +1,6 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "Automatically fit the maximum RAW highlight data into the editing space when opening new files.": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "打开新文件时，自动将 RAW 高光数据的最大范围适配到编辑空间。"
-          }
-        }
-      }
-    },
-    "Record the effective ISO in exports, taking exposure adjustments into account, rather than the capture ISO.": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "在导出文件中记录计入曝光调整后的等效 ISO，而非拍摄时的 ISO。"
-          }
-        }
-      }
-    },
-    "Dims the screen from HDR brightness to avoid burn-in.": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "降低屏幕的 HDR 亮度，避免烧屏。"
-          }
-        }
-      }
-    },
-    "Adjusts HDR curvature while preserving the starting tangent. Zero is straight; 100% ends flat; -100% bends upward to nearly twice the straight endpoint. HDR Gain multiplies the result and can be increased if the curves cross.": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "调整 HDR 曲率，同时保持起点切线。0 为直线，100% 在末端变平，-100% 向上弯曲，使峰值接近直线末端的两倍。HDR 增益会缩放结果，曲线相交时可增加增益。"
-          }
-        }
-      }
-    },
-    "Export Only": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "仅导出"
-          }
-        }
-      }
-    },
-    "On": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "开启"
-          }
-        }
-      }
-    },
     "" : {
       "shouldTranslate" : false
     },
@@ -236,6 +170,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已选择 %lld 项"
+          }
+        }
+      }
+    },
+    "%lld-bit" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 位"
+          }
+        }
+      }
+    },
+    "%lld-bit decoded" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 位解码"
           }
         }
       }
@@ -418,6 +374,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "松开影调滑块时调整白场。隐藏的 HDR 目标值会随影调和对比度更新。"
+          }
+        }
+      }
+    },
+    "Adjusts HDR curvature while preserving the starting tangent. Zero is straight; 100% ends flat; -100% bends upward to nearly twice the straight endpoint. HDR Gain multiplies the result and can be increased if the curves cross." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "调整 HDR 曲率，同时保持起点切线。0 为直线，100% 在末端变平，-100% 向上弯曲，使峰值接近直线末端的两倍。HDR 增益会缩放结果，曲线相交时可增加增益。"
           }
         }
       }
@@ -614,6 +581,17 @@
         }
       }
     },
+    "Automatically fit the maximum RAW highlight data into the editing space when opening new files." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开新文件时，自动将 RAW 高光数据的最大范围适配到编辑空间。"
+          }
+        }
+      }
+    },
     "b" : {
 
     },
@@ -630,6 +608,20 @@
     },
     "Back" : {
 
+    },
+    "BadHDR" : {
+
+    },
+    "BadHDR radius" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BadHDR 半径"
+          }
+        }
+      }
     },
     "Batch Export" : {
       "extractionState" : "manual",
@@ -1573,6 +1565,17 @@
         }
       }
     },
+    "Dims the screen from HDR brightness to avoid burn-in." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "降低屏幕的 HDR 亮度，避免烧屏。"
+          }
+        }
+      }
+    },
     "Direct HDR" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1806,6 +1809,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "导出图像"
+          }
+        }
+      }
+    },
+    "Export Only" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "仅导出"
           }
         }
       }
@@ -2075,6 +2089,9 @@
           }
         }
       }
+    },
+    "Getting Started…" : {
+
     },
     "GNU General Public License v3.0 (GPL-3.0-only)" : {
       "extractionState" : "manual",
@@ -2606,6 +2623,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "此文件夹中的图像文件"
+          }
+        }
+      }
+    },
+    "Image Info" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "图像信息"
           }
         }
       }
@@ -3407,6 +3435,17 @@
         }
       }
     },
+    "On" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "开启"
+          }
+        }
+      }
+    },
     "On release of Tone or Exposure, move white to the current curve’s SDR level 254/255 and multiply Contrast by the new white point." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3865,6 +3904,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "最近访问的文件夹，第 %lld 项，共 %lld 项"
+          }
+        }
+      }
+    },
+    "Record the effective ISO in exports, taking exposure adjustments into account, rather than the capture ISO." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在导出文件中记录计入曝光调整后的等效 ISO，而非拍摄时的 ISO。"
           }
         }
       }
@@ -5225,6 +5275,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在支持的相机上使用 Apple 神经网络去马赛克和降噪。更改解码器可能会改变细节和色彩。"
+          }
+        }
+      }
+    },
+    "Uses blurred luminance to reduce highlights before tone mapping while preserving color ratios. Negative strength reverses the effect." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在色调映射前，根据模糊后的亮度压低高光，同时保持颜色比例。负强度会反转效果。"
           }
         }
       }

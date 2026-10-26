@@ -5,7 +5,7 @@ import SwiftUI
     @NSApplicationDelegateAdaptor(SaveLifecycleAppDelegate.self) private var appDelegate
     #endif
     var body: some Scene {
-        WindowGroup {
+        WindowGroup(id: "editor") {
             ContentView()
         }
         #if os(macOS)
