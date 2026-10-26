@@ -18,11 +18,13 @@ nonisolated struct ToneMapping: Codable, Equatable, Sendable {
     var halation = HalationSettings()
     var vignette = VignetteSettings()
     var offset = 0.0
-    var white = 1.0
+    var white = 0.5
     var tonePosition = 0.040
     var toneUsesSourceLuminance = true
     var peakPosition: Double { tonePosition }
-    var concentration = 0.4
+    var concentration = 0.2
+    // Log2 relative derivative weights, from ¼× to 4×.
+    var contrastDistribution = [0.0, 0.0, 0.0, 0.0]
     var channelContrast = [0.0, 0.0, 0.0]
     var hdrTarget = 4.0
     var hdrGain = 1.0
@@ -46,6 +48,7 @@ nonisolated struct ToneMapping: Codable, Equatable, Sendable {
     static func fresh(isRAW: Bool, sourceHeadroom: Double) -> ToneMapping {
         var result = ToneMapping()
         if !isRAW {
+            result.white = 1
             result.concentration = 0
             // Non-RAW decoding divides by headroom to fit our input domain.
             // A linear curve and the inverse gain restore the decoded HDR pixels.
@@ -146,7 +149,8 @@ nonisolated struct ToneMapping: Codable, Equatable, Sendable {
         let span = max(Self.minimumRange, upperInput)
         let count = 2000
         let effectiveConcentration = concentration
-        guard effectiveConcentration != 0 else {
+        let neutralDistribution = contrastDistribution.allSatisfy { $0 == contrastDistribution[0] }
+        guard effectiveConcentration != 0 || !neutralDistribution else {
             return ToneCurve(values: (0...count).map { Double($0) / Double(count) * outputMax },
                              black: 0, white: upperInput)
         }
@@ -162,9 +166,11 @@ nonisolated struct ToneMapping: Codable, Equatable, Sendable {
         let b = k * (1 - peak)
         let peakLog = (a == 0 ? 0 : a * log(peak))
                     + (b == 0 ? 0 : b * log1p(-peak))
+        let distribution = ToneContrastDistribution(peak: peak, weights: contrastDistribution)
         func density(_ x: Double) -> Double {
             let profile = exp(a * log(x) + b * log1p(-x) - peakLog)
-            return negative ? max(0, 1 - min(1, -effectiveConcentration) * profile) : profile
+            let base = negative ? max(0, 1 - min(1, -effectiveConcentration) * profile) : profile
+            return neutralDistribution ? base : base * distribution.weight(at: x)
         }
         // Midpoint integration avoids sampling endpoint singular limits as k
         // approaches zero. Subtracting peakLog keeps all weights well scaled.
@@ -176,6 +182,29 @@ nonisolated struct ToneMapping: Codable, Equatable, Sendable {
         }
         let scale = outputMax / values[count]
         return ToneCurve(values: values.map { $0 * scale }, black: 0, white: upperInput)
+    }
+}
+
+/// Positive, C1-continuous relative slope weights. Subtracting a common log
+/// weight removes overall gain before integration, so equal handles are identity.
+nonisolated struct ToneContrastDistribution {
+    let positions: [Double]
+    let logs: [Double]
+
+    init(peak: Double, weights: [Double]) {
+        let m = peak.clamped(to: 0...1)
+        positions = [0, m / 2, (m + 1) / 2, 1]
+        let mean = weights.reduce(0, +) / 4
+        logs = weights.map { $0 - mean }
+    }
+
+    func weight(at x: Double) -> Double {
+        // Zero-width intervals at Tone = black/white carry no area.
+        let i = (0..<3).first { x < positions[$0 + 1] } ?? 2
+        let span = positions[i + 1] - positions[i]
+        let t = span > 0 ? ((x - positions[i]) / span).clamped(to: 0...1) : 1
+        let blend = t * t * (3 - 2 * t)
+        return exp2(logs[i] + (logs[i + 1] - logs[i]) * blend)
     }
 }
 

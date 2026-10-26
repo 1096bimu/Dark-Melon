@@ -6,6 +6,8 @@ import UIKit
 #endif
 
 nonisolated enum PasteItem: String, CaseIterable, Codable, Sendable, Identifiable {
+    // Preserve saved selections from the experimental Skew control.
+    case contrastDistribution = "skew"
     case tone, contrast, whitePoint, hdrGain, hdrRolloff, rgbWhiteBalance, rawWhiteBalance
     case chromaCurve, lightnessChromaCurve, vertices, hueTwister, splitTone
     case dyeResponse, clarity, hdf, grain, halation, vignette, badHDR
@@ -16,6 +18,7 @@ nonisolated enum PasteItem: String, CaseIterable, Codable, Sendable, Identifiabl
         switch self {
         case .tone: "Tone"
         case .contrast: "Contrast"
+        case .contrastDistribution: "Contrast Distribution"
         case .whitePoint: "White Point"
         case .hdrGain: "HDR Gain"
         case .hdrRolloff: "HDR Rolloff"
@@ -62,7 +65,7 @@ nonisolated enum PasteItem: String, CaseIterable, Codable, Sendable, Identifiabl
         default: nil
         }
     }
-    static let toneItems: [Self] = [.tone,.contrast,.whitePoint,.hdrGain,.hdrRolloff]
+    static let toneItems: [Self] = [.tone,.contrast,.contrastDistribution,.whitePoint,.hdrGain,.hdrRolloff]
     static let balanceItems: [Self] = [.rgbWhiteBalance,.rawWhiteBalance]
     static let colorItems: [Self] = [.chromaCurve,.lightnessChromaCurve,.vertices,.hueTwister,.splitTone]
     static let effectItems: [Self] = [.dyeResponse,.clarity,.hdf,.grain,.halation,.vignette,.badHDR]
@@ -104,8 +107,9 @@ nonisolated struct SettingsPasteSelection: Codable, Sendable, Equatable {
         if contains(.whitePoint) { result.white = source.white }
         if contains(.tone) { result.tonePosition = source.tonePosition }
         if contains(.contrast) { result.concentration = source.concentration }
+        if contains(.contrastDistribution) { result.contrastDistribution = source.contrastDistribution }
         result.tonePosition = min(result.white, result.tonePosition)
-        if contains(.tone) || contains(.contrast) || contains(.whitePoint) { result.setAutomaticHDRTarget() }
+        if contains(.tone) || contains(.contrast) || contains(.whitePoint) || contains(.contrastDistribution) { result.setAutomaticHDRTarget() }
         if contains(.hdrGain) { result.hdrGain = source.hdrGain }
         if contains(.hdrRolloff) { result.hdrRolloff = source.hdrRolloff }
         if contains(.rgbWhiteBalance) { result.whiteBalance = source.whiteBalance }

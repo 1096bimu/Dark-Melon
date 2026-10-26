@@ -56,7 +56,6 @@ extension FocusedValues {
 
 #if os(macOS)
 struct EditorCommands: Commands {
-    @Environment(\.openURL) private var openURL
     @FocusedValue(\.editorUndo) private var editUndo
     @FocusedValue(\.toggleEditorPicker) private var togglePicker
     @FocusedBinding(\.editorPanel) private var panel
@@ -89,8 +88,14 @@ struct EditorCommands: Commands {
         }
         CommandGroup(replacing: .help) {
             Button("Getting Started…") {
-                if let url = Bundle.main.url(forResource: "GettingStarted", withExtension: "html") {
-                    openURL(url)
+                // SwiftUI's OpenURLAction is for web links; this guide is a bundled file.
+                guard let url = Bundle.main.url(forResource: "GettingStarted", withExtension: "html"),
+                      NSWorkspace.shared.open(url) else {
+                    let alert = NSAlert()
+                    alert.messageText = String(localized: "Could not open Getting Started")
+                    alert.informativeText = String(localized: "The bundled guide could not be opened. Check that an application is available to open HTML files.")
+                    alert.runModal()
+                    return
                 }
             }
             Button("Guided Tutorial…") { startTutorial?() }
@@ -125,6 +130,8 @@ struct EditorSettingsView: View {
     @AppStorage(ExportMetadata.effectiveISOPreferenceKey) private var effectiveISO = true
     @AppStorage(HDRScreenSaver.preferenceKey) private var screenSaver = false
     @AppStorage("showHueTwister") private var showHueTwister = false
+    @AppStorage("showContrastDistribution") private var showContrastDistribution = true
+    @AppStorage("showAdvancedRAWControls") private var showAdvancedRAWControls = false
     @AppStorage(RAWSettings.maximizeRangePreferenceKey) private var alwaysMaximizeRAWRange = false
     @AppStorage(ScopeGradient.preferenceKey) private var gradient = ScopeGradient.inferno
     var body: some View {
@@ -163,9 +170,15 @@ struct EditorSettingsView: View {
                 Text("Automatically fit the maximum RAW highlight data into the editing space when opening new files.")
                     .font(.caption).foregroundStyle(.secondary)
             }
-            Section("Color Scope") {
+            Section("Advanced Controls") {
+                Toggle("Contrast Distribution", isOn: $showContrastDistribution)
                 Toggle("HUE Twister", isOn: $showHueTwister)
-                    .help("Show darker/lighter hue controls. Saved adjustments remain active when hidden.")
+                Toggle("Advanced RAW Sliders", isOn: $showAdvancedRAWControls)
+                    .help("Show Offset, noise reduction, sharpness, detail, local edge contrast, and moiré reduction.")
+                Text("Hiding controls does not change their values or affect processing, copy/paste, or Film Lock.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Section("Color Scope") {
                 Picker("Density gradient", selection: $gradient) {
                     ForEach(ScopeGradient.allCases) { item in
                         Text(item.displayName).tag(item)

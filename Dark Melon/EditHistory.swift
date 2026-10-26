@@ -135,6 +135,7 @@ import AppKit
         if a.offset != b.offset { return String(localized: "Offset") }
         if a.channelContrast != b.channelContrast { return String(localized: "Dye Response") }
         if a.concentration != b.concentration { return String(localized: "Contrast") }
+        if a.contrastDistribution != b.contrastDistribution { return String(localized: "Contrast Distribution") }
         if a.white != b.white { return String(localized: "White point") }
         return String(localized: "Tone")
     }

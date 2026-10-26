@@ -1295,6 +1295,15 @@ struct ContentView: View {
         HStack {
             Text("Tone").font(.headline)
             Spacer()
+            Button("Truncate") {
+                editHistory.flush()
+                mapping = ToneTruncation.applying(to: mapping, space: colorSpace)
+                editHistory.observe(currentRecipe, name: String(localized: "Truncate"))
+                editHistory.flush()
+            }
+            .disabled(resettingTone)
+            .filmLock(.whitePoint).filmLock(.contrast).filmLock(.tone)
+            .help("Move the white point to SDR level 254/255 and scale Contrast by the same ratio.")
             Button("Reset Tone", action: resetTone).disabled(resettingTone)
         }.padding(12)
         SlopeEditor(mapping: $mapping, sourceISO: development?.metadata.iso,
@@ -1811,21 +1820,6 @@ private struct LinearHistogram: View {
                     if showingSDR { Text("\(Int((Double(tick) * 255 / 4).rounded()))") }
                     else { Text(Double(tick) / 4 * inputMaximum, format: .number.precision(.fractionLength(inputMaximum < 0.01 ? 4 : inputMaximum < 0.1 ? 3 : 2))) }
                     if tick < 4 { Spacer() }
-                }
-            }
-            .foregroundStyle(.secondary)
-            HStack {
-                if let stops = SDRDynamicRange.stops(mapping: mapping, space: colorSpace) {
-                    Text("SDR Tonal Range: \(stops, specifier: "%.2f") stops")
-                        .help("Source-linear range mapped between encoded SDR values 3/255 and 250/255, measured in stops. Uses the shared tone curve and ignores Dye Response.")
-                } else {
-                    Text("SDR Tonal Range: —")
-                }
-                Spacer()
-                if let statistics = SDRStatistics(counts: sdrHistogram?.sdrLuma) {
-                    Text("Median: \(statistics.median)")
-                } else {
-                    Text("Median: —")
                 }
             }
             .foregroundStyle(.secondary)

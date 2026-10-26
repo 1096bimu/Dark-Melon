@@ -118,6 +118,7 @@ nonisolated struct RAWSettings: Codable, Equatable, Sendable {
 }
 
 struct RAWControls: View {
+    @AppStorage("showAdvancedRAWControls") private var showAdvancedRAWControls = false
     @Environment(\.lockedFilmItems) private var lockedItems
     @Binding var settings: RAWSettings
     @Binding var offset: Double
@@ -155,7 +156,7 @@ struct RAWControls: View {
                     settings.highlightRecovery = $0; commit()
                 }))
                 .disabled(!settings.supportsHighlightRecovery).filmLock(.highlightRecovery)
-                ForEach(RAWAdjustment.allCases) { control in
+                ForEach(RAWAdjustment.allCases.filter { showAdvancedRAWControls || $0 == .exposure || $0 == .shadowBias }) { control in
                     VStack(alignment: .leading, spacing: 6) {
                         HStack {
                             Text(LocalizedStringKey(control.rawValue))
@@ -173,7 +174,7 @@ struct RAWControls: View {
                         .accessibilityLabel(LocalizedStringKey(control.rawValue))
                     }
                     .disabled(!settings.supported.contains(control) || lockedItems.contains(where: { $0.rawAdjustment == control }))
-                    if control == .shadowBias {
+                    if control == .shadowBias && showAdvancedRAWControls {
                         VStack(alignment: .leading, spacing: 6) {
                             HStack {
                                 Text("Offset")

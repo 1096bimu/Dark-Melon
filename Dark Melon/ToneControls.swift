@@ -62,6 +62,7 @@ nonisolated enum ToneSliderScale {
 }
 
 struct SlopeEditor: View {
+    @AppStorage("showContrastDistribution") private var showContrastDistribution = true
     @Binding var mapping: ToneMapping
     var sourceISO: Double? = nil
     var rawExposure = 0.0
@@ -168,6 +169,10 @@ struct SlopeEditor: View {
                     .help("Zero is linear. Negative values reduce contrast around the tone position.")
             }
             .filmLock(.contrast)
+            if showContrastDistribution {
+                ToneDistributionEditor(mapping: $mapping)
+                    .filmLock(.contrastDistribution)
+            }
             Group {
                 if mapping.hdrEnabled && !mapping.hdrHasContinuationRoom {
                     Label("No room for HDR continuation. Move Tone or the SDR white point below 1.", systemImage: "exclamationmark.triangle")
@@ -277,7 +282,10 @@ struct HistogramToneCurve: View {
                 context.fill(Path(ellipseIn: CGRect(x: crossing.x - 3, y: crossing.y - 3,
                                                    width: 6, height: 6)), with: .color(.white))
             }
-            context.draw(Text(mapping.hdrEnabled ? "HDR Output \(mapping.hdrMax.formatted(.number.precision(.fractionLength(2))))" : "HDR Off")
+            let hdrLabel = mapping.hdrEnabled
+                ? Text("HDR Output +\(log2(mapping.hdrMax), specifier: "%.2f") stops")
+                : Text("HDR Off")
+            context.draw(hdrLabel
                 .font(.caption2.monospacedDigit()).foregroundStyle(.orange),
                          at: CGPoint(x: size.width - 5, y: 3), anchor: .topTrailing)
             context.draw(Text("1.0 · SDR white").font(.caption2).foregroundStyle(.white),

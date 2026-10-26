@@ -3,7 +3,7 @@ import SwiftUI
 /// Short, accessible explanations shared by control headings and graph titles.
 struct ControlInfo: View {
     enum Topic {
-        case shadowBias, iso, tone, contrast, hdrGain, hdrRolloff, saturation, luminanceSaturation
+        case shadowBias, iso, tone, contrast, contrastDistribution, hdrGain, hdrRolloff, saturation, luminanceSaturation
 
         var title: String {
             switch self {
@@ -11,6 +11,7 @@ struct ControlInfo: View {
             case .iso: String(localized: "ISO")
             case .tone: String(localized: "Tone")
             case .contrast: String(localized: "Contrast")
+            case .contrastDistribution: String(localized: "Contrast Distribution")
             case .hdrGain: String(localized: "HDR Gain")
             case .hdrRolloff: String(localized: "HDR Rolloff")
             case .saturation: String(localized: "Chroma → Chroma")
@@ -27,6 +28,8 @@ struct ControlInfo: View {
                 String(localized: "Tone indicates the range of luminance that is of the most interest, usually set to skin tones, or 50% grey. Its luminance is generally protected when adjusting Contrast.")
             case .contrast:
                 String(localized: "Contrast indicates the level of contrast centered around the luminance indicated by Tone.")
+            case .contrastDistribution:
+                String(localized: "Redistributes contrast across the SDR range. The middle controls lie halfway from black to Tone and from Tone to white. Equal weights leave the original curve unchanged; higher relative weights add contrast locally.")
             case .hdrRolloff:
                 String(localized: "Adjusts HDR curvature while preserving the starting tangent. Zero is straight; 100% ends flat; -100% bends upward to nearly twice the straight endpoint. HDR Gain multiplies the result and can be increased if the curves cross.")
             case .hdrGain:

@@ -7,12 +7,26 @@ import ImageIO
 import AppKit
 #endif
 
-enum BrowserGridLayout {
+nonisolated enum BrowserGridLayout {
     static let thumbnailMinimum: CGFloat = 80
     static let spacing: CGFloat = 8
     static let padding: CGFloat = 8
     // Stay one point below the width at which a third thumbnail fits.
     static let twoColumnWidth = 3 * thumbnailMinimum + 2 * spacing + 2 * padding - 1
+
+    static func columnCount(for viewportWidth: CGFloat, current: Int) -> Int {
+        guard viewportWidth.isFinite else { return 1 }
+        let available = max(0, viewportWidth - 2 * padding)
+        let count = max(1, Int(((available + spacing) / (thumbnailMinimum + spacing)).rounded(.down)))
+        func minimumWidth(_ columns: Int) -> CGFloat {
+            CGFloat(columns) * (thumbnailMinimum + spacing) - spacing + 2 * padding
+        }
+        // A few points of hysteresis stop split-view rounding near a breakpoint
+        // from repeatedly swapping between large and small thumbnails.
+        if count > current, viewportWidth < minimumWidth(current + 1) + 4 { return current }
+        if count < current, viewportWidth >= minimumWidth(current) - 4 { return current }
+        return count
+    }
 }
 
 nonisolated struct BrowserEntry: Identifiable, Sendable {
@@ -170,6 +184,7 @@ struct ImageFileBrowser: View {
     @State private var choosingFolder = false
     @State private var selectedFiles: Set<URL> = []
     @State private var selectionAnchor: URL?
+    @State private var gridColumnCount = 2
 
     private var activeSelection: Set<URL> { selection?.wrappedValue ?? selectedFiles }
     private func selectFile(_ url: URL, ordered: [URL]) {
@@ -250,107 +265,117 @@ struct ImageFileBrowser: View {
                 }
                 .padding(.horizontal, 12).padding(.bottom, 8)
                 ScrollViewReader { proxy in
-                    ScrollView {
-                        VStack(spacing: 4) {
-                            LazyVStack(spacing: 4) {
-                                ForEach(folders) { entry in
-                                    let rank = recent.firstIndex(of: entry.url.standardizedFileURL)
-                                    let warmth: Color = rank == 0 ? .orange : rank == 1 ? .yellow : .cyan
-                                    Button { navigate(entry.url) } label: {
-                                        HStack {
-                                            Image(systemName: "folder")
-                                                .foregroundStyle(rank == nil ? Color.secondary : warmth.opacity(rank == 0 ? 1 : rank == 1 ? 0.65 : 0.4))
-                                            Text(entry.url.lastPathComponent).lineLimit(1).truncationMode(.middle)
-                                            Spacer(minLength: 0)
-                                            if let count = folderCounts[entry.url] {
-                                                Text(count >= 0 ? "\(count)" : "—")
-                                                    .monospacedDigit().foregroundStyle(.secondary)
-                                                    .help("Image files directly in this folder")
-                                            } else {
-                                                Text("…").foregroundStyle(.secondary)
-                                            }
-                                        }
-                                        .padding(6)
-                                        .background(rank == nil ? Color.clear : warmth.opacity(rank == 0 ? 0.22 : rank == 1 ? 0.11 : 0.045),
-                                                    in: RoundedRectangle(cornerRadius: 5))
-                                        .contentShape(Rectangle())
-                                    }
-                                    .buttonStyle(.plain)
-                                    .id(entry.url.standardizedFileURL)
-                                    .accessibilityValue(rank.map { "Recently visited folder, \($0 + 1) of \(recent.count)" } ?? "")
-                                }
-                            }
-                            LazyVGrid(columns: [GridItem(.adaptive(minimum: BrowserGridLayout.thumbnailMinimum), spacing: BrowserGridLayout.spacing)], spacing: BrowserGridLayout.spacing) {
-                                ForEach(files) { entry in
-                                    Button {
-                                        selectFile(entry.url, ordered: files.map(\.url))
-                                    } label: {
-                                        FileThumbnail(url: entry.url)
-                                            .padding(4)
-                                            .background((activeSelection.contains(entry.url) || (selectionAnchor == nil && activeSelection.isEmpty && selectedURL == entry.url)) ? Color.accentColor.opacity(0.25) : .clear,
-                                                        in: RoundedRectangle(cornerRadius: 6))
-                                            .overlay {
-                                                if entry.hasSavedSettings {
-                                                    RoundedRectangle(cornerRadius: 6)
-                                                        .strokeBorder(Color.accentColor, lineWidth: 1.5)
-                                                        .allowsHitTesting(false)
+                    GeometryReader { viewport in
+                        let cellWidth = max(1, (viewport.size.width - 2 * BrowserGridLayout.padding
+                            - CGFloat(gridColumnCount - 1) * BrowserGridLayout.spacing) / CGFloat(gridColumnCount))
+                        ScrollView {
+                            VStack(spacing: 4) {
+                                LazyVStack(spacing: 4) {
+                                    ForEach(folders) { entry in
+                                        let rank = recent.firstIndex(of: entry.url.standardizedFileURL)
+                                        let warmth: Color = rank == 0 ? .orange : rank == 1 ? .yellow : .cyan
+                                        Button { navigate(entry.url) } label: {
+                                            HStack {
+                                                Image(systemName: "folder")
+                                                    .foregroundStyle(rank == nil ? Color.secondary : warmth.opacity(rank == 0 ? 1 : rank == 1 ? 0.65 : 0.4))
+                                                Text(entry.url.lastPathComponent).lineLimit(1).truncationMode(.middle)
+                                                Spacer(minLength: 0)
+                                                if let count = folderCounts[entry.url] {
+                                                    Text(count >= 0 ? "\(count)" : "—")
+                                                        .monospacedDigit().foregroundStyle(.secondary)
+                                                        .help("Image files directly in this folder")
+                                                } else {
+                                                    Text("…").foregroundStyle(.secondary)
                                                 }
                                             }
-
+                                            .padding(6)
+                                            .background(rank == nil ? Color.clear : warmth.opacity(rank == 0 ? 0.22 : rank == 1 ? 0.11 : 0.045),
+                                                        in: RoundedRectangle(cornerRadius: 5))
+                                            .contentShape(Rectangle())
+                                        }
+                                        .buttonStyle(.plain)
+                                        .id(entry.url.standardizedFileURL)
+                                        .accessibilityValue(rank.map { "Recently visited folder, \($0 + 1) of \(recent.count)" } ?? "")
                                     }
-                                    .id(entry.url.standardizedFileURL)
-                                    .buttonStyle(.plain)
-                                    .help(entry.url.lastPathComponent + (entry.hasSavedSettings ? " · " + String(localized: "Saved development settings") : ""))
-                                    .accessibilityValue(entry.hasSavedSettings ? "Saved development settings" : "")
-                                    .contextMenu {
-                                        if let fileAction {
-                                            let targets = contextFiles(entry.url, ordered: files.map(\.url))
-                                            Button(targets.count > 1 ? "Delete Edits (\(targets.count))" : "Delete Edit", role: .destructive) {
-                                                if let multipleFileAction { multipleFileAction(.deleteEdit, targets) }
-                                                else { fileAction(.deleteEdit, entry.url) }
+                                }
+                                // Both columns and cells use the outer viewport, independent
+                                // of scroll content and thumbnail intrinsic sizes.
+                                LazyVGrid(columns: Array(repeating: GridItem(.fixed(cellWidth), spacing: BrowserGridLayout.spacing), count: gridColumnCount), spacing: BrowserGridLayout.spacing) {
+                                    ForEach(files) { entry in
+                                        Button {
+                                            selectFile(entry.url, ordered: files.map(\.url))
+                                        } label: {
+                                            FileThumbnail(url: entry.url, imageWidth: max(1, cellWidth - 8))
+                                                .padding(4)
+                                                .background((activeSelection.contains(entry.url) || (selectionAnchor == nil && activeSelection.isEmpty && selectedURL == entry.url)) ? Color.accentColor.opacity(0.25) : .clear,
+                                                            in: RoundedRectangle(cornerRadius: 6))
+                                                .overlay {
+                                                    if entry.hasSavedSettings {
+                                                        RoundedRectangle(cornerRadius: 6)
+                                                            .strokeBorder(Color.accentColor, lineWidth: 1.5)
+                                                            .allowsHitTesting(false)
+                                                    }
+                                                }
+
+                                        }
+                                        .id(entry.url.standardizedFileURL)
+                                        .buttonStyle(.plain)
+                                        .help(entry.url.lastPathComponent + (entry.hasSavedSettings ? " · " + String(localized: "Saved development settings") : ""))
+                                        .accessibilityValue(entry.hasSavedSettings ? "Saved development settings" : "")
+                                        .contextMenu {
+                                            if let fileAction {
+                                                let targets = contextFiles(entry.url, ordered: files.map(\.url))
+                                                Button(targets.count > 1 ? "Delete Edits (\(targets.count))" : "Delete Edit", role: .destructive) {
+                                                    if let multipleFileAction { multipleFileAction(.deleteEdit, targets) }
+                                                    else { fileAction(.deleteEdit, entry.url) }
+                                                }
+                                                .disabled(!files.contains { targets.contains($0.url) && ($0.hasSavedSettings || (hasPendingEdit?($0.url) ?? false)) })
+                                                #if os(macOS)
+                                                Button("Show in Finder") { fileAction(.showInFinder, entry.url) }
+                                                #endif
+                                                Divider()
+                                                Button("Copy Edit") { fileAction(.copyEdit, entry.url) }
+                                                Button(targets.count > 1 ? "Paste Edit to \(targets.count) Files…" : "Paste Edit…") {
+                                                    if let multipleFileAction { multipleFileAction(.pasteEdit, targets) }
+                                                    else { fileAction(.pasteEdit, entry.url) }
+                                                }
+                                                Divider()
+                                                Button("Export…") { fileAction(.export, entry.url) }
                                             }
-                                            .disabled(!files.contains { targets.contains($0.url) && ($0.hasSavedSettings || (hasPendingEdit?($0.url) ?? false)) })
-                                            #if os(macOS)
-                                            Button("Show in Finder") { fileAction(.showInFinder, entry.url) }
-                                            #endif
-                                            Divider()
-                                            Button("Copy Edit") { fileAction(.copyEdit, entry.url) }
-                                            Button(targets.count > 1 ? "Paste Edit to \(targets.count) Files…" : "Paste Edit…") {
-                                                if let multipleFileAction { multipleFileAction(.pasteEdit, targets) }
-                                                else { fileAction(.pasteEdit, entry.url) }
-                                            }
-                                            Divider()
-                                            Button("Export…") { fileAction(.export, entry.url) }
                                         }
                                     }
                                 }
                             }
+                            .padding(BrowserGridLayout.padding)
+                            .frame(width: viewport.size.width)
                         }
-                        .padding(BrowserGridLayout.padding)
-                        .frame(maxWidth: .infinity)
-                    }
-                    .onChange(of: selectedURL) { _, url in
-                        guard selection == nil, let url,
-                              files.contains(where: { $0.url.standardizedFileURL == url.standardizedFileURL }) else { return }
-                        proxy.scrollTo(url.standardizedFileURL, anchor: .center)
-                    }
-                    .task(id: listingRevision) {
-                        let current = selectedURL?.standardizedFileURL
-                        let target: URL?
-                        if !centeredOnOpen, let current,
-                           files.contains(where: { $0.url.standardizedFileURL == current }) {
-                            target = current
-                        } else if let returnFolder,
-                                  folders.contains(where: { $0.url.standardizedFileURL == returnFolder }) {
-                            target = returnFolder
-                        } else { target = nil }
-                        guard !model.loading else { return }
-                        centeredOnOpen = true
-                        guard let target else { return }
-                        // Let the newly mounted lazy rows register their scroll IDs.
-                        await Task.yield()
-                        guard !Task.isCancelled else { return }
-                        proxy.scrollTo(target, anchor: .center)
+                        .onChange(of: viewport.size.width.rounded(.down), initial: true) { _, width in
+                            let count = BrowserGridLayout.columnCount(for: width, current: gridColumnCount)
+                            if count != gridColumnCount { gridColumnCount = count }
+                        }
+                        .onChange(of: selectedURL) { _, url in
+                            guard selection == nil, let url,
+                                  files.contains(where: { $0.url.standardizedFileURL == url.standardizedFileURL }) else { return }
+                            proxy.scrollTo(url.standardizedFileURL, anchor: .center)
+                        }
+                        .task(id: listingRevision) {
+                            let current = selectedURL?.standardizedFileURL
+                            let target: URL?
+                            if !centeredOnOpen, let current,
+                               files.contains(where: { $0.url.standardizedFileURL == current }) {
+                                target = current
+                            } else if let returnFolder,
+                                      folders.contains(where: { $0.url.standardizedFileURL == returnFolder }) {
+                                target = returnFolder
+                            } else { target = nil }
+                            guard !model.loading else { return }
+                            centeredOnOpen = true
+                            guard let target else { return }
+                            // Let the newly mounted lazy rows register their scroll IDs.
+                            await Task.yield()
+                            guard !Task.isCancelled else { return }
+                            proxy.scrollTo(target, anchor: .center)
+                        }
                     }
                 }
                 // Recreate the scroll layout when an async listing arrives after
@@ -438,23 +463,26 @@ struct EditorColumns<Content: View>: View {
 
 private struct FileThumbnail: View {
     let url: URL
+    let imageWidth: CGFloat
     @State private var image: CGImage?
 
     var body: some View {
         VStack(spacing: 4) {
-            ZStack {
-                Color.black.opacity(0.15)
-                if let image {
-                    Image(decorative: image, scale: 1)
-                        .resizable().scaledToFit()
-                } else {
-                    Image(systemName: "photo").foregroundStyle(.secondary)
+            Color.black.opacity(0.15)
+                .frame(width: imageWidth, height: imageWidth)
+                .overlay {
+                    // Loading an image must not change the square's layout size.
+                    if let image {
+                        Image(decorative: image, scale: 1)
+                            .resizable().scaledToFit()
+                    } else {
+                        Image(systemName: "photo").foregroundStyle(.secondary)
+                    }
                 }
-            }
-            .aspectRatio(1, contentMode: .fit)
-            .clipShape(RoundedRectangle(cornerRadius: 4))
+                .clipShape(RoundedRectangle(cornerRadius: 4))
             Text(url.lastPathComponent)
                 .font(.caption).lineLimit(1).truncationMode(.middle)
+                .frame(width: imageWidth)
         }
         .task(id: url) {
             image = nil

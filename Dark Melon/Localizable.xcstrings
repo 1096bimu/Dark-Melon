@@ -202,15 +202,11 @@
     "×" : {
       "shouldTranslate" : false
     },
-    "0" : {
-
-    },
+    "0" : {},
     "0×–2×" : {
       "shouldTranslate" : false
     },
-    "1" : {
-
-    },
+    "1" : {},
     "1.0 · SDR white" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -255,9 +251,7 @@
         }
       }
     },
-    "a" : {
-
-    },
+    "a" : {},
     "About %@" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -280,9 +274,7 @@
         }
       }
     },
-    "Add" : {
-
-    },
+    "Add" : {},
     "Add Current Edit" : {
       "localizations" : {
         "zh-Hans" : {
@@ -385,6 +377,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "调整 HDR 曲率，同时保持起点切线。0 为直线，100% 在末端变平，-100% 向上弯曲，使峰值接近直线末端的两倍。HDR 增益会缩放结果，曲线相交时可增加增益。"
+          }
+        }
+      }
+    },
+    "Advanced Controls" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "高级控制"
+          }
+        }
+      }
+    },
+    "Advanced RAW Sliders" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "高级 RAW 滑块"
           }
         }
       }
@@ -592,9 +604,7 @@
         }
       }
     },
-    "b" : {
-
-    },
+    "b" : {},
     "B" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -606,12 +616,8 @@
         }
       }
     },
-    "Back" : {
-
-    },
-    "BadHDR" : {
-
-    },
+    "Back" : {},
+    "BadHDR" : {},
     "BadHDR radius" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1190,6 +1196,16 @@
         }
       }
     },
+    "Contrast Distribution" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "对比度分布"
+          }
+        }
+      }
+    },
     "Contrast indicates the level of contrast centered around the luminance indicated by Tone." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1311,6 +1327,7 @@
         }
       }
     },
+    "Could not open Getting Started" : {},
     "Could not restore saved edits: %@" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1333,9 +1350,7 @@
         }
       }
     },
-    "Create" : {
-
-    },
+    "Create" : {},
     "Create Snapshot" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1435,9 +1450,7 @@
         }
       }
     },
-    "Delete" : {
-
-    },
+    "Delete" : {},
     "Delete Edit" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1788,9 +1801,7 @@
         }
       }
     },
-    "Export" : {
-
-    },
+    "Export" : {},
     "Export height in pixels" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2076,9 +2087,7 @@
         }
       }
     },
-    "G" : {
-
-    },
+    "G" : {},
     "Gain map" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2090,9 +2099,7 @@
         }
       }
     },
-    "Getting Started…" : {
-
-    },
+    "Getting Started…" : {},
     "GNU General Public License v3.0 (GPL-3.0-only)" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2348,6 +2355,17 @@
         }
       }
     },
+    "HDR Output +%.2f stops" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "HDR 输出 +%.2f 档"
+          }
+        }
+      }
+    },
     "HDR Rolloff" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2437,6 +2455,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "隐藏左侧面板（F）"
+          }
+        }
+      }
+    },
+    "Hiding controls does not change their values or affect processing, copy/paste, or Film Lock." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "隐藏控制不会更改其数值，也不会影响图像处理、复制与粘贴或胶片锁定。"
           }
         }
       }
@@ -3121,6 +3149,7 @@
       }
     },
     "Median: —" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -3747,9 +3776,7 @@
         }
       }
     },
-    "Preview" : {
-
-    },
+    "Preview" : {},
     "Preview: HDR" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -3815,9 +3842,7 @@
         }
       }
     },
-    "R" : {
-
-    },
+    "R" : {},
     "Radius" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -3936,6 +3961,27 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "红色增益"
+          }
+        }
+      }
+    },
+    "Redistributes contrast across the SDR range. The middle controls lie halfway from black to Tone and from Tone to white. Equal weights leave the original curve unchanged; higher relative weights add contrast locally." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 SDR 范围内重新分配对比度。中间两个控制点分别位于黑色与影调、影调与白色之间的中点。所有权重相等时保持原始曲线不变；相对权重越高，局部对比度越强。"
+          }
+        }
+      }
+    },
+    "Redistributes contrast toward shadows or highlights without moving the peak set by Tone. Positive values favor the shadow side; negative values favor the highlight side. Zero is unchanged. Skew has no effect at zero Contrast." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在不移动影调所设峰值位置的情况下，将对比度分布偏向暗部或高光。正值偏向暗部，负值偏向高光。零表示不改变。对比度为零时，偏斜不起作用。"
           }
         }
       }
@@ -4388,6 +4434,7 @@
       }
     },
     "SDR Tonal Range: —" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -4398,6 +4445,7 @@
       }
     },
     "SDR Tonal Range: %.2f stops" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -4604,6 +4652,7 @@
       }
     },
     "Show darker/lighter hue controls. Saved adjustments remain active when hidden." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -4668,6 +4717,16 @@
         }
       }
     },
+    "Show Offset, noise reduction, sharpness, detail, local edge contrast, and moiré reduction." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示偏移、降噪、锐度、细节、局部边缘对比度和摩尔纹抑制。"
+          }
+        }
+      }
+    },
     "Shown" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -4707,6 +4766,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "尺寸和估算大小以第一张所选图像为准。所有图像使用相同的尺寸比例。有已保存设置时使用该设置，否则使用自动调整。"
+          }
+        }
+      }
+    },
+    "Skew" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "偏斜"
           }
         }
       }
@@ -4753,6 +4823,7 @@
       }
     },
     "Source-linear range mapped between encoded SDR values 3/255 and 250/255, measured in stops. Uses the shared tone curve and ignores Dye Response." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -4827,6 +4898,7 @@
         }
       }
     },
+    "The bundled guide could not be opened. Check that an application is available to open HTML files." : {},
     "The development sidecar is not a valid Dark Melon XMP document." : {
       "localizations" : {
         "zh-Hans" : {
@@ -5506,6 +5578,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "零为线性。负值会降低影调位置附近的对比度。"
+          }
+        }
+      }
+    },
+    "Truncate" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "截断"
+          }
+        }
+      }
+    },
+    "Move the white point to SDR level 254/255 and scale Contrast by the same ratio." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "将白点移至 SDR 输出值 254/255 对应的位置，并按相同比例缩放对比度。"
           }
         }
       }

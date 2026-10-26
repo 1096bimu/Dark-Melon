@@ -156,6 +156,7 @@ nonisolated struct DevelopmentRecipe: Codable, Equatable, Sendable {
               m.hls.count == 6,
               within(m.offset, -0.3...0.3), within(m.white, 0...1), m.white >= ToneMapping.minimumRange * 0.999,
               within(m.tonePosition, 0...1), within(m.concentration, -1...1),
+              m.contrastDistribution.count == 4, m.contrastDistribution.allSatisfy({ within($0, -2...2) }),
               m.channelContrast.count == 3, m.channelContrast.allSatisfy({ within($0, -0.2...0.2) }),
               within(m.hdrRolloff, -1...1), within(m.hdrTarget, 1...20), m.hdrGain.isFinite, m.hdrGain >= 0,
               within(m.clarity, -2...2), within(m.clarityRadius, 15...90),
