@@ -188,23 +188,73 @@ nonisolated struct ToneMapping: Codable, Equatable, Sendable {
 /// Positive, C1-continuous relative slope weights. Subtracting a common log
 /// weight removes overall gain before integration, so equal handles are identity.
 nonisolated struct ToneContrastDistribution {
-    let positions: [Double]
-    let logs: [Double]
+    let curve: FourPointCubic
+    private let mean: Double
+    var positions: [Double] { curve.positions }
 
     init(peak: Double, weights: [Double]) {
         let m = peak.clamped(to: 0...1)
-        positions = [0, m / 2, (m + 1) / 2, 1]
-        let mean = weights.reduce(0, +) / 4
-        logs = weights.map { $0 - mean }
+        curve = FourPointCubic(positions: [0, m / 2, (m + 1) / 2, 1], values: weights)
+        mean = weights.reduce(0, +) / 4
+    }
+
+    func logWeight(segment: Int, fraction: Double) -> Double {
+        curve.value(segment: segment, fraction: fraction)
     }
 
     func weight(at x: Double) -> Double {
-        // Zero-width intervals at Tone = black/white carry no area.
         let i = (0..<3).first { x < positions[$0 + 1] } ?? 2
         let span = positions[i + 1] - positions[i]
-        let t = span > 0 ? ((x - positions[i]) / span).clamped(to: 0...1) : 1
-        let blend = t * t * (3 - 2 * t)
-        return exp2(logs[i] + (logs[i + 1] - logs[i]) * blend)
+        let t = span > 0 ? (x - positions[i]) / span : 1
+        return exp2(logWeight(segment: i, fraction: t) - mean)
+    }
+}
+
+/// Four-point PCHIP, shared by the derivative and the graph's nonuniform axis.
+nonisolated struct FourPointCubic {
+    let positions: [Double]
+    let values: [Double]
+    private let slopes: [Double]
+
+    init(positions: [Double], values: [Double]) {
+        self.positions = positions
+        self.values = values
+        let h = (0..<3).map { positions[$0 + 1] - positions[$0] }
+        let d = (0..<3).map { h[$0] > 0 ? (values[$0 + 1] - values[$0]) / h[$0] : 0 }
+        // PCHIP: weighted harmonic means preserve monotonic intervals without
+        // overshoot. Only extrema and flat intervals require horizontal tangents.
+        func endpoint(_ h0: Double, _ h1: Double, _ d0: Double, _ d1: Double) -> Double {
+            guard h0 > 0 else { return 0 }
+            let slope = ((2 * h0 + h1) * d0 - h0 * d1) / (h0 + h1)
+            guard slope * d0 > 0 else { return 0 }
+            return d0 * d1 <= 0 && abs(slope) > 3 * abs(d0) ? 3 * d0 : slope
+        }
+        var tangents = [Double](repeating: 0, count: 4)
+        tangents[0] = endpoint(h[0], h[1], d[0], d[1])
+        tangents[3] = endpoint(h[2], h[1], d[2], d[1])
+        for i in 1...2 {
+            // A coincident endpoint has no area and must not constrain its neighbor.
+            if h[i - 1] == 0 { tangents[i] = d[i] }
+            else if h[i] == 0 { tangents[i] = d[i - 1] }
+            else if d[i - 1] * d[i] > 0 {
+                let w1 = 2 * h[i] + h[i - 1], w2 = h[i] + 2 * h[i - 1]
+                tangents[i] = (w1 + w2) / (w1 / d[i - 1] + w2 / d[i])
+            }
+        }
+        slopes = tangents
+    }
+
+    func value(segment i: Int, fraction: Double) -> Double {
+        let t = fraction.clamped(to: 0...1), h = positions[i + 1] - positions[i]
+        let t2 = t * t, t3 = t2 * t
+        return (2*t3 - 3*t2 + 1) * values[i] + (t3 - 2*t2 + t) * h * slopes[i]
+            + (-2*t3 + 3*t2) * values[i + 1] + (t3 - t2) * h * slopes[i + 1]
+    }
+
+    func bezierControls(segment i: Int) -> (start: Double, first: Double, second: Double, end: Double) {
+        let third = (positions[i + 1] - positions[i]) / 3
+        return (values[i], values[i] + third * slopes[i],
+                values[i + 1] - third * slopes[i + 1], values[i + 1])
     }
 }
 

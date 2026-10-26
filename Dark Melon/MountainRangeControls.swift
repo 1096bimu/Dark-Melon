@@ -2,6 +2,7 @@ import SwiftUI
 
 /// Periodic hue axis: duplicated edge handles share the same control and drag state.
 struct MountainRangeHandles: View {
+    @Environment(\.resetMapping) private var defaults
     @Binding var controls: [OKLabVertexAdjustment]
     @Binding var selected: Int?
     let space: ProcessingColorSpace
@@ -54,7 +55,20 @@ struct MountainRangeHandles: View {
                         ForEach(-1...1,id: \.self) { copy in
                             let x=p.x+Double(copy)*size.width
                             if x >= -14 && x <= size.width+14 {
-                                EditorGraphHandle(color:Self.colors[i],selected:selected==i)
+                                EditorGraphHandle(color:Self.colors[i],selected:selected==i, isDragging: drag?.index == i && drag?.upper == upper)
+                                    .controlReset {
+                                        selected = i
+                                        let saved = defaults.vertexWarp[i]
+                                        if densityMode { controls[i].lightness = saved.lightness }
+                                        else if lightnessMode {
+                                            if upper { controls[i].lighterHue = saved.lighterHue }
+                                            else { controls[i].darkerHue = saved.darkerHue }
+                                        } else if movementEnabled {
+                                            controls[i].chroma = saved.chroma
+                                            controls[i].hueOffset = saved.hueOffset
+                                            controls[i].rotation = saved.rotation
+                                        }
+                                    }
                                     .position(x:x,y:p.y)
                                     .accessibilityLabel(Text(LocalizedStringKey(Self.names[i])))
                                     .gesture(DragGesture(minimumDistance:0)

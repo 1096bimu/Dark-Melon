@@ -46,7 +46,9 @@ struct EffectsControls: View {
                             .foregroundStyle([Color.red, .green, .blue][channel])
                             .frame(width: 22)
                             .accessibilityHidden(true)
-                        Slider(value: value, in: -0.2...0.2)
+                        EditorSlider(value: value, in: -0.2...0.2)
+                            .controlReset { channelContrast[channel] = defaults.channelContrast[channel] }
+                            .editorSliderTrack(EditorSliderTracks.dyeResponse[channel])
                             .accessibilityLabel(Text(LocalizedStringKey(name)))
                         AdjustmentField(title: LocalizedStringKey(name), value: value, range: -0.2...0.2,
                                         digits: 1, scale: 100, unit: "%")
@@ -64,7 +66,7 @@ struct EffectsControls: View {
                 }
                 HStack {
                     Image(systemName: "dial.medium")
-                    Slider(value: $clarity, in: -2...2) { Text("Clarity") }.filmLock(.clarity)
+                    EditorSlider(value: $clarity, in: -2...2) { Text("Clarity") }.controlReset { clarity = defaults.clarity }.filmLock(.clarity)
                         .labelsHidden()
                 }
             }
@@ -76,7 +78,7 @@ struct EffectsControls: View {
                 }
                 HStack {
                     Image(systemName: "circle.dashed")
-                    Slider(value: Binding(get: { radius / 30 }, set: { radius = $0 * 30 }), in: 0.5...3) { Text("Radius") }.filmLock(.clarity)
+                    EditorSlider(value: Binding(get: { radius / 30 }, set: { radius = $0 * 30 }), in: 0.5...3) { Text("Radius") }.controlReset { radius = defaults.clarityRadius }.filmLock(.clarity)
                         .labelsHidden()
                 }
             }
@@ -89,7 +91,7 @@ struct EffectsControls: View {
                 }
                 HStack {
                     Image(systemName: "aqi.low")
-                    Slider(value: $hdf, in: 0...0.2) { Text("HDF") }.filmLock(.hdf)
+                    EditorSlider(value: $hdf, in: 0...0.2) { Text("HDF") }.controlReset { hdf = defaults.hdf }.filmLock(.hdf)
                         .labelsHidden()
                 }
             }
@@ -101,7 +103,7 @@ struct EffectsControls: View {
                 }
                 HStack {
                     Image(systemName: "circle.dashed")
-                    Slider(value: Binding(get: { hdfRadius / 100 }, set: { hdfRadius = $0 * 100 }), in: 0.5...2) { Text("HDF radius") }.filmLock(.hdf)
+                    EditorSlider(value: Binding(get: { hdfRadius / 100 }, set: { hdfRadius = $0 * 100 }), in: 0.5...2) { Text("HDF radius") }.controlReset { hdfRadius = defaults.hdfRadius }.filmLock(.hdf)
                         .labelsHidden()
                 }
             }
@@ -116,7 +118,7 @@ struct EffectsControls: View {
                 }
                 HStack {
                     Image(systemName: "sun.haze")
-                    Slider(value: $halation.inputCurve, in: 0...1) { Text("Halation") }.labelsHidden()
+                    EditorSlider(value: $halation.inputCurve, in: 0...1) { Text("Halation") }.controlReset { halation.inputCurve = defaults.halation.inputCurve }.labelsHidden()
                 }
                 HStack {
                     Text("Radius")
@@ -125,7 +127,7 @@ struct EffectsControls: View {
                 }
                 HStack {
                     Image(systemName: "circle.dashed")
-                    Slider(value: $halation.radius, in: 0.5...3) { Text("Halation radius") }.labelsHidden()
+                    EditorSlider(value: $halation.radius, in: 0.5...3) { Text("Halation radius") }.controlReset { halation.radius = defaults.halation.radius }.labelsHidden()
                 }
                 Group {
                 HStack {
@@ -133,7 +135,7 @@ struct EffectsControls: View {
                     AdjustmentField(title: "Transmission", value: $halation.transmission, range: 0...0.5, digits: 2, scale: 1, unit: "")
 
                 }
-                Slider(value: $halation.transmission, in: 0...0.5) { Text("Transmission") }.labelsHidden()
+                EditorSlider(value: $halation.transmission, in: 0...0.5) { Text("Transmission") }.controlReset { halation.transmission = defaults.halation.transmission }.labelsHidden()
                 }.disabled(monochrome)
             }
             .disabled(!hdrEnabled).filmLock(.halation)
@@ -148,13 +150,13 @@ struct EffectsControls: View {
                     AdjustmentField(title: "Vignette amount", value: $vignette.amount, range: 0...4, digits: 2, scale: 1, unit: "stops").filmLock(.vignette)
 
                 }
-                Slider(value: $vignette.amount, in: 0...4) { Text("Vignette amount") }.filmLock(.vignette).labelsHidden()
+                EditorSlider(value: $vignette.amount, in: 0...4) { Text("Vignette amount") }.controlReset { vignette.amount = defaults.vignette.amount }.filmLock(.vignette).labelsHidden()
                 HStack {
                     Text("Spread")
                     AdjustmentField(title: "Vignette spread", value: $vignette.spread, range: 0...1, digits: 0, scale: 100, unit: "%").filmLock(.vignette)
 
                 }
-                Slider(value: $vignette.spread, in: 0...1) { Text("Vignette spread") }.filmLock(.vignette).labelsHidden()
+                EditorSlider(value: $vignette.spread, in: 0...1) { Text("Vignette spread") }.controlReset { vignette.spread = defaults.vignette.spread }.filmLock(.vignette).labelsHidden()
             }
             Divider()
             VStack(alignment: .leading, spacing: 6) {
@@ -164,7 +166,7 @@ struct EffectsControls: View {
                 }
                 HStack {
                     Image(systemName: "burn")
-                    Slider(value: $badHDR.strength, in: -4...4) { Text("BadHDR") }.labelsHidden()
+                    EditorSlider(value: $badHDR.strength, in: -4...4) { Text("BadHDR") }.controlReset { badHDR.strength = defaults.badHDR.strength }.labelsHidden()
                 }
                 HStack {
                     Text("Radius")
@@ -172,7 +174,7 @@ struct EffectsControls: View {
                 }
                 HStack {
                     Image(systemName: "circle.dashed")
-                    Slider(value: $badHDR.radius, in: 0.5...3) { Text("BadHDR radius") }.labelsHidden()
+                    EditorSlider(value: $badHDR.radius, in: 0.5...3) { Text("BadHDR radius") }.controlReset { badHDR.radius = defaults.badHDR.radius }.labelsHidden()
                 }
             }
             .filmLock(.badHDR)

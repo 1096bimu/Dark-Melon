@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct OKLabVertexControls: View {
+    @Environment(\.resetMapping) private var defaults
     @Binding var controls: [OKLabVertexAdjustment]
     let space: ProcessingColorSpace
     @State private var selected: Int?
@@ -108,7 +109,13 @@ struct OKLabVertexControls: View {
                         context.draw(Text("b").font(.caption).foregroundStyle(.secondary),at:CGPoint(x:center.x+12,y:8))
                     }
                     ForEach(0..<OKLabVertexWarp.count) { index in
-                        EditorGraphHandle(color:colors[index], selected:selected==index)
+                        EditorGraphHandle(color:colors[index], selected:selected==index, isDragging: dragging == index)
+                            .controlReset {
+                                selected = index
+                                controls[index].chroma = defaults.vertexWarp[index].chroma
+                                controls[index].hueOffset = defaults.vertexWarp[index].hueOffset
+                                controls[index].rotation = defaults.vertexWarp[index].rotation
+                            }
                             .position(point(index,size:size))
                             .accessibilityLabel(Text(LocalizedStringKey(names[index])))
                             .accessibilityAddTraits(.isButton)
@@ -162,7 +169,7 @@ struct OKLabVertexControls: View {
                     Spacer()
                     AdjustmentField(title: "Lightness", value: $controls[selected].lightness, range: -0.25...0.25, digits: 3)
                 }
-                Slider(value:$controls[selected].lightness,in: -0.25...0.25) { Text("Lightness") }.labelsHidden()
+                EditorSlider(value:$controls[selected].lightness,in: -0.25...0.25) { Text("Lightness") }.controlReset { controls[selected].lightness = defaults.vertexWarp[selected].lightness }.labelsHidden()
             }
         }
     }

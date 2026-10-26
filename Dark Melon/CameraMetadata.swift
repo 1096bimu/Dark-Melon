@@ -122,7 +122,7 @@ struct CameraMetadataOverlay: View {
         .foregroundStyle(.white)
         .padding(10)
         .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 8))
+        .modifier(PreviewOverlayVisibility())
         .padding(12)
-        .allowsHitTesting(false)
     }
 }

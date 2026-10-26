@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct FilmGrainControls: View {
+    @Environment(\.resetMapping) private var defaults
     @Binding var settings: FilmGrainSettings
 
     var body: some View {
@@ -11,13 +12,13 @@ struct FilmGrainControls: View {
                 AdjustmentField(title: "Size", value: $settings.size, range: 0.2...3, digits: 2, scale: 1)
 
             }
-            Slider(value: $settings.size, in: 0.2...3) { Text("Grain size") }.labelsHidden()
+            EditorSlider(value: $settings.size, in: 0.2...3) { Text("Grain size") }.controlReset { settings.size = defaults.grain.size }.labelsHidden()
             HStack {
                 Text("Strength")
                 AdjustmentField(title: "Strength", value: $settings.strength, range: 0...5, digits: 2, scale: 1)
 
             }
-            Slider(value: $settings.strength, in: 0...5) { Text("Grain strength") }.labelsHidden()
+            EditorSlider(value: $settings.strength, in: 0...5) { Text("Grain strength") }.controlReset { settings.strength = defaults.grain.strength }.labelsHidden()
             HStack {
                 Text("Distribution")
                 AdjustmentField(title: "Distribution", value: $settings.distribution, range: 0...1, digits: 0, scale: 100, unit: "%")
@@ -34,7 +35,7 @@ struct FilmGrainControls: View {
             }
             .frame(height: 48)
             .accessibilityLabel("Grain distribution from shadows to highlights")
-            Slider(value: $settings.distribution, in: 0...1) { Text("Grain distribution") }.labelsHidden()
+            EditorSlider(value: $settings.distribution, in: 0...1) { Text("Grain distribution") }.controlReset { settings.distribution = defaults.grain.distribution }.labelsHidden()
             HStack { Text("Black peak"); Spacer(); Text("Midtone peak") }
                 .font(.caption).foregroundStyle(.secondary)
         }

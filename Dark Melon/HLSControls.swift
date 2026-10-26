@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct HLSControls: View {
+    @Environment(\.resetMapping) private var defaults
     @Binding var adjustments: [HLSAdjustment]
     @Binding var comparing: Bool
     @Binding var blackAndWhite: BlackAndWhiteSettings
@@ -41,14 +42,14 @@ struct HLSControls: View {
                         Text("\(adjustments[index].saturation, format: .number.precision(.fractionLength(2)))×")
                             .monospacedDigit().foregroundStyle(.secondary)
                     }
-                    Slider(value: $adjustments[index].saturation, in: 0...2) { Text("\(String(localized: String.LocalizationValue(names[index]))) saturation") }
+                    EditorSlider(value: $adjustments[index].saturation, in: 0...2) { Text("\(String(localized: String.LocalizationValue(names[index]))) saturation") }.controlReset { adjustments[index].saturation = defaults.hls[index].saturation }
                         .labelsHidden()
                     HStack {
                         Text("Lightness")
                         Text(String(format: "%+.0f%%", adjustments[index].lightness * 25))
                             .monospacedDigit().foregroundStyle(.secondary)
                     }
-                    Slider(value: $adjustments[index].lightness, in: -1...1) { Text("\(String(localized: String.LocalizationValue(names[index]))) lightness") }
+                    EditorSlider(value: $adjustments[index].lightness, in: -1...1) { Text("\(String(localized: String.LocalizationValue(names[index]))) lightness") }.controlReset { adjustments[index].lightness = defaults.hls[index].lightness }
                         .labelsHidden()
                 }
                 if index < 5 { Divider() }
@@ -89,7 +90,7 @@ private struct HueToneCurve: View {
                         curve.move(to: point(0, adjustment.shadowHue, size))
                         curve.addLine(to: point(1, adjustment.midtoneHue, size))
                         curve.addLine(to: point(2, adjustment.highlightHue, size))
-                        context.stroke(curve, with: .color(color), lineWidth: 2)
+                        context.stroke(curve, with: .color(EditorGraphStyle.trackColor), style: EditorGraphStyle.trackStroke)
                     }
                     handle(0, $adjustment.shadowHue, size, "Shadow hue")
                     handle(1, $adjustment.midtoneHue, size, "Midtone hue")
@@ -114,6 +115,7 @@ private struct HueToneCurve: View {
             .frame(width: 14, height: 14)
             .overlay(Circle().stroke(.background, lineWidth: 2))
             .frame(width: 28, height: 28).contentShape(Circle())
+            .resetInteraction { value.wrappedValue = 0 }
             .position(point(index, value.wrappedValue, size))
             .gesture(DragGesture(minimumDistance: 0, coordinateSpace: .named(coordinates)).onChanged {
                 value.wrappedValue = (30 - Double(($0.location.y - 12) / max(1, size.height - 24)) * 60).clamped(to: -30...30)

@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct SpectralSensitivityPlot: View {
+    @Environment(\.resetMapping) private var defaults
     @Binding var settings: BlackAndWhiteSettings
     let onCommit: () -> Void
 
@@ -40,7 +41,7 @@ struct SpectralSensitivityPlot: View {
                             else { path.addLine(to: point) }
                         }
                     }
-                    .stroke(.primary, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                    .stroke(EditorGraphStyle.trackColor, style: EditorGraphStyle.trackStroke)
 
                     ForEach(0..<5, id: \.self) { index in
                         let value = settings.value(at: index)
@@ -51,6 +52,7 @@ struct SpectralSensitivityPlot: View {
                             .frame(width: 20, height: 20)
                             .frame(width: 44, height: 44)
                             .contentShape(Rectangle())
+                            .resetInteraction { settings.setValue(defaults.blackAndWhite.value(at: index), at: index); onCommit() }
                             .position(x: xPosition(wavelengthPosition(at: index), width: size.width),
                                       y: yPosition(value, height: size.height))
                             .gesture(

@@ -3,6 +3,8 @@ import SwiftUI
 /// Equal display spacing keeps the shadow controls usable at small Tone values.
 /// Labels show the actual source positions; rendering uses those positions.
 struct ToneDistributionEditor: View {
+    @Environment(\.resetMapping) private var defaults
+    @GestureState private var dragging: Int?
     @Binding var mapping: ToneMapping
     private let labels = ["Black", "Shadows", "Highlights", "White"]
 
@@ -35,22 +37,20 @@ struct ToneDistributionEditor: View {
                         path.addLine(to: CGPoint(x: 14 + width, y: 14 + height / 2))
                     }.stroke(EditorGraphStyle.guideColor, style: EditorGraphStyle.guide)
                     Path { path in
-                        for step in 0...120 {
-                            let x = Double(step) / 120 * 3
-                            let i = min(2, Int(x))
-                            let t = x - Double(i)
-                            let blend = t * t * (3 - 2 * t)
-                            let logs = mapping.contrastDistribution
-                            let y = logs[i] + (logs[i + 1] - logs[i]) * blend
-                            let point = CGPoint(x: 14 + x / 3 * width, y: 14 + (0.5 - y / 4) * height)
-                            if step == 0 { path.move(to: point) } else { path.addLine(to: point) }
+                        // A simple control polygon; processing retains smooth interpolation.
+                        for i in 0..<4 {
+                            let point = CGPoint(x: 14 + CGFloat(i) / 3 * width,
+                                                y: 14 + (0.5 - mapping.contrastDistribution[i] / 4) * height)
+                            if i == 0 { path.move(to: point) } else { path.addLine(to: point) }
                         }
-                    }.stroke(.tint, lineWidth: EditorGraphStyle.line)
+                    }.stroke(EditorSliderTracks.tone, style: EditorGraphStyle.trackStroke)
                     ForEach(0..<4) { index in
-                        EditorGraphHandle()
+                        EditorGraphHandle(isDragging: dragging == index)
+                            .controlReset { weight(index).wrappedValue = exp2(defaults.contrastDistribution[index]) }
                             .position(x: 14 + CGFloat(index) / 3 * width,
                                       y: 14 + (0.5 - mapping.contrastDistribution[index] / 4) * height)
                             .gesture(DragGesture(minimumDistance: 0, coordinateSpace: .named("toneDistribution"))
+                                .updating($dragging) { _, state, _ in state = index }
                                 .onChanged { drag in
                                     weight(index).wrappedValue = exp2((4 * (0.5 - (drag.location.y - 14) / height)).clamped(to: -2...2))
                                 })

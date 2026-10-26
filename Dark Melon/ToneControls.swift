@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct HistogramPoints: View {
+    @Environment(\.resetMapping) private var defaults
     @Binding var mapping: ToneMapping
     var inputMaximum = 1.0
     var onWhitePointEditingChanged: (Bool) -> Void = { _ in }
@@ -21,6 +22,7 @@ struct HistogramPoints: View {
                 Text("W")
                     .font(.caption2.bold()).foregroundStyle(.black).padding(4)
                     .background(Color.white, in: RoundedRectangle(cornerRadius: 3))
+                    .resetInteraction { update(defaults.white) }
                     .position(x: min(geometry.size.width - 10, max(10, x)), y: 32)
                     .accessibilityLabel("White point")
                     .accessibilityValue(mapping.white.formatted(.number.precision(.fractionLength(4))))
@@ -62,6 +64,7 @@ nonisolated enum ToneSliderScale {
 }
 
 struct SlopeEditor: View {
+    @Environment(\.resetMapping) private var defaults
     @AppStorage("showContrastDistribution") private var showContrastDistribution = true
     @Binding var mapping: ToneMapping
     var sourceISO: Double? = nil
@@ -104,7 +107,8 @@ struct SlopeEditor: View {
                 }
                 HStack {
                     Image(systemName: "slider.horizontal.below.sun.min").frame(width: 22).accessibilityHidden(true)
-                    Slider(value: isoExposure, in: ToneISOProxy.range, onEditingChanged: onISOEditingChanged) { Text("ISO") }
+                    EditorSlider(value: isoExposure, in: ToneISOProxy.range, onEditingChanged: onISOEditingChanged) { Text("ISO") }
+                        .controlReset { isoExposure.wrappedValue = ToneISOProxy.exposure(white: defaults.white) }
                         .labelsHidden()
                 }
             }
@@ -123,7 +127,7 @@ struct SlopeEditor: View {
                 HStack {
                     Image(systemName: "swirl.circle.righthalf.filled")
                         .frame(width: 22).accessibilityHidden(true)
-                Slider(value: Binding(get: { ToneSliderScale.position(for: min(mapping.tonePosition, mapping.white)) },
+                EditorSlider(value: Binding(get: { ToneSliderScale.position(for: min(mapping.tonePosition, mapping.white)) },
                                       set: {
                                           let tone = min(ToneSliderScale.tone(at: $0), mapping.white)
                                           if mapping.tonePosition != tone { onToneChanged() }
@@ -136,6 +140,8 @@ struct SlopeEditor: View {
                 } onEditingChanged: { editing in
                     onToneEditingChanged(editing)
                 }
+                        .controlReset { mapping.tonePosition = min(mapping.white, defaults.tonePosition); mapping.setAutomaticHDRTarget() }
+                        .editorSliderTrack(EditorSliderTracks.tone)
                         .labelsHidden()
                         .accessibilityValue(mapping.tonePosition.formatted(.number.precision(.fractionLength(3))))
                 }
@@ -158,12 +164,14 @@ struct SlopeEditor: View {
                 HStack {
                     Image(systemName: "circle.lefthalf.striped.horizontal")
                         .frame(width: 22).accessibilityHidden(true)
-                    Slider(value: Binding(get: { mapping.concentration },
+                    EditorSlider(value: Binding(get: { mapping.concentration },
                                           set: {
                                               if mapping.concentration != $0 { onContrastChanged() }
                                               mapping.concentration = $0
                                               mapping.setAutomaticHDRTarget()
                                           }), in: -1...1) { Text("Contrast") }
+                        .controlReset { mapping.concentration = defaults.concentration; mapping.setAutomaticHDRTarget() }
+                        .editorSliderTrack(EditorSliderTracks.contrast(tone: mapping.tonePosition, white: mapping.white))
                         .labelsHidden()
                 }
                     .help("Zero is linear. Negative values reduce contrast around the tone position.")
@@ -198,7 +206,7 @@ struct SlopeEditor: View {
                 HStack {
                     Image(systemName: "sun.max")
                         .frame(width: 22).accessibilityHidden(true)
-                    Slider(value: Binding(get: { mapping.hdrEnabled ? min(5, max(1, mapping.hdrGain)) : 0 }, set: { value in
+                    EditorSlider(value: Binding(get: { mapping.hdrEnabled ? min(5, max(1, mapping.hdrGain)) : 0 }, set: { value in
                         mapping.hdrGain = value < 0.5 ? 0 : min(5, max(1, value))
                         onHDRGainAdjustment()
                     }), in: 0...5, onEditingChanged: { editing in
@@ -207,6 +215,7 @@ struct SlopeEditor: View {
                             onHDRGainAdjustment()
                         }
                     }) { Text("HDR Gain") }
+                        .controlReset { mapping.hdrGain = defaults.hdrGain; onHDRGainAdjustment() }
                         .labelsHidden()
                 }
             }
@@ -221,10 +230,11 @@ struct SlopeEditor: View {
                 }
                 HStack {
                     Image(systemName: "line.diagonal").frame(width: 22).accessibilityHidden(true)
-                    Slider(value: Binding(get: { mapping.hdrRolloff }, set: {
+                    EditorSlider(value: Binding(get: { mapping.hdrRolloff }, set: {
                         mapping.hdrRolloff = $0
                         onHDRGainAdjustment()
                     }), in: -1...1) { Text("HDR Rolloff") }
+                        .controlReset { mapping.hdrRolloff = defaults.hdrRolloff; onHDRGainAdjustment() }
                         .labelsHidden()
                 }
             }

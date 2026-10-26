@@ -10,6 +10,16 @@
     "…" : {
       "shouldTranslate" : false
     },
+    "%.0f° · %.0f%%" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$.0f° · %2$.0f%%"
+          }
+        }
+      }
+    },
     "%@" : {
       "shouldTranslate" : false
     },
@@ -202,11 +212,15 @@
     "×" : {
       "shouldTranslate" : false
     },
-    "0" : {},
+    "0" : {
+
+    },
     "0×–2×" : {
       "shouldTranslate" : false
     },
-    "1" : {},
+    "1" : {
+
+    },
     "1.0 · SDR white" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -251,7 +265,9 @@
         }
       }
     },
-    "a" : {},
+    "a" : {
+
+    },
     "About %@" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -274,7 +290,9 @@
         }
       }
     },
-    "Add" : {},
+    "Add" : {
+
+    },
     "Add Current Edit" : {
       "localizations" : {
         "zh-Hans" : {
@@ -604,7 +622,9 @@
         }
       }
     },
-    "b" : {},
+    "b" : {
+
+    },
     "B" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -616,8 +636,12 @@
         }
       }
     },
-    "Back" : {},
-    "BadHDR" : {},
+    "Back" : {
+
+    },
+    "BadHDR" : {
+
+    },
     "BadHDR radius" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1327,7 +1351,9 @@
         }
       }
     },
-    "Could not open Getting Started" : {},
+    "Could not open Getting Started" : {
+
+    },
     "Could not restore saved edits: %@" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1350,7 +1376,9 @@
         }
       }
     },
-    "Create" : {},
+    "Create" : {
+
+    },
     "Create Snapshot" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1450,7 +1478,9 @@
         }
       }
     },
-    "Delete" : {},
+    "Delete" : {
+
+    },
     "Delete Edit" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1801,7 +1831,9 @@
         }
       }
     },
-    "Export" : {},
+    "Export" : {
+
+    },
     "Export height in pixels" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2087,7 +2119,9 @@
         }
       }
     },
-    "G" : {},
+    "G" : {
+
+    },
     "Gain map" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2099,7 +2133,9 @@
         }
       }
     },
-    "Getting Started…" : {},
+    "Getting Started…" : {
+
+    },
     "GNU General Public License v3.0 (GPL-3.0-only)" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2619,6 +2655,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "色相"
+          }
+        }
+      }
+    },
+    "Hue and Strength" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "色相与强度"
           }
         }
       }
@@ -3273,6 +3319,16 @@
         }
       }
     },
+    "Move the white point to SDR level 254/255 and scale Contrast by the same ratio." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "将白点移至 SDR 输出值 254/255 对应的位置，并按相同比例缩放对比度。"
+          }
+        }
+      }
+    },
     "Move to" : {
       "localizations" : {
         "zh-Hans" : {
@@ -3776,7 +3832,9 @@
         }
       }
     },
-    "Preview" : {},
+    "Preview" : {
+
+    },
     "Preview: HDR" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -3842,7 +3900,9 @@
         }
       }
     },
-    "R" : {},
+    "R" : {
+
+    },
     "Radius" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -4898,7 +4958,9 @@
         }
       }
     },
-    "The bundled guide could not be opened. Check that an application is available to open HTML files." : {},
+    "The bundled guide could not be opened. Check that an application is available to open HTML files." : {
+
+    },
     "The development sidecar is not a valid Dark Melon XMP document." : {
       "localizations" : {
         "zh-Hans" : {
@@ -5176,6 +5238,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "透射率"
+          }
+        }
+      }
+    },
+    "Truncate" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "截断"
           }
         }
       }
@@ -5578,26 +5650,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "零为线性。负值会降低影调位置附近的对比度。"
-          }
-        }
-      }
-    },
-    "Truncate" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "截断"
-          }
-        }
-      }
-    },
-    "Move the white point to SDR level 254/255 and scale Contrast by the same ratio." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "将白点移至 SDR 输出值 254/255 对应的位置，并按相同比例缩放对比度。"
           }
         }
       }

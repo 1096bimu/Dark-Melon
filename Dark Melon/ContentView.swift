@@ -444,6 +444,7 @@ struct ContentView: View {
                 .fixedSize(horizontal: true, vertical: false)
                 .padding(10)
                 .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 8))
+                .modifier(PreviewOverlayVisibility())
                 .padding(.leading, 12).padding(.bottom, 64)
                 .disabled(loading)
             }
@@ -467,8 +468,11 @@ struct ContentView: View {
                 .help("Choose which development settings to paste")
             }
             .buttonStyle(.bordered)
-            .padding(8)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+            .labelStyle(.titleOnly)
+            .fixedSize()
+            .padding(10)
+            .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 8))
+            .modifier(PreviewOverlayVisibility())
             .padding(12)
             .disabled(development == nil || loading)
             }
@@ -555,6 +559,7 @@ struct ContentView: View {
             editorScene
             .environment(\.lockedFilmItems, lockedFilm?.selection.selectedItems ?? [])
             .environment(\.resetMapping, resetDefaults.mapping)
+            .environment(\.resetRAWSettings, resetDefaults.rawSettings)
             .task {
                 editHistory.restore = restoreHistory
                 editHistory.captureSession = { snapshotSession }

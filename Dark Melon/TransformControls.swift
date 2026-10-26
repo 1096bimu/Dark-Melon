@@ -110,10 +110,10 @@ struct CropRatioControls: View {
                 Spacer()
                 Text(label).monospacedDigit()
             }
-            Slider(value: $position, in: 0...Double(CropGeometry.ratios.count - 1), onEditingChanged: { editing in
+            EditorSlider(value: $position, in: 0...Double(CropGeometry.ratios.count - 1), onEditingChanged: { editing in
                 // Small magnetic stops retain arbitrary ratios everywhere else.
                 if !editing, abs(position - position.rounded()) < 0.12 { position = position.rounded() }
-            }) { Text("Aspect Ratio") }
+            }) { Text("Aspect Ratio") }.controlReset { position = Double(CropGeometry.ratios.firstIndex(where: { $0.value == 1 }) ?? 5) }
             HStack(spacing: 0) {
                 ForEach(CropGeometry.ratios.indices, id: \.self) { i in
                     Button(CropGeometry.ratios[i].label) { position = Double(i) }

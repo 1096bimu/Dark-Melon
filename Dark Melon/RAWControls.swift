@@ -118,6 +118,8 @@ nonisolated struct RAWSettings: Codable, Equatable, Sendable {
 }
 
 struct RAWControls: View {
+    @Environment(\.resetRAWSettings) private var rawDefaults
+    @Environment(\.resetMapping) private var defaults
     @AppStorage("showAdvancedRAWControls") private var showAdvancedRAWControls = false
     @Environment(\.lockedFilmItems) private var lockedItems
     @Binding var settings: RAWSettings
@@ -166,11 +168,12 @@ struct RAWControls: View {
                                 .foregroundStyle(.secondary).monospacedDigit()
                             if control == .exposure { Text("EV").foregroundStyle(.secondary) }
                         }
-                        Slider(value: Binding(get: { settings.values[control] ?? 0 }, set: {
+                        EditorSlider(value: Binding(get: { settings.values[control] ?? 0 }, set: {
                             settings.values[control] = $0
                         }), in: control.minimum...control.maximum, onEditingChanged: { editing in
                             if !editing { commit() }
                         })
+                        .controlReset { settings.values[control] = rawDefaults?.values[control] ?? 0 }
                         .accessibilityLabel(LocalizedStringKey(control.rawValue))
                     }
                     .disabled(!settings.supported.contains(control) || lockedItems.contains(where: { $0.rawAdjustment == control }))
@@ -183,7 +186,8 @@ struct RAWControls: View {
                             }
                             HStack {
                                 Image(systemName: "plusminus").frame(width: 22).accessibilityHidden(true)
-                                Slider(value: $offset, in: -0.02...0.02) { Text("Offset") }
+                                EditorSlider(value: $offset, in: -0.02...0.02) { Text("Offset") }
+                                    .controlReset { offset = defaults.offset }
                                     .labelsHidden()
                             }
                             .filmLock(.offset)

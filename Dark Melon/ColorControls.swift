@@ -15,10 +15,10 @@ struct ColorControls: View {
                 if !monochrome {
                     ChromaCurveEditor(title: "Chroma → Chroma", start: $settings.saturationStart,
                         middle: $settings.saturationMid, sdr: $settings.saturationEnd, hdr: $settings.saturationHDR,
-                        sdrMaximum: OKLCHGamut.maxima[colorSpace]!, hdrMax: hdrMax, info: .saturation).filmLock(.chromaCurve)
+                        sdrMaximum: OKLCHGamut.maxima[colorSpace]!, hdrMax: hdrMax, info: .saturation, resetValues: [defaults.color.saturationStart, defaults.color.saturationMid, defaults.color.saturationEnd, defaults.color.saturationHDR]).filmLock(.chromaCurve)
                     ChromaCurveEditor(title: "Lightness → Chroma", start: $settings.luminanceSaturationStart,
                         middle: $settings.luminanceSaturationMid, sdr: $settings.luminanceSaturationEnd,
-                        hdr: $settings.luminanceSaturationHDR, sdrMaximum: 1, hdrMax: hdrMax, info: .luminanceSaturation).filmLock(.lightnessChromaCurve)
+                        hdr: $settings.luminanceSaturationHDR, sdrMaximum: 1, hdrMax: hdrMax, info: .luminanceSaturation, resetValues: [defaults.color.luminanceSaturationStart, defaults.color.luminanceSaturationMid, defaults.color.luminanceSaturationEnd, defaults.color.luminanceSaturationHDR]).filmLock(.lightnessChromaCurve)
                     Divider()
                 }
             }

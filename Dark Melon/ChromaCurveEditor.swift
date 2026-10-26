@@ -3,6 +3,7 @@ import SwiftUI
 /// SDR and HDR intervals have separate labeled widths so all four handles remain usable.
 struct ChromaCurveEditor: View {
     let title: String
+    @GestureState private var dragging: Int?
     @Binding var start: Double
     @Binding var middle: Double
     @Binding var sdr: Double
@@ -10,6 +11,7 @@ struct ChromaCurveEditor: View {
     let sdrMaximum: Double
     let hdrMax: Double
     let info: ControlInfo.Topic
+    var resetValues = [1.0, 1.0, 1.0, 1.0]
     private var controls: [Binding<Double>] { [$start, $middle, $sdr, $hdr] }
     private var labels: [String] { ["0", "SDR ½", "SDR", "HDR"] }
     private var levels: [Double] { [0, sdrMaximum/2, sdrMaximum, sdrMaximum*cbrt(hdrMax)] }
@@ -39,11 +41,14 @@ struct ChromaCurveEditor: View {
                             let p = CGPoint(x: 14+CGFloat(i)/3*width,y: 14+(1-values[i]/2)*height)
                             if i == 0 { path.move(to: p) } else { path.addLine(to: p) }
                         }
-                    }.stroke(.tint,lineWidth: EditorGraphStyle.line)
+                    }.stroke(EditorGraphStyle.trackColor, style: EditorGraphStyle.trackStroke)
                     ForEach(0..<4) { index in
-                        EditorGraphHandle()
+                        EditorGraphHandle(isDragging: dragging == index)
+                            .controlReset { controls[index].wrappedValue = resetValues[index] }
                             .position(x: 14+CGFloat(index)/3*width,y: 14+(1-values[index]/2)*height)
-                            .gesture(DragGesture(minimumDistance: 0,coordinateSpace: .named(title)).onChanged {
+                            .gesture(DragGesture(minimumDistance: 0,coordinateSpace: .named(title))
+                                .updating($dragging) { _, state, _ in state = index }
+                                .onChanged {
                                 controls[index].wrappedValue = (2*(1-($0.location.y-14)/height)).clamped(to: 0...2)
                             })
                             .accessibilityLabel("\(title) \(labels[index])")

@@ -174,9 +174,9 @@ struct HueChromaScope: View {
                     AdjustmentField(title:"Density",value:$controls[i].lightness,range: -0.25...0.25,digits:3,width:52)
                 }
                 if !monochrome {
-                    Slider(value: $controls[i].lightness, in: -0.25...0.25) {
+                    EditorSlider(value: $controls[i].lightness, in: -0.25...0.25) {
                         Text("Density")
-                    }.labelsHidden()
+                    }.controlReset { controls[i].lightness = defaults.vertexWarp[i].lightness }.labelsHidden()
                 }
             }
             }.filmLock(.vertices)

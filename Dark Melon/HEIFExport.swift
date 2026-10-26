@@ -240,12 +240,13 @@ struct HEIFExportOptions: View {
     private func options(for format: ExportFormat) -> some View {
         Form {
             LabeledContent("Linear size", value: settings.scale.formatted(.percent.precision(.fractionLength(0))))
-            Slider(value: Binding(get: { min(1, max(0.25, (settings.scale * 20).rounded() / 20)) },
+            EditorSlider(value: Binding(get: { min(1, max(0.25, (settings.scale * 20).rounded() / 20)) },
                                   set: { useSliderScale($0) }),
                    in: 0.25...1, step: 0.05) { Text("Linear size") }
                 onEditingChanged: { editing in
                     if editing { finishDimensionEditing() }
                 }
+            .controlReset { useSliderScale(HEIFSettings().scale) }
             if percentageOnly {
                 LabeledContent("First image", value: "\(outputWidth) × \(outputHeight) px")
                     .monospacedDigit().foregroundStyle(.secondary)
@@ -274,7 +275,7 @@ struct HEIFExportOptions: View {
             }
             if format != .tiff {
                 LabeledContent("Quality", value: settings.quality.formatted(.percent.precision(.fractionLength(0))))
-                Slider(value: $settings.quality, in: 0...1, step: 0.01) { Text("Quality") }
+                EditorSlider(value: $settings.quality, in: 0...1, step: 0.01) { Text("Quality") }.controlReset { settings.quality = HEIFSettings().quality }
                 LabeledContent("Encoded size") {
                     if measuredSettings == settings, let encodedBytes {
                         Text(Int64(encodedBytes), format: .byteCount(style: .file))

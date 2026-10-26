@@ -119,7 +119,6 @@ struct EditorCommands: Commands {
             }
             Divider()
             Toggle("Image Info", isOn: Binding(get: { imageInfoVisible ?? true }, set: { imageInfoVisible = $0 }))
-                .keyboardShortcut("i", modifiers: [])
                 .disabled(imageInfoVisible == nil)
         }
     }
@@ -206,7 +205,6 @@ struct EditorSettingsView: View {
                 shortcut("Export…", "⇧⌘E")
                 shortcut("Original", "Hold C")
                 shortcut("Toggle HDR preview", "H")
-                shortcut("Image Info", "I")
                 shortcut("Folder", "F")
                 shortcut("Library", "L")
                 shortcut("Previous / next file", "← / →")

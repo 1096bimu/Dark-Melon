@@ -1,11 +1,13 @@
 import SwiftUI
 
 struct SplitToneGradientEditor: View {
+    @Environment(\.resetMapping) private var defaults
     @Binding var settings: SplitToneSettings
     let space: ProcessingColorSpace
     let ceiling: Double
     @State private var selection: UUID?
-    @State private var rotatingHue: Bool?
+    @GestureState private var draggingNode: UUID?
+    @GestureState private var draggingWheel = false
     private var maximum: Double { cbrt(ceiling) }
     private var nodes: [SplitToneNode] { settings.nodes ?? [] }
     private var selected: SplitToneNode? { nodes.first{$0.id==selection} }
@@ -49,10 +51,16 @@ struct SplitToneGradientEditor: View {
                         .position(x:min(proxy.size.width-32,max(32,10+width/maximum)),y:49)
                         .allowsHitTesting(false)
                     ForEach(nodes) { node in
-                        EditorGraphHandle(color: nodeTint(node), selected: node.id==selection)
+                        EditorGraphHandle(color: nodeTint(node), selected: node.id==selection, isDragging: draggingNode == node.id)
+                            .controlReset {
+                                selection = node.id
+                                update { $0.lightness = defaults.color.splitTone.nodes?.first(where: { $0.id == node.id })?.lightness ?? maximum / 2 }
+                            }
                             .position(x:10+min(1,node.lightness/maximum)*width,y:20)
                             .onTapGesture { selection=node.id }
-                            .gesture(DragGesture(minimumDistance:3,coordinateSpace:.named("toneGradient")).onChanged { value in
+                            .gesture(DragGesture(minimumDistance:3,coordinateSpace:.named("toneGradient"))
+                                .updating($draggingNode) { _, state, _ in state = node.id }
+                                .onChanged { value in
                                 selection=node.id
                                 update { $0.lightness=((value.location.x-10)/width).clamped(to:0...1)*maximum }
                             })
@@ -71,7 +79,8 @@ struct SplitToneGradientEditor: View {
             if let node=selected {
                 HStack {
                     Text("Lightness")
-                    Slider(value:Binding(get:{selected?.lightness ?? 0},set:{new in update{$0.lightness=new}}),in:0...maximum)
+                    EditorSlider(value:Binding(get:{selected?.lightness ?? 0},set:{new in update{$0.lightness=new}}),in:0...maximum)
+                        .controlReset { update { $0.lightness = defaults.color.splitTone.nodes?.first(where: { $0.id == node.id })?.lightness ?? maximum / 2 } }
                     AdjustmentField(title: "Lightness", value: Binding(get: { selected?.lightness ?? 0 }, set: { v in update { $0.lightness=v } }), range: 0...maximum, digits: 3)
                 }
                 wheel(node).frame(height:230)
@@ -106,8 +115,8 @@ struct SplitToneGradientEditor: View {
             let radius=size/2-14
             let innerRadius=radius-18
             let hueRadius=radius-9
-            // Leave a visible gap even at 100% strength.
-            let strengthRadius=innerRadius-22
+            let strengthRadius=radius
+            let strengthPosition=SplitToneStrengthScale.position(node.strength)
             let angle=node.hue*Double.pi/180
             ZStack {
                 Canvas { context,_ in
@@ -124,7 +133,9 @@ struct SplitToneGradientEditor: View {
                     }
                     var line=Path();line.move(to:center)
                     line.addLine(to:CGPoint(x:center.x+strengthRadius*cos(angle),y:center.y-strengthRadius*sin(angle)))
-                    context.stroke(line,with:.color(.secondary),lineWidth:EditorGraphStyle.line)
+                    context.stroke(line,with:.linearGradient(Gradient(colors: [.gray, nodeTint(node)]),
+                        startPoint:center,endPoint:CGPoint(x:center.x+strengthRadius*cos(angle),y:center.y-strengthRadius*sin(angle))),
+                        style:EditorGraphStyle.trackStroke)
                     for r in [radius, innerRadius] {
                         let rim=Path(ellipseIn:CGRect(x:center.x-r,y:center.y-r,width:2*r,height:2*r))
                         context.stroke(rim,with:.color(.primary.opacity(0.3)),lineWidth:EditorGraphStyle.rim)
@@ -134,36 +145,45 @@ struct SplitToneGradientEditor: View {
                     .stroke(LinearGradient(colors: [.white.opacity(0.22), .clear, .black.opacity(0.18)], startPoint: .top, endPoint: .bottom), lineWidth: 18)
                     .frame(width:2*hueRadius,height:2*hueRadius)
                     .allowsHitTesting(false)
-                EditorGraphHandle(color: nodeTint(node), selected: rotatingHue == true)
-                    .position(x:center.x+hueRadius*cos(angle),y:center.y-hueRadius*sin(angle))
-                    .accessibilityLabel("Hue")
-                    .accessibilityValue(node.hue.formatted())
-                    .accessibilityAdjustableAction { direction in
-                        update { $0.hue=($0.hue+(direction == .increment ? 1 : 359)).truncatingRemainder(dividingBy:360) }
+                EditorGraphHandle(color: nodeTint(node), isDragging: draggingWheel)
+                    .controlReset {
+                        update {
+                            if let saved = defaults.color.splitTone.nodes?.first(where: { $0.id == node.id }) {
+                                $0.hue = saved.hue; $0.strength = saved.strength
+                            } else { $0.strength = 0 }
+                        }
                     }
-                EditorGraphHandle(selected: rotatingHue == false)
-                    .position(x:center.x+strengthRadius*node.strength*cos(angle),y:center.y-strengthRadius*node.strength*sin(angle))
-                    .accessibilityLabel("Tone strength")
-                    .accessibilityValue(node.strength.formatted(.percent))
+                    .position(x:center.x+strengthRadius*strengthPosition*cos(angle),
+                              y:center.y-strengthRadius*strengthPosition*sin(angle))
+                    .accessibilityLabel("Hue and Strength")
+                    .accessibilityValue(Text("\(node.hue, specifier: "%.0f")° · \(node.strength * 100, specifier: "%.0f")%"))
                     .accessibilityAdjustableAction { direction in
                         update { $0.strength=($0.strength+(direction == .increment ? 0.01 : -0.01)).clamped(to:0...1) }
                     }
+
             }
             .contentShape(Circle())
-            .gesture(DragGesture(minimumDistance:0).onChanged { value in
-                let x=value.location.x-center.x,y=center.y-value.location.y
-                if rotatingHue == nil {
-                    let start=value.startLocation
-                    rotatingHue=hypot(start.x-center.x,start.y-center.y) >= innerRadius-8
-                }
-                update {
-                    if rotatingHue == true {
-                        $0.hue=(atan2(y,x)*180 / .pi+360).truncatingRemainder(dividingBy:360)
-                    } else {
-                        $0.strength=((x*cos(angle)+y*sin(angle))/strengthRadius).clamped(to:0...1)
+            .gesture(DragGesture(minimumDistance:0)
+                .updating($draggingWheel) { _, state, _ in state = true }
+                .onChanged { value in
+                    let x=value.location.x-center.x,y=center.y-value.location.y
+                    let distance=hypot(x,y)
+                    update {
+                        // Hue is undefined at the neutral center; retain it there.
+                        if distance > 1 { $0.hue=(atan2(y,x)*180 / .pi+360).truncatingRemainder(dividingBy:360) }
+                        $0.strength=SplitToneStrengthScale.strength(distance/strengthRadius)
                     }
-                }
-            }.onEnded { _ in rotatingHue=nil })
+                })
         }
+    }
+}
+
+/// A logarithmic radius gives about half the travel to the first 10% of tint.
+nonisolated enum SplitToneStrengthScale {
+    static func position(_ strength: Double) -> Double {
+        log1p(99 * strength.clamped(to: 0...1)) / log(100)
+    }
+    static func strength(_ position: Double) -> Double {
+        (expm1(log(100) * position.clamped(to: 0...1)) / 99).clamped(to: 0...1)
     }
 }

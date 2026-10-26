@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct VectorscopeView: View {
+    @Environment(\.resetMapping) private var defaults
     @Environment(\.lockedFilmItems) private var lockedItems
     let source: CGImage?
     let hoverSource: CGImage?
@@ -192,11 +193,13 @@ struct VectorscopeView: View {
                             set: { mapping.rawWhiteBalance?.temperature = Float($0) }),
                             range: 2000...10000, digits: 0, unit: "K", commit: commitRAWBalance).filmLock(.rawWhiteBalance)
                     }
-                    Slider(value: Binding(get: { Double(mapping.rawWhiteBalance?.temperature ?? 6500) }, set: {
+                    EditorSlider(value: Binding(get: { Double(mapping.rawWhiteBalance?.temperature ?? 6500) }, set: {
                         mapping.rawWhiteBalance?.temperature = Float($0)
                     }), in: 2000...10000, onEditingChanged: { editing in
                         if !editing { commitRAWBalance() }
                     }).filmLock(.rawWhiteBalance)
+                    .controlReset { if let wb = defaults.rawWhiteBalance { mapping.rawWhiteBalance?.temperature = wb.temperature } }
+                    .editorSliderTrack(EditorSliderTracks.temperature)
                     HStack {
                         Text("Tint"); Spacer()
                         AdjustmentField(title: "Tint", value: Binding(
@@ -204,11 +207,13 @@ struct VectorscopeView: View {
                             set: { mapping.rawWhiteBalance?.tint = Float($0) }),
                             range: -50...50, digits: 2, commit: commitRAWBalance).filmLock(.rawWhiteBalance)
                     }
-                    Slider(value: Binding(get: { Double(mapping.rawWhiteBalance?.tint ?? 0) }, set: {
+                    EditorSlider(value: Binding(get: { Double(mapping.rawWhiteBalance?.tint ?? 0) }, set: {
                         mapping.rawWhiteBalance?.tint = Float($0)
                     }), in: -50...50, onEditingChanged: { editing in
                         if !editing { commitRAWBalance() }
                     }).filmLock(.rawWhiteBalance)
+                    .controlReset { if let wb = defaults.rawWhiteBalance { mapping.rawWhiteBalance?.tint = wb.tint } }
+                    .editorSliderTrack(EditorSliderTracks.tint)
                 }
                 .disabled(mapping.blackAndWhite.isEnabled)
             } else if !mapping.color.monochrome {

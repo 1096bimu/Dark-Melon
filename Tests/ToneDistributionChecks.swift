@@ -4,6 +4,19 @@ import CoreImage
 
 @main struct ToneDistributionChecks {
     @MainActor static func main() async throws {
+        // Regression: equally spaced screen handles must share a tangent even
+        // when the source intervals are 0–.02–.27–.5, as in the reported corner.
+        for peak in [0.0001, 0.08, 0.5, 0.9999] {
+            let field = ToneContrastDistribution(peak: peak, weights: [0.25,0.41,1.45,3.03].map { log2($0) })
+            let axis = FourPointCubic(positions: field.positions, values: [0,1,2,3])
+            for i in 1...2 {
+                let xl = axis.bezierControls(segment: i-1), xr = axis.bezierControls(segment: i)
+                let yl = field.curve.bezierControls(segment: i-1), yr = field.curve.bezierControls(segment: i)
+                let leftSlope = (yl.end-yl.second)/(xl.end-xl.second)
+                let rightSlope = (yr.first-yr.start)/(xr.first-xr.start)
+                assert(abs(leftSlope-rightSlope) < 1e-8, "Visible corner at handle")
+            }
+        }
         for white in [ToneMapping.minimumRange, 0.2, 1.0] {
             for mode in [0.0, 0.0001, 0.04, 0.5, 0.9999, 1] {
                 for contrast in [-1.0, -0.2, 0, 0.01, 0.4, 1] {
@@ -26,25 +39,39 @@ import CoreImage
                 }
             }
         }
-        // Independent high-resolution integral for a linear base derivative.
+        // Linear log-weights must be reproduced exactly, without flat shoulders.
+        for mode in [0.0001, 0.04, 0.5, 0.9999] {
+            let knots = [0.0, mode / 2, (mode + 1) / 2, 1.0]
+            let field = ToneContrastDistribution(peak: mode, weights: knots.map { 1 - 2 * $0 })
+            for i in 0..<3 {
+                for j in 0...100 {
+                    let t = Double(j) / 100
+                    let x = knots[i] + (knots[i+1] - knots[i]) * t
+                    assert(abs(field.logWeight(segment: i, fraction: t) - (1 - 2*x)) < 1e-12)
+                }
+            }
+        }
+        for mode in [0.0, 0.0001, 0.04, 0.5, 0.9999, 1.0] {
+            for logs in [[-2.0,2,-2,2], [2,1,0,-2], [0,0,2,2]] {
+                let field = ToneContrastDistribution(peak: mode, weights: logs)
+                for i in 0..<3 {
+                    for j in 0...100 {
+                        let y = field.logWeight(segment: i, fraction: Double(j)/100)
+                        assert(y >= min(logs[i],logs[i+1])-1e-12 && y <= max(logs[i],logs[i+1])+1e-12)
+                    }
+                }
+            }
+        }
+        // Independently integrated exponential weights on a linear base derivative.
         var mapping = ToneMapping()
+        mapping.white = 1
         mapping.concentration = 0
         mapping.tonePosition = 0.4
-        mapping.contrastDistribution = [1,0,-1,0]
+        mapping.contrastDistribution = [1,0.6,-0.4,-1]
         let curve = mapping.curve(hdr: false)
-        func weight(_ x: Double) -> Double {
-            let positions = [0.0, 0.2, 0.7, 1.0], logs = [1.0,0,-1,0]
-            let i = x < 0.2 ? 0 : x < 0.7 ? 1 : 2
-            let t = (x - positions[i]) / (positions[i+1] - positions[i])
-            return pow(2, logs[i] + (logs[i+1]-logs[i])*t*t*(3-2*t))
+        for x in [0.1,0.3,0.6,0.9] {
+            assert(abs(curve.value(at:x) - (1 - pow(2, -2*x)) / 0.75) < 1e-6)
         }
-        func integral(_ end: Double) -> Double {
-            let n = 100000
-            return (0..<n).reduce(0.0) { $0 + weight((Double($1)+0.5)*end/Double(n)) } * end/Double(n)
-        }
-        let total = integral(1)
-        for x in [0.1,0.3,0.6,0.9] { assert(abs(curve.value(at:x)-integral(x)/total) < 1e-6) }
-        assert(curve.value(at:0.4) > 0.4)
         mapping.concentration = 0.4
         mapping.white = 0.8; mapping.tonePosition = 0.24; mapping.contrastDistribution = [-1, 1, 0, -0.5]
         mapping.setAutomaticHDRTarget()
