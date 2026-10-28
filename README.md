@@ -65,7 +65,7 @@ Available profiles include **sRGB, Rec.709, Sony S-Log3 / S-Gamut3.Cine, Panason
 - **Perceptual color controls** in OKLab: drag six color handles to adjust hue and chroma, with a Lightness slider for the selected color.
 - **Chroma → Chroma and Lightness → Chroma graphs**, for controlling color intensity by existing chroma or brightness.
 - **Gradient split toning**, with up to six tint nodes across shadows, midtones, and highlights.
-- **Clarity** for local contrast, using a large-radius high-pass layer blended with Soft Light. Similar in purpose to Lightroom's Clarity, but a different implementation; negative strength softens contrast.
+- **Clarity** Similar in purpose to Lightroom's Clarity, but a different implementation; negative strength softens contrast.
 - **HDF filter** for soft glow, adding a blurred version of the image with adjustable strength and radius.
 - **Film grain** based on cinegrain2, with adjustable size, strength, and tonal distribution—from a shadow-weighted response to a midtone peak—for convincing texture across different tones.
 - **GPU histogram and vectorscope**, with both tone curves drawn over the source histogram.
