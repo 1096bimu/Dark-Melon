@@ -108,7 +108,7 @@ struct OKLabVertexControls: View {
                         context.draw(Text("a").font(.caption).foregroundStyle(.secondary),at:CGPoint(x:size.width-8,y:center.y+12))
                         context.draw(Text("b").font(.caption).foregroundStyle(.secondary),at:CGPoint(x:center.x+12,y:8))
                     }
-                    ForEach(0..<OKLabVertexWarp.count) { index in
+                    ForEach(0..<OKLabVertexWarp.count, id: \.self) { index in
                         EditorGraphHandle(color:colors[index], selected:selected==index, isDragging: dragging == index)
                             .controlReset {
                                 selected = index
@@ -169,7 +169,7 @@ struct OKLabVertexControls: View {
                     Spacer()
                     AdjustmentField(title: "Lightness", value: $controls[selected].lightness, range: -0.25...0.25, digits: 3)
                 }
-                EditorSlider(value:$controls[selected].lightness,in: -0.25...0.25) { Text("Lightness") }.controlReset { controls[selected].lightness = defaults.vertexWarp[selected].lightness }.labelsHidden()
+                EditorSlider(value:$controls[selected].lightness,in: -0.25...0.25, label: { Text("Lightness") }).controlReset { controls[selected].lightness = defaults.vertexWarp[selected].lightness }.labelsHidden()
             }
         }
     }

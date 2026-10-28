@@ -113,7 +113,7 @@ nonisolated final class FilmGrain {
         guard settings.strength > 0 else { return image }
         let extent = image.extent.integral
         let shortSide = min(extent.width, extent.height)
-        let size = settings.size.clamped(to: 0.2...3)
+        let size = settings.size.clamped(to: AdjustmentLimits.grainSize)
         let resolutionScale = EffectResolution.scale(shortSide: shortSide)
         let grainReferenceRadius = size * EffectResolution.referenceShortSide / 2160
         let sigma = max(grainReferenceRadius * resolutionScale, 0.05)
@@ -160,7 +160,7 @@ nonisolated final class FilmGrain {
         let amplitude=0.405*0.210*Self.resolutionAmplitude(size: size, shortSide: shortSide)
         guard let result = finish.apply(extent: extent, roiCallback: { _, rect in rect }, arguments: [
             softened, source, narrow, wide,
-            CIVector(x: normalization,y: settings.strength.clamped(to: 0...5),z: amplitude,w: settings.distribution.clamped(to: 0...1)),
+            CIVector(x: normalization,y: settings.strength.clamped(to: AdjustmentLimits.strength),z: amplitude,w: settings.distribution.clamped(to: 0...1)),
             CIVector(x: weights.x,y: weights.y,z: weights.z), ceiling
         ]) else { throw GrainError.kernel }
         return result

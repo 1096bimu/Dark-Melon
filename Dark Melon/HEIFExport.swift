@@ -108,6 +108,7 @@ struct HEIFExportOptions: View {
     let colorSpace: ProcessingColorSpace
     let rawSettings: RAWSettings
     var percentageOnly = false
+    var variationGrid: Binding<Int>? = nil
     let save: (RAWDeveloper) -> Void
     @AppStorage(ExportMetadata.effectiveISOPreferenceKey) private var effectiveISO = true
     @Environment(\.dismiss) private var dismiss
@@ -120,6 +121,7 @@ struct HEIFExportOptions: View {
     @FocusState private var editingDimension: Dimension?
     private enum Dimension: Hashable { case width, height }
     private var outputHDREnabled: Bool {
+        if variationGrid != nil { return false }
         if percentageOnly { return hdrEnabled } // A batch can contain both HDR and log-LUT SDR outputs.
         guard hdrEnabled else { return false }
         guard let id = mapping.lutID, LUTStore.shared.configuration(for: id).input.isLog,
@@ -186,7 +188,7 @@ struct HEIFExportOptions: View {
                 .padding()
                 options(for: settings.format)
             }
-            .navigationTitle("Export Image")
+            .navigationTitle(variationGrid == nil ? "Export Image" : "Variation Export")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
@@ -198,6 +200,7 @@ struct HEIFExportOptions: View {
                         dismiss()
                         save(worker)
                     }
+                    .disabled(variationGrid.map { outputWidth < $0.wrappedValue || outputHeight < $0.wrappedValue } ?? false)
                 }
             }
         }
@@ -206,6 +209,7 @@ struct HEIFExportOptions: View {
         .onChange(of: settings.scale) { _, _ in syncDimensions() }
         .onChange(of: editingDimension) { previous, _ in commitDimension(previous) }
         .task {
+            guard variationGrid == nil else { return }
             // This session retains developed buffers and the last encoded file.
             // Save receives the same worker, including an encode still in flight.
             let worker = sessionWorker()
@@ -233,12 +237,20 @@ struct HEIFExportOptions: View {
             }
         }
         #if os(macOS)
-        .frame(width: 460, height: 460)
+        .frame(width: 460, height: variationGrid == nil ? 460 : 540)
         #endif
     }
 
     private func options(for format: ExportFormat) -> some View {
         Form {
+            if let variationGrid {
+                Picker("Grid size", selection: variationGrid) {
+                    ForEach(2...8, id: \.self) { size in Text("\(size) × \(size)").tag(size) }
+                }
+                Text("One SDR image. Each tile gets a fresh Brew at the current strength.")
+                    .font(.caption).foregroundStyle(.secondary)
+                LabeledContent("Tile size", value: "\(outputWidth / max(2, variationGrid.wrappedValue)) × \(outputHeight / max(2, variationGrid.wrappedValue)) px")
+            }
             LabeledContent("Linear size", value: settings.scale.formatted(.percent.precision(.fractionLength(0))))
             EditorSlider(value: Binding(get: { min(1, max(0.25, (settings.scale * 20).rounded() / 20)) },
                                   set: { useSliderScale($0) }),
@@ -275,7 +287,8 @@ struct HEIFExportOptions: View {
             }
             if format != .tiff {
                 LabeledContent("Quality", value: settings.quality.formatted(.percent.precision(.fractionLength(0))))
-                EditorSlider(value: $settings.quality, in: 0...1, step: 0.01) { Text("Quality") }.controlReset { settings.quality = HEIFSettings().quality }
+                EditorSlider(value: $settings.quality, in: 0...1, step: 0.01, label: { Text("Quality") }).controlReset { settings.quality = HEIFSettings().quality }
+                if variationGrid == nil {
                 LabeledContent("Encoded size") {
                     if measuredSettings == settings, let encodedBytes {
                         Text(Int64(encodedBytes), format: .byteCount(style: .file))
@@ -286,6 +299,7 @@ struct HEIFExportOptions: View {
                     }
                 }
                 .foregroundStyle(.secondary)
+                }
             }
             if format == .tiff {
                 if outputHDREnabled {

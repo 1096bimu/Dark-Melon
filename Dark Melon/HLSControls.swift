@@ -42,14 +42,14 @@ struct HLSControls: View {
                         Text("\(adjustments[index].saturation, format: .number.precision(.fractionLength(2)))×")
                             .monospacedDigit().foregroundStyle(.secondary)
                     }
-                    EditorSlider(value: $adjustments[index].saturation, in: 0...2) { Text("\(String(localized: String.LocalizationValue(names[index]))) saturation") }.controlReset { adjustments[index].saturation = defaults.hls[index].saturation }
+                    EditorSlider(value: $adjustments[index].saturation, in: 0...2, label: { Text("\(String(localized: String.LocalizationValue(names[index]))) saturation") }).controlReset { adjustments[index].saturation = defaults.hls[index].saturation }
                         .labelsHidden()
                     HStack {
                         Text("Lightness")
                         Text(String(format: "%+.0f%%", adjustments[index].lightness * 25))
                             .monospacedDigit().foregroundStyle(.secondary)
                     }
-                    EditorSlider(value: $adjustments[index].lightness, in: -1...1) { Text("\(String(localized: String.LocalizationValue(names[index]))) lightness") }.controlReset { adjustments[index].lightness = defaults.hls[index].lightness }
+                    EditorSlider(value: $adjustments[index].lightness, in: -1...1, label: { Text("\(String(localized: String.LocalizationValue(names[index]))) lightness") }).controlReset { adjustments[index].lightness = defaults.hls[index].lightness }
                         .labelsHidden()
                 }
                 if index < 5 { Divider() }

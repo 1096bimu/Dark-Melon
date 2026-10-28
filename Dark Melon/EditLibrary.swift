@@ -92,12 +92,22 @@ struct LibraryEntry: Identifiable, Codable {
     func addFolder(_ name: String, parent: UUID?) {
         save(entries + [LibraryEntry(parent: parent, name: name)])
     }
-    func addEdit(_ name: String, parent: UUID?, recipe: DevelopmentRecipe, selection: SettingsPasteSelection) {
+    private func selectedRecipe(_ recipe: DevelopmentRecipe, selection: SettingsPasteSelection) -> DevelopmentRecipe {
         var mapping = selection.applying(recipe.mapping, to: ToneMapping())
         if selection.contains(.rawWhiteBalance) { mapping.rawWhiteBalance = recipe.mapping.rawWhiteBalance }
-        let selected = DevelopmentRecipe(colorSpace: recipe.colorSpace, mapping: mapping,
+        return DevelopmentRecipe(colorSpace: recipe.colorSpace, mapping: mapping,
             rawSettings: PasteItem.rawItems.contains(where: selection.contains) ? recipe.rawSettings : nil)
-        save(entries + [LibraryEntry(parent: parent, name: name, recipe: selected, selection: selection)])
+    }
+    func addEdit(_ name: String, parent: UUID?, recipe: DevelopmentRecipe, selection: SettingsPasteSelection) {
+        save(entries + [LibraryEntry(parent: parent, name: name,
+            recipe: selectedRecipe(recipe, selection: selection), selection: selection)])
+    }
+    func updateEdit(_ id: UUID, with recipe: DevelopmentRecipe) {
+        guard let index = entries.firstIndex(where: { $0.id == id && $0.recipe != nil }),
+              let selection = entries[index].selection else { return }
+        var updated = entries
+        updated[index].recipe = selectedRecipe(recipe, selection: selection)
+        save(updated)
     }
     func addLUTs(_ sources: [URL], parent: UUID?) async {
         guard !importingLUT, !sources.isEmpty else { return }
@@ -223,6 +233,9 @@ struct EditLibraryView: View {
                     .contextMenu {
                         Button("Rename…", systemImage: "pencil") { name = entry.name; renaming = entry }
                         if entry.recipe != nil {
+                            Button("Update with Current") {
+                                if let current { library.updateEdit(entry.id, with: current) }
+                            }.disabled(current == nil)
                             Button(LocalizedStringKey(library.rawDefaultID == entry.id ? "Clear RAW Default" : "Use as RAW Default"),
                                    systemImage: "camera.aperture") {
                                 library.useAsRAWDefault(library.rawDefaultID == entry.id ? nil : entry.id)

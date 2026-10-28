@@ -51,6 +51,7 @@ struct EditSnapshotsView: View {
     let selected: String
     let select: (String) -> Void
     let create: (String) -> Void
+    let update: (String) -> Void
     let delete: (UUID) -> Void
     let discardDraft: () -> Void
     @State private var naming = false
@@ -67,10 +68,14 @@ struct EditSnapshotsView: View {
                 .help("Create Snapshot")
             }.padding(12)
             List {
-                if saved { row("Saved Edit", key: "saved", date: savedAt) }
+                if saved {
+                    row("Saved Edit", key: "saved", date: savedAt)
+                        .contextMenu { Button("Update with Current") { update("saved") } }
+                }
                 if draft {
                     row("Unsaved Edit", key: "unsaved", date: draftAt)
                         .contextMenu {
+                            Button("Update with Current") { update("unsaved") }
                             Button("Discard Unsaved Edit", role: .destructive, action: discardDraft)
                         }
                 }
@@ -85,7 +90,10 @@ struct EditSnapshotsView: View {
                             if selected == snapshot.id.uuidString { Image(systemName: "checkmark") }
                         }.contentShape(Rectangle())
                     }.buttonStyle(.plain)
-                    .contextMenu { Button("Delete Snapshot", role: .destructive) { delete(snapshot.id) } }
+                    .contextMenu {
+                        Button("Update with Current") { update(snapshot.id.uuidString) }
+                        Button("Delete Snapshot", role: .destructive) { delete(snapshot.id) }
+                    }
                 }
             }.listStyle(.plain)
         }

@@ -89,7 +89,7 @@ struct HueChromaScope: View {
                 Text(monochrome ? 1 : maximum, format: .number.precision(.fractionLength(3)))
             }.font(.caption).foregroundStyle(.secondary)
             Canvas { context, size in
-                for (index, hue) in OKLabVertexWarp.vertexHues[space]!.enumerated().filter { $0.offset != 1 }.map(\.element).enumerated() {
+                for (index, hue) in OKLabVertexWarp.vertexHues[space]!.enumerated().filter({ $0.offset != 1 }).map(\.element).enumerated() {
                     let x = size.width * hue.truncatingRemainder(dividingBy: 2 * .pi) / (2 * .pi)
                     context.draw(Text(EditorGraphStyle.colorNames[index]).font(.caption2.bold())
                         .foregroundStyle(EditorGraphStyle.colorLabels[index]),
@@ -100,7 +100,7 @@ struct HueChromaScope: View {
                 Color.black
                 if let texture { ScopeMetalView(frame: texture, gradient: gradient) }
                 Canvas { context, size in
-                    for hue in OKLabVertexWarp.vertexHues[space]!.enumerated().filter { $0.offset != 1 }.map(\.element) {
+                    for hue in OKLabVertexWarp.vertexHues[space]!.enumerated().filter({ $0.offset != 1 }).map(\.element) {
                         var guide = Path()
                         let x = size.width * hue.truncatingRemainder(dividingBy: 2 * .pi) / (2 * .pi)
                         guide.move(to: CGPoint(x: x,y: 0))
@@ -167,16 +167,17 @@ struct HueChromaScope: View {
                 HStack {
                     if !monochrome {
                         Text("Chroma")
-                        AdjustmentField(title:"Chroma",value:$controls[i].chroma,range:0...2,unit:"×",width:52)
+                        AdjustmentField(title:"Chroma",value:$controls[i].chroma,range:AdjustmentLimits.chroma,unit:"×",width:52)
                     }
                     Spacer()
                     Text("Density")
-                    AdjustmentField(title:"Density",value:$controls[i].lightness,range: -0.25...0.25,digits:3,width:52)
+                    AdjustmentField(title:"Density",value:$controls[i].lightness,range: AdjustmentLimits.density,digits:3,width:52)
                 }
                 if !monochrome {
-                    EditorSlider(value: $controls[i].lightness, in: -0.25...0.25) {
+                    EditorSlider(value: $controls[i].lightness, in: -0.25...0.25, label: {
                         Text("Density")
-                    }.controlReset { controls[i].lightness = defaults.vertexWarp[i].lightness }.labelsHidden()
+                    }).editorSliderTrack(EditorSliderTracks.density[space]![i])
+                        .controlReset { controls[i].lightness = defaults.vertexWarp[i].lightness }.labelsHidden()
                 }
             }
             }.filmLock(.vertices)

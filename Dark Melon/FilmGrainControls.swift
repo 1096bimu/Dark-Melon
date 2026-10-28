@@ -9,16 +9,16 @@ struct FilmGrainControls: View {
             Label("Film Grain", systemImage: "film").font(.headline)
             HStack {
                 Text("Size")
-                AdjustmentField(title: "Size", value: $settings.size, range: 0.2...3, digits: 2, scale: 1)
+                AdjustmentField(title: "Size", value: $settings.size, range: AdjustmentLimits.grainSize, digits: 2, scale: 1)
 
             }
-            EditorSlider(value: $settings.size, in: 0.2...3) { Text("Grain size") }.controlReset { settings.size = defaults.grain.size }.labelsHidden()
+            EditorSlider(value: $settings.size, in: 0.2...3, label: { Text("Grain size") }).controlReset { settings.size = defaults.grain.size }.labelsHidden()
             HStack {
                 Text("Strength")
-                AdjustmentField(title: "Strength", value: $settings.strength, range: 0...5, digits: 2, scale: 1)
+                AdjustmentField(title: "Strength", value: $settings.strength, range: AdjustmentLimits.strength, digits: 2, scale: 1)
 
             }
-            EditorSlider(value: $settings.strength, in: 0...5) { Text("Grain strength") }.controlReset { settings.strength = defaults.grain.strength }.labelsHidden()
+            EditorSlider(value: $settings.strength, in: 0...5, label: { Text("Grain strength") }).controlReset { settings.strength = defaults.grain.strength }.labelsHidden()
             HStack {
                 Text("Distribution")
                 AdjustmentField(title: "Distribution", value: $settings.distribution, range: 0...1, digits: 0, scale: 100, unit: "%")
@@ -35,7 +35,7 @@ struct FilmGrainControls: View {
             }
             .frame(height: 48)
             .accessibilityLabel("Grain distribution from shadows to highlights")
-            EditorSlider(value: $settings.distribution, in: 0...1) { Text("Grain distribution") }.controlReset { settings.distribution = defaults.grain.distribution }.labelsHidden()
+            EditorSlider(value: $settings.distribution, in: 0...1, label: { Text("Grain distribution") }).controlReset { settings.distribution = defaults.grain.distribution }.labelsHidden()
             HStack { Text("Black peak"); Spacer(); Text("Midtone peak") }
                 .font(.caption).foregroundStyle(.secondary)
         }

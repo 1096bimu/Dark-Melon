@@ -1,63 +1,145 @@
 {
   "features" : [
-    "refractivity"
+    "specular-location"
   ],
-  "fill" : "system-dark",
+  "fill" : {
+    "automatic-gradient" : "display-p3:0.90141,0.90141,0.90141,1.00000",
+    "orientation" : {
+      "start" : {
+        "x" : 0.5,
+        "y" : 1
+      },
+      "stop" : {
+        "x" : 0.5,
+        "y" : 0
+      }
+    }
+  },
   "groups" : [
     {
       "blur-material" : null,
       "layers" : [
         {
-          "blend-mode-specializations" : [
-            {
-              "value" : "normal"
-            },
-            {
-              "appearance" : "dark",
-              "value" : "plus-lighter"
-            }
-          ],
           "fill" : {
-            "linear-gradient" : [
-              "display-p3:0.36563,0.26547,1.00000,1.00000",
-              "display-p3:0.33015,0.75106,1.00000,1.00000"
-            ]
+            "solid" : "srgb:0.22353,0.22353,0.22353,1.00000"
           },
-          "glass" : false,
-          "image-name" : "2d-deathstar.png",
-          "name" : "2d-deathstar",
-          "opacity" : 1,
-          "position" : {
-            "scale" : 0.59,
-            "translation-in-points" : [
-              0,
-              0
-            ]
-          }
+          "glass" : true,
+          "image-name" : "Melon-Camera-Aperture-Outlines.png",
+          "name" : "Melon-Camera-Aperture-Outlines"
         }
       ],
-      "refractivity" : {
-        "depth" : 0,
-        "enabled" : true,
-        "strength" : 0.5
-      },
+      "lighting" : "combined",
       "shadow" : {
         "kind" : "neutral",
-        "opacity" : 0.5
+        "opacity" : 1.42
       },
+      "specular" : "inside",
       "translucency" : {
-        "enabled" : false,
-        "value" : 0.3
+        "enabled" : true,
+        "value" : 0.51
       }
     },
     {
+      "blur-material" : null,
       "layers" : [
         {
+          "blend-mode" : "overlay",
+          "fill" : {
+            "solid" : "srgb:1.00000,1.00000,1.00000,1.00000"
+          },
           "glass" : false,
-          "image-name" : "Image.jpeg",
-          "name" : "Image",
+          "image-name" : "tertdf.png",
+          "name" : "tertdf",
+          "opacity" : 1
+        },
+        {
+          "blend-mode" : "normal",
+          "fill" : {
+            "automatic-gradient" : "srgb:0.94118,0.31251,0.26275,1.00000"
+          },
+          "glass" : false,
+          "image-name" : "erwtsdf-slice-01.png",
+          "name" : "Aperture blade 1"
+        },
+        {
+          "fill" : {
+            "automatic-gradient" : "srgb:0.85059,0.27917,1.00000,1.00000"
+          },
+          "glass" : false,
+          "image-name" : "erwtsdf-slice-02.png",
+          "name" : "Aperture blade 2"
+        },
+        {
+          "fill" : {
+            "automatic-gradient" : "srgb:0.45758,0.42102,1.00000,1.00000"
+          },
+          "glass" : false,
+          "image-name" : "erwtsdf-slice-03.png",
+          "name" : "Aperture blade 3"
+        },
+        {
+          "fill" : {
+            "automatic-gradient" : "srgb:0.13909,0.60376,0.78217,1.00000"
+          },
+          "glass" : false,
+          "image-name" : "erwtsdf-slice-04.png",
+          "name" : "Aperture blade 4"
+        },
+        {
+          "fill" : {
+            "automatic-gradient" : "srgb:0.21386,0.76605,0.48256,1.00000"
+          },
+          "glass" : false,
+          "image-name" : "erwtsdf-slice-05.png",
+          "name" : "Aperture blade 5"
+        },
+        {
+          "fill" : {
+            "automatic-gradient" : "srgb:0.83153,0.64919,0.23214,1.00000"
+          },
+          "glass" : false,
+          "image-name" : "erwtsdf-slice-06.png",
+          "name" : "Aperture blade 6"
+        },
+        {
+          "fill" : {
+            "automatic-gradient" : "srgb:0.31239,0.31239,0.31239,1.00000"
+          },
+          "image-name" : "drt.png",
+          "name" : "drt"
+        }
+      ],
+      "lighting" : "combined",
+      "refractivity" : {
+        "depth" : 0.165,
+        "enabled" : false,
+        "strength" : 0.253125
+      },
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 1
+      },
+      "specular" : "inside",
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.22
+      }
+    },
+    {
+      "blur-material" : null,
+      "layers" : [
+        {
+          "blend-mode" : "normal",
+          "fill" : {
+            "solid" : "display-p3:0.00000,0.00000,0.00000,1.00000"
+          },
+          "glass" : true,
+          "hidden" : false,
+          "image-name" : "Untitled.png",
+          "name" : "Untitled",
+          "opacity" : 1,
           "position" : {
-            "scale" : 1,
+            "scale" : 1.19,
             "translation-in-points" : [
               0,
               0
@@ -65,15 +147,21 @@
           }
         }
       ],
-      "name" : "Group",
+      "lighting" : "combined",
+      "opacity" : 1,
+      "refractivity" : {
+        "depth" : 0.165,
+        "enabled" : false,
+        "strength" : 0.253125
+      },
       "shadow" : {
-        "kind" : "neutral",
-        "opacity" : 0.5
+        "kind" : "none",
+        "opacity" : 0.81
       },
       "specular" : false,
       "translucency" : {
         "enabled" : false,
-        "value" : 0.3
+        "value" : 0.75
       }
     }
   ],

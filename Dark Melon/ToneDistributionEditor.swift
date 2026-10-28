@@ -10,7 +10,7 @@ struct ToneDistributionEditor: View {
 
     private func weight(_ index: Int) -> Binding<Double> {
         Binding(get: { exp2(mapping.contrastDistribution[index]) }, set: { value in
-            mapping.contrastDistribution[index] = log2(value.clamped(to: 0.25...4))
+            mapping.contrastDistribution[index] = log2(value.clamped(to: AdjustmentLimits.distributionWeight))
             mapping.setAutomaticHDRTarget()
         })
     }
@@ -40,7 +40,7 @@ struct ToneDistributionEditor: View {
                         // A simple control polygon; processing retains smooth interpolation.
                         for i in 0..<4 {
                             let point = CGPoint(x: 14 + CGFloat(i) / 3 * width,
-                                                y: 14 + (0.5 - mapping.contrastDistribution[i] / 4) * height)
+                                                y: 14 + (0.5 - mapping.contrastDistribution[i].clamped(to: -2...2) / 4) * height)
                             if i == 0 { path.move(to: point) } else { path.addLine(to: point) }
                         }
                     }.stroke(EditorSliderTracks.tone, style: EditorGraphStyle.trackStroke)
@@ -48,7 +48,7 @@ struct ToneDistributionEditor: View {
                         EditorGraphHandle(isDragging: dragging == index)
                             .controlReset { weight(index).wrappedValue = exp2(defaults.contrastDistribution[index]) }
                             .position(x: 14 + CGFloat(index) / 3 * width,
-                                      y: 14 + (0.5 - mapping.contrastDistribution[index] / 4) * height)
+                                      y: 14 + (0.5 - mapping.contrastDistribution[index].clamped(to: -2...2) / 4) * height)
                             .gesture(DragGesture(minimumDistance: 0, coordinateSpace: .named("toneDistribution"))
                                 .updating($dragging) { _, state, _ in state = index }
                                 .onChanged { drag in
@@ -61,13 +61,13 @@ struct ToneDistributionEditor: View {
                             }
                     }
                 }.coordinateSpace(name: "toneDistribution")
-            }.frame(height: 150)
+            }.frame(height: 150).modifier(DisabledControlAppearance())
             HStack {
                 ForEach(0..<4) { index in
                     VStack(spacing: 2) {
                         Text(LocalizedStringKey(labels[index]))
                         Text(positions[index], format: .number.precision(.fractionLength(3)))
-                        AdjustmentField(title: "Contrast Distribution", value: weight(index), range: 0.25...4, unit: "×", width: 52)
+                        AdjustmentField(title: "Contrast Distribution", value: weight(index), range: AdjustmentLimits.distributionWeight, unit: "×", width: 52)
                     }.frame(maxWidth: .infinity)
                 }
             }.font(.caption).monospacedDigit().foregroundStyle(.secondary)

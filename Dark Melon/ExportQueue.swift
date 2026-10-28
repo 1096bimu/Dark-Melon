@@ -13,7 +13,7 @@ import SwiftUI
 
     init(_ plan: ExportPlan) {
         title = plan.items.count == 1 ? plan.items[0].source.lastPathComponent : String(localized: "Batch Export")
-        total = plan.items.count + plan.failures.count
+        total = (plan.variation?.generations.count ?? plan.items.count) + plan.failures.count
         completed = plan.failures.count
         failures = plan.failures
     }
@@ -93,10 +93,17 @@ import SwiftUI
                         rawSettings: recipe.rawSettings, rawWhiteBalance: recipe.mapping.rawWhiteBalance, lutConfiguration: item.lutConfiguration, exporting: true, memoryLimitMB: BatchExportBudget.singleFileMegabytes)
                     await worker.useLUTConfiguration(item.lutConfiguration)
                     job.active = 1
-                    let bytes = try await worker.cachedExport(item.source, mapping: recipe.mapping, settings: request.plan.settings)
+                    let bytes: Data
+                    if let variation = request.plan.variation {
+                        bytes = try await worker.variationExport(item.source, mapping: recipe.mapping, settings: request.plan.settings, variation: variation) { completed in
+                            job.completed = completed
+                        }
+                    } else {
+                        bytes = try await worker.cachedExport(item.source, mapping: recipe.mapping, settings: request.plan.settings)
+                    }
                     try Task.checkCancellation()
                     try await Self.write(bytes, to: destination)
-                    job.completed += 1
+                    job.completed = job.total
                 } catch is CancellationError { }
                 catch { job.completed += 1; job.failures.append(error.localizedDescription) }
             }

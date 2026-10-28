@@ -38,14 +38,14 @@ struct ChromaCurveEditor: View {
                     }.stroke(EditorGraphStyle.guideColor, style: EditorGraphStyle.guide)
                     Path { path in
                         for i in 0..<4 {
-                            let p = CGPoint(x: 14+CGFloat(i)/3*width,y: 14+(1-values[i]/2)*height)
+                            let p = CGPoint(x: 14+CGFloat(i)/3*width,y: 14+(1-values[i].clamped(to: 0...2)/2)*height)
                             if i == 0 { path.move(to: p) } else { path.addLine(to: p) }
                         }
                     }.stroke(EditorGraphStyle.trackColor, style: EditorGraphStyle.trackStroke)
                     ForEach(0..<4) { index in
                         EditorGraphHandle(isDragging: dragging == index)
                             .controlReset { controls[index].wrappedValue = resetValues[index] }
-                            .position(x: 14+CGFloat(index)/3*width,y: 14+(1-values[index]/2)*height)
+                            .position(x: 14+CGFloat(index)/3*width,y: 14+(1-values[index].clamped(to: 0...2)/2)*height)
                             .gesture(DragGesture(minimumDistance: 0,coordinateSpace: .named(title))
                                 .updating($dragging) { _, state, _ in state = index }
                                 .onChanged {
@@ -57,16 +57,15 @@ struct ChromaCurveEditor: View {
                                 controls[index].wrappedValue = (values[index]+(direction == .increment ? 0.02 : -0.02)).clamped(to: 0...2)
                             }
                             .disabled(index == 3 && hdrMax <= 1)
-                            .opacity(index == 3 && hdrMax <= 1 ? 0.35 : 1)
                     }
                 }.coordinateSpace(name: title)
-            }.frame(height: 150)
+            }.frame(height: 150).modifier(DisabledControlAppearance())
             HStack {
                 ForEach(0..<4) { index in
                     VStack(spacing: 2) {
                         Text(labels[index])
                         Text(levels[index],format: .number.precision(.fractionLength(3)))
-                        AdjustmentField(title: "Chroma", value: controls[index], range: 0...2, unit: "×", width: 52)
+                        AdjustmentField(title: "Chroma", value: controls[index], range: AdjustmentLimits.chroma, unit: "×", width: 52)
                             .disabled(index == 3 && hdrMax <= 1)
                     }.frame(maxWidth: .infinity)
                 }

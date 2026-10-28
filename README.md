@@ -22,6 +22,10 @@ An original 2736 × 1824 JPEG export with an embedded ISO 21496-1 HDR gain map. 
 
 ## Film emulation: the Kyoto collection
 
+**[Room for chance: color variations →](https://1096bimu.github.io/Dark-Melon/variations/)** — ten HDR photographs and nine uncurated variations made with the Cross Process randomizer. Explore film-inspired color, then save and share a look.
+
+**[Compare the authentic process →](https://1096bimu.github.io/Dark-Melon/authentic-process/)** — an aligned split viewer comparing halation and vignette with two alternatives. Zoom, pan, and inspect six details in the same photograph.
+
 **[Explore the Kyoto photo essay →](https://1096bimu.github.io/Dark-Melon/film-emulation/)** — twelve photographs and a practical guide to Dark Melon’s film-inspired process: lens diffusion and vignette before grain and tone mapping, exposure-driven halation, Dye Response, and the two stages of white balance. Open any photograph for a full-size view.
 
 [![A shop beneath a pine tree from the Kyoto film-emulation collection](docs/film-emulation/photos/DSC07481-preview.jpg)](https://1096bimu.github.io/Dark-Melon/film-emulation/)

@@ -186,7 +186,7 @@ struct RAWControls: View {
                             }
                             HStack {
                                 Image(systemName: "plusminus").frame(width: 22).accessibilityHidden(true)
-                                EditorSlider(value: $offset, in: -0.02...0.02) { Text("Offset") }
+                                EditorSlider(value: $offset, in: -0.02...0.02, label: { Text("Offset") })
                                     .controlReset { offset = defaults.offset }
                                     .labelsHidden()
                             }

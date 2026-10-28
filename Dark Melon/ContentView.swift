@@ -21,16 +21,34 @@ struct ContentView: View {
     @State private var cropping = false
     @State private var cropRatioPosition = 5.0
     @State private var editHistory = EditHistory()
+    @State private var deferredEditBefore: DevelopmentRecipe?
     @State private var pendingEdits = PendingEdits()
     @State private var pendingControlsWidth: CGFloat = 120
     @State private var baselineRecipe: DevelopmentRecipe?
     @State private var pendingTransition: (() -> Void)?
+    @State private var pendingCancelTransition: (() -> Void)?
     @State private var confirmingDiscard = false
     @State private var showingPasteSettings = false
     @State private var confirmingPreset: PresetApplication?
     @State private var presetPreview: PresetPreview?
     @State private var presetShowingBefore = false
     @State private var presetPreviewError: String?
+    private func copyCurrentDevelopmentSettings() {
+        do {
+            if let sourceURL {
+                try SettingsClipboard.copy(currentRecipe, reference: development?.whitePoint, source: sourceURL)
+            }
+        } catch { errorMessage = error.localizedDescription }
+    }
+
+    private func pasteDevelopmentSettings() {
+        do {
+            pastedSettings = try SettingsClipboard.read()
+            browserPaste = nil
+            showingPasteSettings = true
+        } catch { errorMessage = error.localizedDescription }
+    }
+
     private var activePresetPreview: PresetPreview? {
         presetPreview?.id == confirmingPreset?.id ? presetPreview : nil
     }
@@ -45,7 +63,7 @@ struct ContentView: View {
     @State private var pasteEditURLs: [URL] = []
     @State private var exportedSourceURL: URL?
     @State private var resettingTone = false
-    @State private var browserModel = ImageBrowserModel()
+    @State private var browserModel = ImageBrowserModel(remembersFolder: true)
     @State private var showingFileBrowser = true
     @State private var showingMetadata = true
     @State private var leftPanelWidth: CGFloat = BrowserGridLayout.twoColumnWidth
@@ -87,6 +105,8 @@ struct ContentView: View {
     @State private var histogramError: String?
     @State private var exportSettings = HEIFSettings.restored()
     @State private var showingExportOptions = false
+    @State private var variationExportMode = false
+    @AppStorage("variationExport.grid") private var variationGrid = 2
     @State private var exporting = false
     @State private var exportDocument: HEIFDocument?
     @State private var showingSave = false
@@ -132,6 +152,7 @@ struct ContentView: View {
 
     private func commitHistory() {
         guard development != nil, !loading else { return }
+        finishDeferredEdit()
         editHistory.observe(currentRecipe, name: cropping ? String(localized: "Transform") : nil)
         editHistory.flush()
     }
@@ -262,7 +283,7 @@ struct ContentView: View {
             result.blackAndWhite = BlackAndWhiteSettings()
             result.blackAndWhite.isEnabled = mapping.blackAndWhite.isEnabled
         }
-        if panel == .effects { result.channelContrast = [0, 0, 0]; result.clarity = 0; result.hdf = 0; result.grain.strength = 0; result.halation.inputCurve = 0; result.vignette.amount = 0; result.badHDR = BadHDRSettings() }
+        if panel == .effects { result.channelContrast = [0, 0, 0]; result.dyeMixers = DyeMixers(); result.clarity = 0; result.hdf = 0; result.grain.strength = 0; result.halation.inputCurve = 0; result.vignette.amount = 0; result.badHDR = BadHDRSettings() }
         return result
     }
 
@@ -298,7 +319,7 @@ struct ContentView: View {
                 Divider()
                 EditSnapshotsView(saved: savedRecipe != nil, savedAt: savedSnapshotDate, draftAt: snapshotSession.draftModifiedAt, draft: snapshotSession.draft != nil,
                     snapshots: namedSnapshots, selected: snapshotSession.selected,
-                    select: selectSnapshot, create: createSnapshot, delete: deleteSnapshot, discardDraft: discardSnapshotDraft)
+                    select: selectSnapshot, create: createSnapshot, update: updateSnapshot, delete: deleteSnapshot, discardDraft: discardSnapshotDraft)
                     .disabled(development == nil || loading)
                     .frame(maxHeight: .infinity)
             }
@@ -330,7 +351,7 @@ struct ContentView: View {
                     libraryPanel
                 } else {
             ImageFileBrowser(selectedURL: sourceURL, open: { load($0, resetEdits: true) }, model: browserModel, changeDirectory: changeDirectory,
-                             fileAction: performFileAction, multipleFileAction: performMultipleFileAction, hasPendingEdit: hasPendingEdit)
+                             fileAction: performFileAction, multipleFileAction: performMultipleFileAction, pendingURLs: browserPendingURLs)
                 .disabled(loading || fileActionBusy)
                 .overlay { if fileActionBusy { ProgressView("Preparing…").padding().background(.regularMaterial) } }
                 }
@@ -451,20 +472,13 @@ struct ContentView: View {
         }
         .overlay(alignment: .bottomTrailing) {
             if !cropping { HStack(spacing: 8) {
-                Button("Copy", systemImage: "doc.on.doc") {
-                    do { if let sourceURL { try SettingsClipboard.copy(currentRecipe, reference: development?.whitePoint, source: sourceURL) } }
-                    catch { errorMessage = error.localizedDescription }
-                }
-                .keyboardShortcut("c", modifiers: .command)
+                Button("Copy", systemImage: "doc.on.doc") { copyCurrentDevelopmentSettings() }
+                .focusedSceneValue(\.copyDevelopmentSettings,
+                                   development == nil || loading ? nil : { copyCurrentDevelopmentSettings() })
                 .help("Copy all development settings")
-                Button("Paste", systemImage: "doc.on.clipboard") {
-                    do {
-                        pastedSettings = try SettingsClipboard.read()
-                        browserPaste = nil
-                        showingPasteSettings = true
-                    } catch { errorMessage = error.localizedDescription }
-                }
-                .keyboardShortcut("v", modifiers: .command)
+                Button("Paste", systemImage: "doc.on.clipboard") { pasteDevelopmentSettings() }
+                .focusedSceneValue(\.pasteDevelopmentSettings,
+                                   development == nil || loading ? nil : { pasteDevelopmentSettings() })
                 .help("Choose which development settings to paste")
             }
             .buttonStyle(.bordered)
@@ -531,7 +545,13 @@ struct ContentView: View {
                 } else if panel == .color {
                     ColorControls(settings: $mapping.color, vertices: $mapping.vertexWarp, monochrome: mapping.blackAndWhite.isEnabled || mapping.color.monochrome, hdrMax: mapping.hdrMax, colorSpace: colorSpace)
                 } else if panel == .effects {
-                    EffectsControls(badHDR: $mapping.badHDR, channelContrast: $mapping.channelContrast, clarity: $mapping.clarity, radius: $mapping.clarityRadius, hdf: $mapping.hdf, hdfRadius: $mapping.hdfRadius, grain: $mapping.grain, halation: $mapping.halation, vignette: $mapping.vignette, hdrEnabled: mapping.hdrEnabled, monochrome: mapping.color.monochrome, comparing: $comparingEffects)
+                    EffectsControls(badHDR: $mapping.badHDR, dyeMixers: $mapping.dyeMixers, randomizeDye: { strength in
+                        let generation = DyeMixers.Generation(seed: UInt64.random(in: .min ... .max),
+                            strength: UInt16((strength.clamped(to: 0...3) / 3 * 65535).rounded()))
+                        if let candidate = DyeMixers.seeded(generation) {
+                            mapping.dyeMixers = candidate
+                        }
+                    }, channelContrast: $mapping.channelContrast, clarity: $mapping.clarity, radius: $mapping.clarityRadius, hdf: $mapping.hdf, hdfRadius: $mapping.hdfRadius, grain: $mapping.grain, halation: $mapping.halation, vignette: $mapping.vignette, hdrEnabled: mapping.hdrEnabled, monochrome: mapping.color.monochrome, comparing: $comparingEffects)
                 } else {
                     tonePanel
                 }
@@ -550,6 +570,7 @@ struct ContentView: View {
             .focusedSceneValue(\.startTutorial, { startTutorial() })
             .focusedSceneValue(\.toggleEditorPicker, pickerShortcutAction)
             #if os(macOS)
+            .focusedSceneValue(\.variationExport, development == nil || loading ? nil : { beginExportOptions(variation: true) })
             .focusedSceneValue(\.batchExport, browserModel.directory == nil ? nil : { showingBatchExport = true })
             #endif
     }
@@ -561,6 +582,7 @@ struct ContentView: View {
             .environment(\.resetMapping, resetDefaults.mapping)
             .environment(\.resetRAWSettings, resetDefaults.rawSettings)
             .task {
+                browserModel.restoreLastFolder()
                 editHistory.restore = restoreHistory
                 editHistory.captureSession = { snapshotSession }
                 editHistory.restoreSession = { snapshotSession = $0 }
@@ -576,14 +598,13 @@ struct ContentView: View {
                     return
                 }
                 snapshotAppliedRecipe = nil
-                if SnapshotEdit(old) != SnapshotEdit(new) {
-                    var session = snapshotSession
-                    session.draft = baselineRecipe.map { SnapshotEdit($0) == SnapshotEdit(new) } == true ? nil : SnapshotEdit(new)
-                    session.draftModifiedAt = session.draft == nil ? nil : Date()
-                    session.selected = session.draft == nil ? "saved" : "unsaved"
-                    snapshotSession = session
+                if editHistory.interacting {
+                    if deferredEditBefore == nil { deferredEditBefore = old }
+                    return
                 }
-                editHistory.observe(new, name: EditHistory.actionName(from: old, to: new))
+                let before = deferredEditBefore ?? old
+                deferredEditBefore = nil
+                recordRecipeChange(from: before, to: new)
                 rememberCurrentEdits()
             }
             .onChange(of: recipeSourceURL) { _, _ in
@@ -721,7 +742,9 @@ struct ContentView: View {
             }
             .environment(previewHover)
             .background(EditGestureBoundary(began: {
+                finishDeferredEdit()
                 editHistory.flush()
+                if !loading, development != nil, !cropping { deferredEditBefore = currentRecipe }
                 editHistory.interacting = true
             }, ended: {
                 editHistory.interacting = false
@@ -731,12 +754,16 @@ struct ContentView: View {
                 enabled: development != nil && !loading && !cropping))
             .background(leftPanelShortcuts.opacity(0).frame(width: 0, height: 0).accessibilityHidden(true))
             #if os(macOS)
+            .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in
+                editHistory.interacting = false
+                if !cropping { commitHistory() }
+            }
             .background(FileNavigationShortcut(navigate: navigateFile).frame(width: 0, height: 0))
             #endif
             .navigationTitle(filename)
             #if os(macOS)
             .sheet(isPresented: $showingBatchExport) {
-                if let directory = browserModel.directory { BatchExportView(directory: directory, film: lockedFilm, queue: exportQueue) }
+                if let directory = browserModel.directory { BatchExportView(directory: directory, film: lockedFilm, recipeOverrides: batchRecipeOverrides, pendingURLs: browserPendingURLs, queue: exportQueue) }
             }
             #endif
             .toolbar {
@@ -768,7 +795,7 @@ struct ContentView: View {
                     .keyboardShortcut("s", modifiers: .command)
                     .disabled(development == nil || loading || savingRecipe || (savedRecipe == currentRecipe && !tutorialNeedsSave))
                     .help("Save development settings beside the original image in an XMP sidecar")
-                    Toggle("Lock Film", systemImage: lockedFilm == nil ? "lock.open" : "lock.fill", isOn: Binding(
+                    Toggle("Film Lock", systemImage: lockedFilm == nil ? "lock.open" : "lock.fill", isOn: Binding(
                         get: { lockedFilm != nil },
                         set: {
                             confirmingPreset = nil
@@ -824,7 +851,7 @@ struct ContentView: View {
             .sheet(isPresented: $showingFilmLock) {
                 SettingsPasteOptions(apply: { selection in
                     lockedFilm = FilmSettings(mapping, rawSettings: mapping.rawWhiteBalance == nil ? nil : rawSettings, selection: selection)
-                }, title: "Lock Film", actionTitle: "Lock", selectingLock: true)
+                }, title: "Film Lock", actionTitle: "Lock", selectingLock: true)
             }
             .sheet(isPresented: $showingPasteSettings, onDismiss: { browserPaste = nil; pasteEditURLs = [] }) {
                 SettingsPasteOptions { selection in
@@ -849,6 +876,7 @@ struct ContentView: View {
                                       sourceURL: session.development.url, mapping: session.recipe.mapping,
                                       colorSpace: session.recipe.colorSpace,
                                       rawSettings: session.recipe.rawSettings ?? session.development.rawDefaults ?? RAWSettings(),
+                                      variationGrid: variationExportMode ? $variationGrid : nil,
                                       save: { prepareExport(development: session.development, recipe: session.recipe, worker: $0) })
                 }
             }
@@ -887,12 +915,23 @@ struct ContentView: View {
         .alert("Unsaved edits", isPresented: $confirmingDiscard) {
             Button("Save All and Continue") {
                 do { try savePendingEdits(); finishTransition() }
-                catch { errorMessage = error.localizedDescription; pendingTransition = nil }
+                catch {
+                    if (error as? CocoaError)?.code == .userCancelled { cancelTransition() }
+                    else {
+                        errorMessage = error.localizedDescription
+                        pendingTransition = nil
+                        pendingCancelTransition = nil
+                    }
+                }
             }
             Button("Discard Edits", role: .destructive) { finishTransition() }
-            Button("Cancel", role: .cancel) { pendingTransition = nil }
+            Button("Cancel", role: .cancel) { cancelTransition() }
         } message: {
-            Text("There are unsaved edits for \(pendingEdits.entries.count) file(s). Save them or discard them before continuing.")
+            if pendingCancelTransition != nil {
+                Text("Save or discard pending edits before Film Lock, or choose Cancel to keep them unsaved and continue using the current edit.")
+            } else {
+                Text("There are unsaved edits for \(pendingEdits.entries.count) file(s). Save them or discard them before continuing.")
+            }
         }
         #if os(macOS)
         .background(FileSaveLifecycle(approveClose: confirmClose, openFile: { url in
@@ -1037,7 +1076,7 @@ struct ContentView: View {
         snapshotSession = session
         // Register the transfer against the loaded edit, not against a new baseline.
         snapshotAppliedRecipe = currentRecipe
-        editHistory.observe(currentRecipe, name: String(localized: "Lock Film"))
+        editHistory.observe(currentRecipe, name: String(localized: "Film Lock"))
         editHistory.flush()
         rememberCurrentEdits()
         if reload, let sourceURL { load(sourceURL, resetEdits: false) }
@@ -1122,6 +1161,27 @@ struct ContentView: View {
         rememberCurrentEdits()
     }
 
+    private func updateSnapshot(_ key: String) {
+        guard !loading, development != nil else { return }
+        if key == "saved" { saveRecipe(); return }
+        commitHistory()
+        var session = snapshotSession
+        if key == "unsaved" {
+            session.draft = SnapshotEdit(currentRecipe)
+            session.draftModifiedAt = Date()
+        } else {
+            guard let index = namedSnapshots.firstIndex(where: { $0.id.uuidString == key }) else { return }
+            namedSnapshots[index].edit = SnapshotEdit(currentRecipe)
+            namedSnapshots[index].createdAt = Date()
+        }
+        session.selected = key
+        snapshotSession = session
+        snapshotAppliedRecipe = currentRecipe
+        editHistory.observe(currentRecipe, name: String(localized: "Update with Current"))
+        editHistory.flush()
+        rememberCurrentEdits()
+    }
+
     private func deleteSnapshot(_ id: UUID) {
         commitHistory()
         namedSnapshots.removeAll { $0.id == id }
@@ -1158,7 +1218,33 @@ struct ContentView: View {
         rememberCurrentEdits()
     }
 
+    /// During a gesture only the rendering mapping changes. Commit snapshot,
+    /// history, and browser state together at the boundary, or before leaving.
+    private func recordRecipeChange(from old: DevelopmentRecipe, to new: DevelopmentRecipe) {
+        if SnapshotEdit(old) != SnapshotEdit(new) {
+            var session = snapshotSession
+            session.draft = baselineRecipe.map { SnapshotEdit($0) == SnapshotEdit(new) } == true ? nil : SnapshotEdit(new)
+            session.draftModifiedAt = session.draft == nil ? nil : Date()
+            session.selected = session.draft == nil ? "saved" : "unsaved"
+            snapshotSession = session
+        }
+        editHistory.observe(currentRecipe, name: EditHistory.actionName(from: old, to: new))
+    }
+
+    private func finishDeferredEdit() {
+        guard let before = deferredEditBefore else { return }
+        deferredEditBefore = nil
+        guard before != currentRecipe else { return }
+        recordRecipeChange(from: before, to: currentRecipe)
+        // The snapshot metadata change must not be mistaken for another edit.
+        snapshotAppliedRecipe = currentRecipe
+        guard let url = recipeSourceURL, let baselineRecipe else { return }
+        pendingEdits.remember(url: url, recipe: currentRecipe, baseline: baselineRecipe,
+            saved: savedRecipe, session: snapshotSession)
+    }
+
     private func rememberCurrentEdits() {
+        finishDeferredEdit()
         guard let url = recipeSourceURL, let baselineRecipe else { return }
         pendingEdits.remember(url: url, recipe: currentRecipe, baseline: baselineRecipe,
             saved: savedRecipe, session: snapshotSession)
@@ -1198,23 +1284,33 @@ struct ContentView: View {
             showingFilmLock = true
             return
         }
-        requestDiscard {
+        requestDiscard(onCancel: { showingFilmLock = true }) {
             guard let url = recipeSourceURL else { return }
             // Reload the resolved state: discarded edits must not be captured as film.
             load(url, resetEdits: true) { showingFilmLock = true }
         }
     }
 
-    private func requestDiscard(_ action: @escaping () -> Void) {
+    private func requestDiscard(onCancel: (() -> Void)? = nil, _ action: @escaping () -> Void) {
         rememberCurrentEdits()
+        pendingCancelTransition = onCancel
         pendingTransition = action
         if pendingEdits.entries.isEmpty { finishTransition() }
         else { confirmingDiscard = true }
     }
 
+    private func cancelTransition() {
+        let action = pendingCancelTransition
+        pendingTransition = nil
+        pendingCancelTransition = nil
+        // Film Lock can capture the active edit without saving, discarding, or reloading it.
+        action?()
+    }
+
     private func finishTransition() {
         let action = pendingTransition
         pendingTransition = nil
+        pendingCancelTransition = nil
         pendingEdits.clear()
         snapshotSessions.removeAll()
         editHistory.clear()
@@ -1411,17 +1507,21 @@ struct ContentView: View {
     }
 
     private var leftPanelPicker: some View {
-        Picker("Left Panel", selection: Binding(get: { showingLibrary }, set: {
-            showingLibrary = $0; showingFileBrowser = true
-        })) {
-            Text("Folder").tag(false)
-            Text("Library").tag(true)
-        }.pickerStyle(.segmented).labelsHidden().fixedSize()
+        #if os(macOS)
+        BrowserPanelPicker(selection: showingFileBrowser ? (showingLibrary ? 1 : 0) : nil) {
+            toggleLeftPanel(library: $0 == 1)
+        }.fixedSize()
+        #else
+        ControlGroup {
+            Button("Folder") { toggleLeftPanel(library: false) }
+            Button("Library") { toggleLeftPanel(library: true) }
+        }
+        #endif
     }
 
     private func navigateFile(_ direction: Int) -> Bool {
         guard !loading, !fileActionBusy, !cropping else { return false }
-        browserModel.pendingURLs = Set(pendingEdits.entries.map { $0.url.standardizedFileURL })
+        browserModel.pendingURLs = Set(pendingEdits.entries.map(\.url))
         guard let url = browserModel.adjacentFile(to: sourceURL, direction: direction) else { return false }
         load(url, resetEdits: true)
         return true
@@ -1458,11 +1558,9 @@ struct ContentView: View {
         if tutorial.step == .tone || tutorial.step == .contrast { panel = .tone }
     }
 
-    private func hasPendingEdit(_ url: URL) -> Bool {
-        if url.standardizedFileURL == recipeSourceURL?.standardizedFileURL {
-            return snapshotSession.draft != nil || (baselineRecipe != nil && currentRecipe != baselineRecipe)
-        }
-        return pendingEdits.entry(for: url) != nil
+    /// Browser status reflects committed gestures, not the live slider position.
+    private var browserPendingURLs: Set<URL> {
+        Set(pendingEdits.entries.map(\.url))
     }
 
     private func performFileAction(_ action: BrowserFileAction, _ url: URL) {
@@ -1608,7 +1706,17 @@ struct ContentView: View {
         exportDocument = nil
     }
 
-    private func beginExportOptions(_ target: BrowserFileDevelopment? = nil) {
+    /// Match single export: the active snapshot wins over any older pending entry.
+    private var batchRecipeOverrides: [URL: DevelopmentRecipe] {
+        var recipes = Dictionary(uniqueKeysWithValues: pendingEdits.entries.map { ($0.url, $0.recipe) })
+        if let url = recipeSourceURL, development != nil, !loading {
+            recipes[url.standardizedFileURL] = currentRecipe
+        }
+        return recipes
+    }
+
+    private func beginExportOptions(_ target: BrowserFileDevelopment? = nil, variation: Bool = false) {
+        variationExportMode = variation
         guard let source = target?.development ?? development else { return }
         let original = target?.recipe ?? currentRecipe
         exportSession = (source, lockedFilm?.applying(to: original) ?? original)
@@ -1623,7 +1731,8 @@ struct ContentView: View {
     }
 
     private func prepareExport(development: RAWDevelopment, recipe: DevelopmentRecipe, worker: RAWDeveloper) {
-        let plan = ExportPlan(items: [PreparedExportItem(source: development.url, recipe: recipe)], settings: exportSettings)
+        let variation = variationExportMode ? VariationExport(grid: variationGrid, strength: UserDefaults.standard.object(forKey: "dyeRandomStrength") as? Double ?? 1) : nil
+        let plan = ExportPlan(items: [PreparedExportItem(source: development.url, recipe: recipe)], settings: exportSettings, variation: variation)
         #if os(macOS)
         // The options sheet closes before the save panel opens. No live editor
         // state is read after this immutable plan has been created.
@@ -1637,7 +1746,12 @@ struct ContentView: View {
             defer { exporting = false }
             do {
                 await worker.useLUTConfiguration(plan.items.first?.lutConfiguration)
-                let data = try await worker.cachedExport(development.url, mapping: recipe.mapping, settings: plan.settings)
+                let data: Data
+                if let variation = plan.variation {
+                    data = try await worker.variationExport(development.url, mapping: recipe.mapping, settings: plan.settings, variation: variation)
+                } else {
+                    data = try await worker.cachedExport(development.url, mapping: recipe.mapping, settings: plan.settings)
+                }
                 exportDocument = HEIFDocument(data: data)
                 showingSave = true
             } catch { errorMessage = error.localizedDescription }
@@ -1650,7 +1764,7 @@ struct ContentView: View {
         guard let item = plan.items.first else { return }
         let panel = NSSavePanel()
         panel.allowedContentTypes = [plan.settings.format.type]
-        panel.nameFieldStringValue = item.source.deletingPathExtension().lastPathComponent + "." + plan.settings.format.fileExtension
+        panel.nameFieldStringValue = item.source.deletingPathExtension().lastPathComponent + (plan.variation == nil ? "" : "-variations") + "." + plan.settings.format.fileExtension
         panel.canCreateDirectories = true
         let complete: (NSApplication.ModalResponse) -> Void = { response in
             guard response == .OK, let url = panel.url else { return }

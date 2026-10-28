@@ -1,5 +1,20 @@
 import SwiftUI
 
+extension EnvironmentValues {
+    @Entry var controlAppearanceDimmed = false
+}
+
+/// Apply disabled opacity once, including when handles live inside a dimmed graph.
+struct DisabledControlAppearance: ViewModifier {
+    @Environment(\.isEnabled) private var enabled
+    @Environment(\.controlAppearanceDimmed) private var dimmed
+    func body(content: Content) -> some View {
+        content
+            .environment(\.controlAppearanceDimmed, dimmed || !enabled)
+            .opacity(!enabled && !dimmed ? 0.4 : 1)
+    }
+}
+
 /// Shared visual vocabulary for interactive color graphs.
 enum EditorGraphStyle {
     static let colorNames = ["R", "Y", "G", "C", "B", "M"]
@@ -46,5 +61,6 @@ struct EditorGraphHandle: View {
         .frame(width: 28, height: 28)
         .contentShape(Circle())
         .resetInteraction(reset)
+        .modifier(DisabledControlAppearance())
     }
 }

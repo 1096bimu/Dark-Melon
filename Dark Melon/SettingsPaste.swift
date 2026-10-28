@@ -29,7 +29,7 @@ nonisolated enum PasteItem: String, CaseIterable, Codable, Sendable, Identifiabl
         case .vertices: "Color Nodes"
         case .hueTwister: "HUE Twister"
         case .splitTone: "Split Tone"
-        case .dyeResponse: "Dye Response"
+        case .dyeResponse: "Cross Processing"
         case .clarity: "Clarity"
         case .hdf: "HDF"
         case .grain: "Film Grain"
@@ -142,7 +142,7 @@ nonisolated struct SettingsPasteSelection: Codable, Sendable, Equatable {
         }
         if contains(.vertices) { result.color.monochrome = source.color.monochrome; result.hls = source.hls; result.blackAndWhite = source.blackAndWhite }
         if contains(.splitTone) { result.color.splitTone = source.color.splitTone }
-        if contains(.dyeResponse) { result.channelContrast = source.channelContrast }
+        if contains(.dyeResponse) { result.channelContrast = source.channelContrast; result.dyeMixers = source.dyeMixers }
         if contains(.clarity) { result.clarity = source.clarity; result.clarityRadius = source.clarityRadius }
         if contains(.hdf) { result.hdf = source.hdf; result.hdfRadius = source.hdfRadius }
         if contains(.grain) { result.grain = source.grain }
@@ -182,7 +182,7 @@ nonisolated struct SettingsPasteSelection: Codable, Sendable, Equatable {
 // Ignore removed/unknown selection leaves without losing an entire preset or
 // saved preference. Declared separately to preserve the memberwise initializer.
 extension SettingsPasteSelection {
-    init(from decoder: Decoder) throws {
+    nonisolated init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         self.init()
         tone = try values.decodeIfPresent(Bool.self, forKey: .tone) ?? true

@@ -10,6 +10,9 @@
     "…" : {
       "shouldTranslate" : false
     },
+    "%" : {
+
+    },
     "%.0f° · %.0f%%" : {
       "localizations" : {
         "en" : {
@@ -261,6 +264,48 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "16 位"
+          }
+        }
+      }
+    },
+    "18 numbers: mixer A, then mixer B, each in RGB row order. Applied before and after the film response, ahead of tone mapping. Press Return to apply." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "18 个数字：先是矩阵 A，再是矩阵 B，均按 RGB 行排列，在色调映射之前分别应用于胶片响应的前后。按回车键应用。"
+          }
+        }
+      }
+    },
+    "18 numbers: mixer A, then mixer B, each in RGB row order. Applied before and after the tone curves. Press Return to apply." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "18 个数字：先是矩阵 A，再是矩阵 B，均按 RGB 行排列，分别在色调曲线前后应用。按回车键应用。"
+          }
+        }
+      }
+    },
+    "100% Zoom" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "100% 缩放"
+          }
+        }
+      }
+    },
+    "200% Zoom" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "200% 缩放"
           }
         }
       }
@@ -653,6 +698,16 @@
         }
       }
     },
+    "Base32 code containing the matrix seed, Brew strength, and RGB slider values. Paste a code and press Return to restore them together." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Base32 代码包含矩阵种子、调制强度及 RGB 滑块数值。粘贴代码并按回车键即可一并还原。"
+          }
+        }
+      }
+    },
     "Batch Export" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -771,6 +826,16 @@
         }
       }
     },
+    "Brew" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "调制"
+          }
+        }
+      }
+    },
     "Browse images and subfolders." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -857,7 +922,18 @@
         }
       }
     },
+    "Changes relative film-layer contrast around Tone in log exposure. Equal RGB values have no effect; the SDR and HDR tone curves remain unchanged." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 log 曝光中围绕影调调整各胶片层的相对对比度。RGB 数值相同时无效果，SDR 和 HDR 色调曲线保持不变。"
+          }
+        }
+      }
+    },
     "Changes relative RGB contrast in the tone map. The shared average is ignored, so equal values have no effect." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -1241,6 +1317,28 @@
         }
       }
     },
+    "Controls the matrix range for the next Random click. Zero produces identity matrices; 100% uses the full range. Existing matrices are unchanged." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "控制下次点击“随机”时的矩阵范围。零生成单位矩阵，100% 使用完整范围。现有矩阵保持不变。"
+          }
+        }
+      }
+    },
+    "Controls the matrix range for the next Random click. Zero produces identity matrices; 100% uses the original range; 300% triples it. Existing matrices are unchanged." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "控制下次点击“随机”时的矩阵范围。零生成单位矩阵，100% 使用原始范围，300% 为三倍范围。现有矩阵保持不变。"
+          }
+        }
+      }
+    },
     "Convert to WB" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1411,6 +1509,26 @@
         }
       }
     },
+    "Cross Processing" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "交叉冲洗"
+          }
+        }
+      }
+    },
+    "Cross Processing code" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "交叉冲洗代码"
+          }
+        }
+      }
+    },
     "Curve: SDR" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1432,6 +1550,9 @@
           }
         }
       }
+    },
+    "Cut" : {
+
     },
     "Cyan" : {
       "extractionState" : "manual",
@@ -1694,7 +1815,19 @@
         }
       }
     },
+    "Dye matrices" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "染料矩阵"
+          }
+        }
+      }
+    },
     "Dye Response" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -1790,6 +1923,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "编码后大小"
+          }
+        }
+      }
+    },
+    "Enter 18 finite numbers between −16 and 16. Previous matrices are unchanged." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请输入 18 个介于 −16 和 16 之间的有限数值。原矩阵保持不变。"
           }
         }
       }
@@ -2003,6 +2147,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "胶片颗粒改编自 mr-berndt 的 cinegrain2。"
+          }
+        }
+      }
+    },
+    "Film Lock" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "锁定胶片"
+          }
+        }
+      }
+    },
+    "Film response processing failed." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "胶片响应处理失败。"
           }
         }
       }
@@ -2770,6 +2934,16 @@
         }
       }
     },
+    "Invalid Cross Processing code. Settings are unchanged." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "交叉冲洗代码无效。设置未更改。"
+          }
+        }
+      }
+    },
     "Invalid or unsupported .cube LUT." : {
       "localizations" : {
         "zh-Hans" : {
@@ -2839,6 +3013,7 @@
       }
     },
     "Left Panel" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -3000,16 +3175,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "锁定"
-          }
-        }
-      }
-    },
-    "Lock Film" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "锁定胶片"
           }
         }
       }
@@ -3319,6 +3484,16 @@
         }
       }
     },
+    "Mouse" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "鼠标"
+          }
+        }
+      }
+    },
     "Move the white point to SDR level 254/255 and scale Contrast by the same ratio." : {
       "localizations" : {
         "zh-Hans" : {
@@ -3378,6 +3553,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "名称"
+          }
+        }
+      }
+    },
+    "Navigation" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导航方式"
           }
         }
       }
@@ -3914,6 +4099,27 @@
         }
       }
     },
+    "Random" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "随机"
+          }
+        }
+      }
+    },
+    "Randomization strength" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "随机强度"
+          }
+        }
+      }
+    },
     "Ranka" : {
       "localizations" : {
         "en" : {
@@ -4215,6 +4421,16 @@
         }
       }
     },
+    "Reverse Mouse Scroll Direction" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "反转鼠标滚轮方向"
+          }
+        }
+      }
+    },
     "RGB Contrast" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4379,6 +4595,16 @@
         }
       }
     },
+    "Save or discard pending edits before Film Lock, or choose Cancel to keep them unsaved and continue using the current edit." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在胶片锁定前保存或放弃待处理的编辑，或选择取消以保留未保存的编辑并继续使用当前编辑。"
+          }
+        }
+      }
+    },
     "Save your settings" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -4439,6 +4665,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "屏幕保护"
+          }
+        }
+      }
+    },
+    "Scroll to zoom. Drag to pan. Double-click to zoom in or fit." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "滚动缩放，拖动平移，双击放大或适应窗口。"
           }
         }
       }
@@ -4577,6 +4813,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "设置对比度"
+          }
+        }
+      }
+    },
+    "Sets the range for the next Brew. Zero produces identity matrices; 100% uses the original range; 300% triples it. Existing matrices are unchanged until you brew." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "设置下次调制的范围。零生成单位矩阵，100% 使用原始范围，300% 为三倍范围。点击调制之前，现有矩阵保持不变。"
           }
         }
       }
@@ -5222,6 +5468,16 @@
         }
       }
     },
+    "Touchpad" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "触控板"
+          }
+        }
+      }
+    },
     "Transform" : {
       "localizations" : {
         "zh-Hans" : {
@@ -5386,6 +5642,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "上一级"
+          }
+        }
+      }
+    },
+    "Update with Current" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用当前编辑更新"
           }
         }
       }
@@ -5650,6 +5916,56 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "零为线性。负值会降低影调位置附近的对比度。"
+          }
+        }
+      }
+    },
+    "Variation Export…" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "变体导出…"
+          }
+        }
+      }
+    },
+    "Variation Export" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "变体导出"
+          }
+        }
+      }
+    },
+    "Grid size" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "网格大小"
+          }
+        }
+      }
+    },
+    "Tile size" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "单图尺寸"
+          }
+        }
+      }
+    },
+    "One SDR image. Each tile gets a fresh Brew at the current strength." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导出一张 SDR 拼图。每张子图均按当前强度重新调制。"
           }
         }
       }

@@ -24,11 +24,9 @@ struct SplitToneGradientEditor: View {
             GeometryReader { proxy in
                 let width=max(1,proxy.size.width-20)
                 ZStack(alignment: .leading) {
-                    LinearGradient(colors:(0...32).map{Color(white:Double($0)/32)},startPoint:.leading,endPoint:.trailing)
-                        .frame(height:30)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(.primary.opacity(0.25), lineWidth: EditorGraphStyle.rim))
-                        .overlay(RoundedRectangle(cornerRadius: 8).fill(LinearGradient(colors: [.white.opacity(0.18), .clear, .black.opacity(0.12)], startPoint: .top, endPoint: .bottom)).allowsHitTesting(false))
+                    Capsule().fill(EditorSliderTracks.tone)
+                        .frame(height: EditorGraphStyle.trackWidth)
+                        .frame(height: 40)
                         .padding(.horizontal,10)
                         .contentShape(Rectangle())
                         .gesture(SpatialTapGesture().onEnded { tap in
@@ -69,7 +67,7 @@ struct SplitToneGradientEditor: View {
                             .accessibilityValue(node.lightness.formatted())
                     }
                 }.frame(height:40)
-            }.coordinateSpace(name:"toneGradient").frame(height:60)
+            }.coordinateSpace(name:"toneGradient").frame(height:60).modifier(DisabledControlAppearance())
             HStack {
                 Text("Black")
                 Spacer()
@@ -77,13 +75,7 @@ struct SplitToneGradientEditor: View {
                 Text(maximum,format:.number.precision(.fractionLength(3)))
             }.font(.caption).foregroundStyle(.secondary)
             if let node=selected {
-                HStack {
-                    Text("Lightness")
-                    EditorSlider(value:Binding(get:{selected?.lightness ?? 0},set:{new in update{$0.lightness=new}}),in:0...maximum)
-                        .controlReset { update { $0.lightness = defaults.color.splitTone.nodes?.first(where: { $0.id == node.id })?.lightness ?? maximum / 2 } }
-                    AdjustmentField(title: "Lightness", value: Binding(get: { selected?.lightness ?? 0 }, set: { v in update { $0.lightness=v } }), range: 0...maximum, digits: 3)
-                }
-                wheel(node).frame(height:230)
+                wheel(node).frame(height:230).modifier(DisabledControlAppearance())
                 HStack {
                     Text("Hue")
                     AdjustmentField(title: "Hue", value: Binding(get: { selected?.hue ?? 0 }, set: { v in update { $0.hue=v } }), range: 0...360, digits: 0, unit: "°")

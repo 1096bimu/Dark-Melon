@@ -28,10 +28,25 @@ private struct ImageInfoFocus: FocusedValueKey {
 private struct TutorialFocus: FocusedValueKey {
     typealias Value = () -> Void
 }
+private struct VariationExportFocus: FocusedValueKey { typealias Value = () -> Void }
 private struct BatchExportFocus: FocusedValueKey {
     typealias Value = () -> Void
 }
+private struct CopyDevelopmentFocus: FocusedValueKey { typealias Value = () -> Void }
+private struct PasteDevelopmentFocus: FocusedValueKey { typealias Value = () -> Void }
 extension FocusedValues {
+    var variationExport: (() -> Void)? {
+        get { self[VariationExportFocus.self] }
+        set { self[VariationExportFocus.self] = newValue }
+    }
+    var copyDevelopmentSettings: (() -> Void)? {
+        get { self[CopyDevelopmentFocus.self] }
+        set { self[CopyDevelopmentFocus.self] = newValue }
+    }
+    var pasteDevelopmentSettings: (() -> Void)? {
+        get { self[PasteDevelopmentFocus.self] }
+        set { self[PasteDevelopmentFocus.self] = newValue }
+    }
     var imageInfoVisible: Binding<Bool>? {
         get { self[ImageInfoFocus.self] }
         set { self[ImageInfoFocus.self] = newValue }
@@ -56,15 +71,34 @@ extension FocusedValues {
 
 #if os(macOS)
 struct EditorCommands: Commands {
+    @FocusedValue(\.copyDevelopmentSettings) private var copySettings
+    @FocusedValue(\.pasteDevelopmentSettings) private var pasteSettings
+    private var textEditor: NSTextView? { NSApp.keyWindow?.firstResponder as? NSTextView }
     @FocusedValue(\.editorUndo) private var editUndo
     @FocusedValue(\.toggleEditorPicker) private var togglePicker
     @FocusedBinding(\.editorPanel) private var panel
     @FocusedBinding(\.imageInfoVisible) private var imageInfoVisible
+    @FocusedValue(\.variationExport) private var variationExport
     @FocusedValue(\.batchExport) private var batchExport
     @FocusedValue(\.startTutorial) private var startTutorial
     private var textCanUndo: Bool { (NSApp.keyWindow?.firstResponder as? NSTextView)?.undoManager?.canUndo ?? false }
     private var textCanRedo: Bool { (NSApp.keyWindow?.firstResponder as? NSTextView)?.undoManager?.canRedo ?? false }
     var body: some Commands {
+        CommandGroup(replacing: .pasteboard) {
+            Button("Cut") { textEditor?.cut(nil) }
+                .keyboardShortcut("x", modifiers: .command)
+                .disabled(textEditor == nil)
+            Button("Copy") {
+                if let textEditor { textEditor.copy(nil) } else { copySettings?() }
+            }
+            .keyboardShortcut("c", modifiers: .command)
+            .disabled(textEditor == nil && copySettings == nil)
+            Button("Paste") {
+                if let textEditor { textEditor.paste(nil) } else { pasteSettings?() }
+            }
+            .keyboardShortcut("v", modifiers: .command)
+            .disabled(textEditor == nil && pasteSettings == nil)
+        }
         CommandGroup(replacing: .undoRedo) {
             Button(editUndo?.undoTitle ?? String(localized: "Undo")) {
                 if let text = NSApp.keyWindow?.firstResponder as? NSTextView, let manager = text.undoManager, manager.canUndo {
@@ -102,6 +136,9 @@ struct EditorCommands: Commands {
                 .disabled(startTutorial == nil)
         }
         CommandMenu("Tools") {
+            Button("Variation Export…") { variationExport?() }
+                .disabled(variationExport == nil)
+            Divider()
             Button("White Balance Picker") { togglePicker?(.whiteBalance) }
                 .keyboardShortcut("w", modifiers: [])
                 .disabled(togglePicker == nil)
@@ -128,6 +165,8 @@ struct EditorSettingsView: View {
     @State private var section = 0
     @AppStorage(ExportMetadata.effectiveISOPreferenceKey) private var effectiveISO = true
     @AppStorage(HDRScreenSaver.preferenceKey) private var screenSaver = false
+    @AppStorage("previewMouseControls") private var mouseControls = false
+    @AppStorage("previewReverseMouseScroll") private var reverseMouseScroll = false
     @AppStorage("showHueTwister") private var showHueTwister = false
     @AppStorage("showContrastDistribution") private var showContrastDistribution = true
     @AppStorage("showAdvancedRAWControls") private var showAdvancedRAWControls = false
@@ -152,6 +191,12 @@ struct EditorSettingsView: View {
     private var preferencesView: some View {
         Form {
             Section("Preview") {
+                Picker("Navigation", selection: $mouseControls) {
+                    Text("Touchpad").tag(false)
+                    Text("Mouse").tag(true)
+                }.pickerStyle(.segmented)
+                Toggle("Reverse Mouse Scroll Direction", isOn: $reverseMouseScroll)
+                    .disabled(!mouseControls)
                 Toggle("Screen Saver", isOn: $screenSaver)
                     .help("Fade the HDR preview to SDR when the app loses focus or after one minute without mouse or keyboard input. Activity restores HDR without changing the selected preview mode.")
                 Text("Dims the screen from HDR brightness to avoid burn-in.")

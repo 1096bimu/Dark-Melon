@@ -37,11 +37,11 @@ struct VectorscopeView: View {
     private var gainValues: some View {
         HStack(spacing: 6) {
             Text("R")
-            AdjustmentField(title: "Red gain", value: $mapping.whiteBalance.red, range: 0.000001...256, digits: 3, width: 60)
+            AdjustmentField(title: "Red gain", value: $mapping.whiteBalance.red, range: 0.000001...10000, digits: 3, width: 60)
             Text("G")
-            AdjustmentField(title: "Green gain", value: $mapping.whiteBalance.green, range: 0.000001...256, digits: 3, width: 60)
+            AdjustmentField(title: "Green gain", value: $mapping.whiteBalance.green, range: 0.000001...10000, digits: 3, width: 60)
             Text("B")
-            AdjustmentField(title: "Blue gain", value: $mapping.whiteBalance.blue, range: 0.000001...256, digits: 3, width: 60)
+            AdjustmentField(title: "Blue gain", value: $mapping.whiteBalance.blue, range: 0.000001...10000, digits: 3, width: 60)
         }.filmLock(.rgbWhiteBalance)
     }
 
@@ -191,7 +191,7 @@ struct VectorscopeView: View {
                         AdjustmentField(title: "Temperature", value: Binding(
                             get: { Double(mapping.rawWhiteBalance?.temperature ?? 6500) },
                             set: { mapping.rawWhiteBalance?.temperature = Float($0) }),
-                            range: 2000...10000, digits: 0, unit: "K", commit: commitRAWBalance).filmLock(.rawWhiteBalance)
+                            range: 2000...50000, digits: 0, unit: "K", commit: commitRAWBalance).filmLock(.rawWhiteBalance)
                     }
                     EditorSlider(value: Binding(get: { Double(mapping.rawWhiteBalance?.temperature ?? 6500) }, set: {
                         mapping.rawWhiteBalance?.temperature = Float($0)
@@ -205,7 +205,7 @@ struct VectorscopeView: View {
                         AdjustmentField(title: "Tint", value: Binding(
                             get: { Double(mapping.rawWhiteBalance?.tint ?? 0) },
                             set: { mapping.rawWhiteBalance?.tint = Float($0) }),
-                            range: -50...50, digits: 2, commit: commitRAWBalance).filmLock(.rawWhiteBalance)
+                            range: -150...150, digits: 2, commit: commitRAWBalance).filmLock(.rawWhiteBalance)
                     }
                     EditorSlider(value: Binding(get: { Double(mapping.rawWhiteBalance?.tint ?? 0) }, set: {
                         mapping.rawWhiteBalance?.tint = Float($0)

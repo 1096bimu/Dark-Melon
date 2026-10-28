@@ -56,9 +56,9 @@ struct BrowserGridProbe: View {
         for width:CGFloat in [270,271,272,273,274,275,271] {
             precondition(BrowserGridLayout.columnCount(for:width,current:2)==2,"Breakpoint jitter changed columns")
         }
-        precondition(BrowserGridLayout.columnCount(for:280,current:2)==3)
-        precondition(BrowserGridLayout.columnCount(for:271,current:3)==3)
-        precondition(BrowserGridLayout.columnCount(for:265,current:3)==2)
+        precondition(BrowserGridLayout.columnCount(for:300,current:2)==3)
+        precondition(BrowserGridLayout.columnCount(for:295,current:3)==3)
+        precondition(BrowserGridLayout.columnCount(for:290,current:3)==2)
         try await Task.sleep(for:.milliseconds(400))
         for width:CGFloat in [160,175,179,180,181,183,184,185,188,200,240,271] {
             window.setContentSize(NSSize(width:width,height:600))

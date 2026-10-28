@@ -50,6 +50,16 @@ import Foundation
   assert(pending.entry(for:a) != nil)
   pending.remember(url:a,recipe:all,baseline:all,saved:all)
   assert(pending.entry(for:a) == nil)
+  // Deferred gestures publish only their final state, with one undo step.
+  h.clear();h.activate(a,recipe:initial)
+  h.interacting=true
+  let revision=h.revision
+  var live=initial
+  for step in 0..<100 { live.mapping.concentration=Double(step)/100 }
+  assert(h.revision==revision && !h.canUndo)
+  h.interacting=false;h.observe(live);h.flush()
+  h.undo();assert(restored==initial && !h.canUndo)
+  h.redo();assert(restored==live)
   h.clear();assert(!h.canUndo && !h.canRedo)
   print("PASS: grouped edits, reciprocal redo, branch invalidation, per-file histories, reload/save retention, offscreen paste, exact recipes, dirty-state comparison.")
  }

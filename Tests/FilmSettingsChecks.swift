@@ -53,6 +53,8 @@ import Foundation
         retained.hdrTarget = photo.hdrTarget
         assert(retained == photo)
         assert(lock.applying(to: result) == result)
+        assert(FilmSettings.film.contains(.contrastDistribution))
+        assert(FilmSettings.digital.contains(.contrastDistribution))
         assert(!FilmSettings.film.contains(.whitePoint) && !FilmSettings.film.contains(.tone))
         assert(!FilmSettings.digital.contains(.whitePoint) && !FilmSettings.digital.contains(.tone))
         let isoEdit = ToneISOProxy.applying(exposure: 2, to: result)

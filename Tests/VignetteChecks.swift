@@ -46,7 +46,7 @@ import CoreImage
   var m=json["mapping"] as! [String:Any];m.removeValue(forKey:"vignette");json["mapping"]=m
   let old=try DevelopmentRecipe.decode(JSONSerialization.data(withJSONObject:json));assert(old.mapping.vignette==VignetteSettings())
   assert(SettingsPasteSelection().applying(mapping,to:ToneMapping()).vignette==mapping.vignette)
-  mapping.vignette.amount=5
+  mapping.vignette.amount=33
   do { _=try DevelopmentRecipe.decode(DevelopmentRecipe(colorSpace:.sRGB,mapping:mapping).encoded());fatalError("Invalid accepted") } catch RecipeError.invalid { }
   print("PASS: vignette GPU exposure, center/corners/spread, rotated/perspective/aspect geometry, recipes and paste")
  }

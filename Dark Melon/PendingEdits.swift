@@ -11,7 +11,10 @@ nonisolated struct PendingEdits {
         var id: URL { url }
     }
     private(set) var entries: [Entry] = []
-    func entry(for url: URL) -> Entry? { entries.first { $0.url == url.standardizedFileURL } }
+    func entry(for url: URL) -> Entry? {
+        let key = url.standardizedFileURL
+        return entries.first { $0.url == key }
+    }
     mutating func remember(url: URL, recipe: DevelopmentRecipe, baseline: DevelopmentRecipe, saved: DevelopmentRecipe?, session: SnapshotSession? = nil) {
         let url = url.standardizedFileURL
         guard recipe != baseline else { remove(url); return }
@@ -21,6 +24,9 @@ nonisolated struct PendingEdits {
         if let index = entries.firstIndex(where: { $0.url == url }) { entries[index] = entry }
         else { entries.append(entry) }
     }
-    mutating func remove(_ url: URL) { entries.removeAll { $0.url == url.standardizedFileURL } }
+    mutating func remove(_ url: URL) {
+        let key = url.standardizedFileURL
+        entries.removeAll { $0.url == key }
+    }
     mutating func clear() { entries.removeAll() }
 }

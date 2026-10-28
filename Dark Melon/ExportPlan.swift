@@ -28,16 +28,18 @@ nonisolated struct ExportPlan: Sendable {
     let items: [PreparedExportItem]
     let settings: HEIFSettings
     let failures: [String]
+    let variation: VariationExport?
 
-    init(items: [PreparedExportItem], settings: HEIFSettings, failures: [String] = []) {
+    init(items: [PreparedExportItem], settings: HEIFSettings, failures: [String] = [], variation: VariationExport? = nil) {
         self.items = items
         self.settings = settings
         self.failures = failures
+        self.variation = variation
     }
 
     @concurrent
     static func prepare(files: [URL], film: FilmSettings?, maximizeRAWRange: Bool,
-                        rawDefault: RAWDefaultPreset? = nil,
+                        rawDefault: RAWDefaultPreset? = nil, recipeOverrides: [URL: DevelopmentRecipe] = [:],
                         progress: @escaping @MainActor @Sendable (Int, Int) -> Void) async throws -> (items: [PreparedExportItem], failures: [String]) {
         let rawDefault = if let rawDefault { rawDefault } else { await EditLibrary.shared.rawDefaultPreset }
         let pixels = try files.map {
@@ -69,6 +71,13 @@ nonisolated struct ExportPlan: Sendable {
                     group.addTask {
                         do {
                             try Task.checkCancellation()
+                            // In-memory edits are already resolved, just like single export.
+                            // Never replace them with fresh RAW defaults or a sidecar.
+                            if let current = recipeOverrides[url.standardizedFileURL] {
+                                let recipe = film?.applying(to: current) ?? current
+                                return PreparationResult(index: index, cost: cost,
+                                    item: PreparedExportItem(source: url, recipe: recipe, pixels: pixels[index]), error: nil)
+                            }
                             let target = try await BrowserRecipeTarget.load(url)
                             let worker = RAWDeveloper(colorSpace: target.recipe.colorSpace, rawSettings: target.recipe.rawSettings,
                                                       rawWhiteBalance: target.recipe.mapping.rawWhiteBalance, exporting: true, memoryLimitMB: allocation.megabytesPerFile)

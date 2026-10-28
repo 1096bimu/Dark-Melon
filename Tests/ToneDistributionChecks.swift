@@ -90,7 +90,7 @@ import CoreImage
         oldMapping.removeValue(forKey: "contrastDistribution"); old["mapping"] = oldMapping
         let legacy = try DevelopmentRecipe.decode(JSONSerialization.data(withJSONObject: old))
         assert(legacy.mapping.contrastDistribution == [0,0,0,0])
-        var invalid = recipe; invalid.mapping.contrastDistribution = [0,0,0,2.01]
+        var invalid = recipe; invalid.mapping.contrastDistribution = [0,0,0,8.01]
         do { _ = try DevelopmentRecipe.decode(invalid.encoded()); fatalError("Invalid contrast weights accepted") }
         catch RecipeError.invalid { }
         let selection = SettingsPasteSelection(items: [.contrastDistribution])

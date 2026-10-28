@@ -8,23 +8,38 @@ import AppKit
 #endif
 
 nonisolated enum BrowserGridLayout {
-    static let thumbnailMinimum: CGFloat = 80
     static let spacing: CGFloat = 8
     static let padding: CGFloat = 8
-    // Stay one point below the width at which a third thumbnail fits.
-    static let twoColumnWidth = 3 * thumbnailMinimum + 2 * spacing + 2 * padding - 1
+    // Three discrete layouts. Image/editor updates never resize a thumbnail.
+    static func cellWidth(columns: Int) -> CGFloat {
+        switch columns {
+        case 1: 160
+        case 2: 112
+        default: 88
+        }
+    }
+    static func minimumWidth(columns: Int) -> CGFloat {
+        CGFloat(columns) * cellWidth(columns: columns)
+            + CGFloat(columns - 1) * spacing + 2 * padding
+    }
+    static let batchCellWidth: CGFloat = 112
+    static func batchColumnCount(for width: CGFloat, current: Int) -> Int {
+        guard width.isFinite else { return 1 }
+        let stride = batchCellWidth + spacing
+        let available = width - 2 * padding + spacing
+        let lower = max(1, Int(((available - 4) / stride).rounded(.down)))
+        let upper = max(1, Int(((available + 4) / stride).rounded(.down)))
+        return min(upper, max(lower, current))
+    }
+
+    static let twoColumnWidth = minimumWidth(columns: 3) - 1
 
     static func columnCount(for viewportWidth: CGFloat, current: Int) -> Int {
         guard viewportWidth.isFinite else { return 1 }
-        let available = max(0, viewportWidth - 2 * padding)
-        let count = max(1, Int(((available + spacing) / (thumbnailMinimum + spacing)).rounded(.down)))
-        func minimumWidth(_ columns: Int) -> CGFloat {
-            CGFloat(columns) * (thumbnailMinimum + spacing) - spacing + 2 * padding
-        }
-        // A few points of hysteresis stop split-view rounding near a breakpoint
-        // from repeatedly swapping between large and small thumbnails.
-        if count > current, viewportWidth < minimumWidth(current + 1) + 4 { return current }
-        if count < current, viewportWidth >= minimumWidth(current) - 4 { return current }
+        var count = min(3, max(1, current))
+        // Keep a small dead band at each transition for split-view rounding.
+        while count < 3, viewportWidth >= minimumWidth(columns: count + 1) + 4 { count += 1 }
+        while count > 1, viewportWidth < minimumWidth(columns: count) - 4 { count -= 1 }
         return count
     }
 }
@@ -55,7 +70,7 @@ final class ImageBrowserModel {
             switch filter {
             case .all: return true
             case .raw: return $0.isRAW
-            case .edited: return $0.hasSavedSettings || pendingURLs.contains($0.url.standardizedFileURL)
+            case .edited: return $0.hasSavedSettings || pendingURLs.contains($0.url)
             }
         }
     }
@@ -64,7 +79,7 @@ final class ImageBrowserModel {
         guard !loading, direction == -1 || direction == 1 else { return nil }
         let files = visibleFiles
         guard !files.isEmpty else { return nil }
-        guard let current, let index = files.firstIndex(where: { $0.url.standardizedFileURL == current.standardizedFileURL }) else {
+        guard let current, let index = files.firstIndex(where: { $0.url == current.standardizedFileURL }) else {
             return direction > 0 ? files.first?.url : files.last?.url
         }
         let next = index + direction
@@ -84,12 +99,95 @@ final class ImageBrowserModel {
     private var access: [URL] = []
     private var listing: Task<Void, Never>?
 
+    private let remembersFolder: Bool
+    private var restoreStarted = false
+    private var restoreID: UUID?
+    private var restoreTimeout: Task<Void, Never>?
+    private var bookmarkRevision = UUID()
+    private static let bookmarkKey = "browser.lastFolderBookmarks"
+    init(remembersFolder: Bool = false) { self.remembersFolder = remembersFolder }
+
+    private func rememberFolder() {
+        guard remembersFolder, let root, let directory else { return }
+        let revision = UUID()
+        bookmarkRevision = revision
+        Task {
+            let data = await Task.detached(priority: .utility) { () -> Data? in
+                #if os(macOS)
+                let options: URL.BookmarkCreationOptions = [.withSecurityScope]
+                #else
+                let options: URL.BookmarkCreationOptions = []
+                #endif
+                guard let rootData = try? root.bookmarkData(options: options, includingResourceValuesForKeys: nil, relativeTo: nil),
+                      let directoryData = try? directory.bookmarkData(options: options, includingResourceValuesForKeys: nil, relativeTo: nil) else { return nil }
+                return try? PropertyListEncoder().encode([rootData, directoryData])
+            }.value
+            guard bookmarkRevision == revision, let data else { return }
+            UserDefaults.standard.set(data, forKey: Self.bookmarkKey)
+        }
+    }
+
+    func restoreLastFolder() {
+        guard remembersFolder, !restoreStarted else { return }
+        restoreStarted = true
+        guard directory == nil,
+              let data = UserDefaults.standard.data(forKey: Self.bookmarkKey),
+              let bookmarks = try? PropertyListDecoder().decode([Data].self, from: data), bookmarks.count == 2 else { return }
+        let id = UUID()
+        restoreID = id
+        restoreTimeout = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(5))
+            guard !Task.isCancelled, let self, self.restoreID == id else { return }
+            self.abandonRestoration()
+        }
+        Task {
+            let resolved = await Task.detached(priority: .utility) { () -> (URL, URL, [URL])? in
+                #if os(macOS)
+                let options: URL.BookmarkResolutionOptions = [.withSecurityScope, .withoutUI, .withoutMounting]
+                #else
+                let options: URL.BookmarkResolutionOptions = [.withoutUI, .withoutMounting]
+                #endif
+                var stale = false
+                guard let root = try? URL(resolvingBookmarkData: bookmarks[0], options: options, relativeTo: nil, bookmarkDataIsStale: &stale) else { return nil }
+                var access: [URL] = []
+                if root.startAccessingSecurityScopedResource() { access.append(root) }
+                guard let directory = try? URL(resolvingBookmarkData: bookmarks[1], options: options, relativeTo: nil, bookmarkDataIsStale: &stale) else {
+                    for url in access { url.stopAccessingSecurityScopedResource() }
+                    return nil
+                }
+                if directory != root, directory.startAccessingSecurityScopedResource() { access.append(directory) }
+                return (root, directory, access)
+            }.value
+            guard restoreID == id else {
+                if let resolved { for url in resolved.2 { url.stopAccessingSecurityScopedResource() } }
+                return
+            }
+            guard let resolved else { abandonRestoration(); return }
+            access.append(contentsOf: resolved.2)
+            root = resolved.0
+            navigate(to: resolved.1, restoring: true)
+        }
+    }
+    private func abandonRestoration() {
+        restoreID = nil
+        restoreTimeout?.cancel()
+        listing?.cancel()
+        root = nil; directory = nil; entries = []; folderCounts = [:]
+        loading = false; error = nil
+        for url in access { url.stopAccessingSecurityScopedResource() }
+        access = []
+    }
+
     func choose(_ url: URL) {
         if !access.contains(url), url.startAccessingSecurityScopedResource() { access.append(url) }
         root = url
         navigate(to: url)
     }
-    func navigate(to url: URL) {
+    func navigate(to url: URL, restoring: Bool = false) {
+        if !restoring {
+            restoreID = nil
+            restoreTimeout?.cancel()
+        }
         let parent = url.standardizedFileURL
         returnFolder = nil
         if let previous = directory?.standardizedFileURL,
@@ -102,6 +200,7 @@ final class ImageBrowserModel {
         }
         listing?.cancel()
         directory = url
+        if !restoring { rememberFolder() }
         entries = []
         folderCounts = [:]
         error = nil
@@ -120,7 +219,7 @@ final class ImageBrowserModel {
                         let values = try item.resourceValues(forKeys: keys)
                         let folder = values.isDirectory == true && values.isPackage != true
                         guard folder || values.contentType?.conforms(to: .image) == true else { return nil }
-                        return BrowserEntry(url: item, isFolder: folder,
+                        return BrowserEntry(url: item.standardizedFileURL, isFolder: folder,
                             hasSavedSettings: !folder && names.contains(RecipeStore.sidecarURL(for: item).lastPathComponent),
                             isRAW: values.contentType?.conforms(to: .rawImage) == true)
                     }.sorted {
@@ -129,6 +228,11 @@ final class ImageBrowserModel {
                     }
                 }.value
                 try Task.checkCancellation()
+                if restoring {
+                    restoreID = nil
+                    restoreTimeout?.cancel()
+                    rememberFolder()
+                }
                 entries = result
                 listingRevision = UUID()
                 loading = false
@@ -144,6 +248,7 @@ final class ImageBrowserModel {
             } catch is CancellationError {
             } catch {
                 guard !Task.isCancelled else { return }
+                if restoring { abandonRestoration(); return }
                 self.error = error.localizedDescription
                 loading = false
             }
@@ -167,6 +272,7 @@ final class ImageBrowserModel {
 
     isolated deinit {
         listing?.cancel()
+        restoreTimeout?.cancel()
         for url in access { url.stopAccessingSecurityScopedResource() }
     }
 }
@@ -176,10 +282,11 @@ struct ImageFileBrowser: View {
     let open: (URL) -> Void
     var model: ImageBrowserModel
     var selection: Binding<Set<URL>>? = nil
+    var expandedGrid = false
     var changeDirectory: ((URL, Bool) -> Void)? = nil
     var fileAction: ((BrowserFileAction, URL) -> Void)? = nil
     var multipleFileAction: ((BrowserFileAction, [URL]) -> Void)? = nil
-    var hasPendingEdit: ((URL) -> Bool)? = nil
+    var pendingURLs: Set<URL> = []
     @State private var centeredOnOpen = false
     @State private var choosingFolder = false
     @State private var selectedFiles: Set<URL> = []
@@ -231,10 +338,9 @@ struct ImageFileBrowser: View {
         // builders. Async listings must invalidate this view even when the first
         // layout happened while the directory was still empty.
         let entries = model.entries
-        let pendingURLs = Set(entries.filter { !$0.isFolder && (hasPendingEdit?($0.url) ?? false) }.map { $0.url.standardizedFileURL })
         let folders = selection == nil ? entries.filter(\.isFolder) : []
         let visible = model.filter == .edited
-            ? entries.filter { !$0.isFolder && ($0.hasSavedSettings || pendingURLs.contains($0.url.standardizedFileURL)) }
+            ? entries.filter { !$0.isFolder && ($0.hasSavedSettings || pendingURLs.contains($0.url)) }
             : model.visibleFiles
         let files = selection == nil ? visible : visible.filter(\.hasSavedSettings) + visible.filter { !$0.hasSavedSettings }
         let folderCounts = model.folderCounts
@@ -266,13 +372,12 @@ struct ImageFileBrowser: View {
                 .padding(.horizontal, 12).padding(.bottom, 8)
                 ScrollViewReader { proxy in
                     GeometryReader { viewport in
-                        let cellWidth = max(1, (viewport.size.width - 2 * BrowserGridLayout.padding
-                            - CGFloat(gridColumnCount - 1) * BrowserGridLayout.spacing) / CGFloat(gridColumnCount))
+                        let cellWidth = expandedGrid ? BrowserGridLayout.batchCellWidth : BrowserGridLayout.cellWidth(columns: gridColumnCount)
                         ScrollView {
                             VStack(spacing: 4) {
                                 LazyVStack(spacing: 4) {
                                     ForEach(folders) { entry in
-                                        let rank = recent.firstIndex(of: entry.url.standardizedFileURL)
+                                        let rank = recent.firstIndex(of: entry.url)
                                         let warmth: Color = rank == 0 ? .orange : rank == 1 ? .yellow : .cyan
                                         Button { navigate(entry.url) } label: {
                                             HStack {
@@ -294,12 +399,11 @@ struct ImageFileBrowser: View {
                                             .contentShape(Rectangle())
                                         }
                                         .buttonStyle(.plain)
-                                        .id(entry.url.standardizedFileURL)
+                                        .id(entry.url)
                                         .accessibilityValue(rank.map { "Recently visited folder, \($0 + 1) of \(recent.count)" } ?? "")
                                     }
                                 }
-                                // Both columns and cells use the outer viewport, independent
-                                // of scroll content and thumbnail intrinsic sizes.
+                                // Fixed cells do not stretch with scrollbars or parent layout updates.
                                 LazyVGrid(columns: Array(repeating: GridItem(.fixed(cellWidth), spacing: BrowserGridLayout.spacing), count: gridColumnCount), spacing: BrowserGridLayout.spacing) {
                                     ForEach(files) { entry in
                                         Button {
@@ -318,7 +422,7 @@ struct ImageFileBrowser: View {
                                                 }
 
                                         }
-                                        .id(entry.url.standardizedFileURL)
+                                        .id(entry.url)
                                         .buttonStyle(.plain)
                                         .help(entry.url.lastPathComponent + (entry.hasSavedSettings ? " · " + String(localized: "Saved development settings") : ""))
                                         .accessibilityValue(entry.hasSavedSettings ? "Saved development settings" : "")
@@ -329,7 +433,7 @@ struct ImageFileBrowser: View {
                                                     if let multipleFileAction { multipleFileAction(.deleteEdit, targets) }
                                                     else { fileAction(.deleteEdit, entry.url) }
                                                 }
-                                                .disabled(!files.contains { targets.contains($0.url) && ($0.hasSavedSettings || (hasPendingEdit?($0.url) ?? false)) })
+                                                .disabled(!files.contains { targets.contains($0.url) && ($0.hasSavedSettings || pendingURLs.contains($0.url)) })
                                                 #if os(macOS)
                                                 Button("Show in Finder") { fileAction(.showInFinder, entry.url) }
                                                 #endif
@@ -350,22 +454,25 @@ struct ImageFileBrowser: View {
                             .frame(width: viewport.size.width)
                         }
                         .onChange(of: viewport.size.width.rounded(.down), initial: true) { _, width in
-                            let count = BrowserGridLayout.columnCount(for: width, current: gridColumnCount)
+                            let count = expandedGrid
+                                ? BrowserGridLayout.batchColumnCount(for: width, current: gridColumnCount)
+                                : BrowserGridLayout.columnCount(for: width, current: gridColumnCount)
                             if count != gridColumnCount { gridColumnCount = count }
                         }
                         .onChange(of: selectedURL) { _, url in
-                            guard selection == nil, let url,
-                                  files.contains(where: { $0.url.standardizedFileURL == url.standardizedFileURL }) else { return }
-                            proxy.scrollTo(url.standardizedFileURL, anchor: .center)
+                            guard selection == nil, let url else { return }
+                            let key = url.standardizedFileURL
+                            guard files.contains(where: { $0.url == key }) else { return }
+                            proxy.scrollTo(key, anchor: .center)
                         }
                         .task(id: listingRevision) {
                             let current = selectedURL?.standardizedFileURL
                             let target: URL?
                             if !centeredOnOpen, let current,
-                               files.contains(where: { $0.url.standardizedFileURL == current }) {
+                               files.contains(where: { $0.url == current }) {
                                 target = current
                             } else if let returnFolder,
-                                      folders.contains(where: { $0.url.standardizedFileURL == returnFolder }) {
+                                      folders.contains(where: { $0.url == returnFolder }) {
                                 target = returnFolder
                             } else { target = nil }
                             guard !model.loading else { return }

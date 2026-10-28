@@ -13,32 +13,8 @@ nonisolated final class Halation {
         case kernel
         var errorDescription: String? { String(localized: "Unable to create the Halation processing kernels.") }
     }
-    private let shape = CIColorKernel(source: """
-        kernel vec4 halationInput(__sample source, float exponent) {
-            vec4 p = unpremultiply(source);
-            vec3 positive = max(p.rgb, vec3(0.0));
-            // Shape the unit interval; preserve above-white headroom without power amplification.
-            vec3 shaped = pow(min(positive, vec3(1.0)), vec3(exponent))
-                + max(positive - vec3(1.0), vec3(0.0));
-            return premultiply(vec4(shaped, p.a));
-        }
-        """)
-    private let composite = CIColorKernel(source: """
-        kernel vec4 halationAdd(__sample source, __sample redHalo, __sample greenHalo, float strength, float transmission, float ceiling, float monochrome) {
-            vec4 p = unpremultiply(source);
-            if (monochrome > 0.5) {
-                p.rgb = max(p.rgb + strength * unpremultiply(redHalo).rgb, vec3(0.0));
-                if (ceiling > 0.0) { p.rgb = min(p.rgb, vec3(ceiling)); }
-                return premultiply(p);
-            }
-            float red = unpremultiply(redHalo).r;
-            float green = unpremultiply(greenHalo).g;
-            p.r = max(p.r + strength * red, 0.0);
-            p.g = max(p.g + strength * transmission * green, 0.0);
-            if (ceiling > 0.0) { p.rg = min(p.rg, vec2(ceiling)); }
-            return premultiply(p);
-        }
-        """)
+    private let shape = MetalImageKernels.color("halationInput")
+    private let composite = MetalImageKernels.color("halationAdd")
 
     /// A zero ceiling preserves scene-linear headroom before tone mapping.
     func apply(to image: CIImage, source: CIImage, settings: HalationSettings,
@@ -64,7 +40,7 @@ nonisolated final class Halation {
                 .cropped(to: image.extent)
             : halo
         guard let output = composite?.apply(extent: image.extent,
-            arguments: [image, halo, greenHalo, min(1, max(0, hdrBrightness) / 20), min(0.5, max(0, settings.transmission)), ceiling, monochrome ? 1.0 : 0.0]) else { throw HalationError.kernel }
+            arguments: [image, halo, greenHalo, min(1, max(0, hdrBrightness) / 20), settings.transmission.clamped(to: 0...1), ceiling, monochrome ? 1.0 : 0.0]) else { throw HalationError.kernel }
         return output
     }
 }

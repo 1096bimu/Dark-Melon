@@ -1,0 +1,597 @@
+[
+  {
+    "name": "filmResponse",
+    "color": true,
+    "source": "\nkernel vec4 filmResponse(__sample pixel, vec3 a0, vec3 a1, vec3 a2,\n                         vec3 b0, vec3 b1, vec3 b2, vec3 slopes, float reference) {\n    vec4 p = unpremultiply(pixel);\n    vec3 exposed = max(vec3(dot(a0,p.rgb), dot(a1,p.rgb), dot(a2,p.rgb)), vec3(0.0));\n    vec3 h = log2(max(exposed,vec3(1e-20)) / reference);\n    vec3 base = vec3(1.0) / (vec3(1.0) + exp(-h * 0.5));\n    vec3 layer = vec3(1.0) / (vec3(1.0) + exp(-h * slopes * 0.5));\n    vec3 response = exposed * exp2(8.0 * (layer - base));\n    vec3 returned = vec3(dot(b0,response), dot(b1,response), dot(b2,response));\n    return premultiply(vec4(max(returned,vec3(0.0)),p.a));\n}\n",
+    "arguments": [
+      [
+        "__sample",
+        "pixel"
+      ],
+      [
+        "vec3",
+        "a0"
+      ],
+      [
+        "vec3",
+        "a1"
+      ],
+      [
+        "vec3",
+        "a2"
+      ],
+      [
+        "vec3",
+        "b0"
+      ],
+      [
+        "vec3",
+        "b1"
+      ],
+      [
+        "vec3",
+        "b2"
+      ],
+      [
+        "vec3",
+        "slopes"
+      ],
+      [
+        "float",
+        "reference"
+      ]
+    ]
+  },
+  {
+    "name": "hdfAdd",
+    "color": true,
+    "source": "\nkernel vec4 hdfAdd(__sample pixel, __sample blurred, float amount) {\n    vec4 p = unpremultiply(pixel);\n    vec3 glow = unpremultiply(blurred).rgb;\n    return premultiply(vec4(max(p.rgb + amount * glow, vec3(0.0)), p.a));\n}\n",
+    "arguments": [
+      [
+        "__sample",
+        "pixel"
+      ],
+      [
+        "__sample",
+        "blurred"
+      ],
+      [
+        "float",
+        "amount"
+      ]
+    ]
+  },
+  {
+    "name": "clarityAdjust",
+    "color": true,
+    "source": "\nkernel vec4 clarityAdjust(__sample pixel, __sample blurred, float amount, float ceiling) {\n    vec4 p = unpremultiply(pixel);\n    vec3 base = clamp(p.rgb / ceiling, 0.0, 1.0);\n    vec3 low = unpremultiply(blurred).rgb / ceiling;\n    vec3 highPass = clamp(vec3(0.5) + base - low, 0.0, 1.0);\n    if (amount < 0.0) { highPass = 1.0 - highPass; }\n    vec3 d = mix(((16.0 * base - 12.0) * base + 4.0) * base,\n                 sqrt(base), step(vec3(0.25), base));\n    vec3 darken = base - (1.0 - 2.0 * highPass) * base * (1.0 - base);\n    vec3 lighten = base + (2.0 * highPass - 1.0) * (d - base);\n    vec3 blended = mix(darken, lighten, step(vec3(0.5), highPass));\n    vec3 result = clamp(mix(base, blended, clamp(abs(amount), 0.0, 2.0)), 0.0, 1.0);\n    return premultiply(vec4(result * ceiling, p.a));\n}\n",
+    "arguments": [
+      [
+        "__sample",
+        "pixel"
+      ],
+      [
+        "__sample",
+        "blurred"
+      ],
+      [
+        "float",
+        "amount"
+      ],
+      [
+        "float",
+        "ceiling"
+      ]
+    ]
+  },
+  {
+    "name": "toneMap",
+    "color": false,
+    "source": "\nkernel vec4 toneMap(sampler source, sampler table, float black, float span,\n                    float lastIndex) {\n    vec4 pixel = unpremultiply(sample(source, samplerCoord(source)));\n    vec3 t = (pixel.rgb - vec3(black)) / span;\n    vec3 u = clamp(t, 0.0, 1.0) * lastIndex + vec3(0.5);\n    vec3 mapped = vec3(\n        sample(table, samplerTransform(table, vec2(u.r, 0.5))).r,\n        sample(table, samplerTransform(table, vec2(u.g, 0.5))).g,\n        sample(table, samplerTransform(table, vec2(u.b, 0.5))).b);\n    return premultiply(vec4(mapped, pixel.a));\n}\n",
+    "arguments": [
+      [
+        "sampler",
+        "source"
+      ],
+      [
+        "sampler",
+        "table"
+      ],
+      [
+        "float",
+        "black"
+      ],
+      [
+        "float",
+        "span"
+      ],
+      [
+        "float",
+        "lastIndex"
+      ]
+    ]
+  },
+  {
+    "name": "toneLocator",
+    "color": true,
+    "source": "\nkernel vec4 toneLocator(__sample sourcePixel, __sample preview, vec3 weights,\n                        float position, float width, float clipping) {\n    vec3 rgb = unpremultiply(sourcePixel).rgb;\n    float distance = abs(dot(rgb, weights) - position);\n    float mask = 1.0 - smoothstep(width * 0.35, width, distance);\n    if (clipping > 0.5) { mask = step(position, max(rgb.r, max(rgb.g, rgb.b))); }\n    vec3 highlight = clipping > 0.5 ? vec3(1.0, 0.0, 0.0) : vec3(0.21404114);\n    vec4 base = unpremultiply(preview);\n    return premultiply(vec4(mix(base.rgb, highlight, mask * 0.9), base.a));\n}\n",
+    "arguments": [
+      [
+        "__sample",
+        "sourcePixel"
+      ],
+      [
+        "__sample",
+        "preview"
+      ],
+      [
+        "vec3",
+        "weights"
+      ],
+      [
+        "float",
+        "position"
+      ],
+      [
+        "float",
+        "width"
+      ],
+      [
+        "float",
+        "clipping"
+      ]
+    ]
+  },
+  {
+    "name": "inputOffset",
+    "color": true,
+    "source": "\nkernel vec4 inputOffset(__sample pixel, float offset) {\n    // Equal linear-light addition. Bound negative RGB, retain HDR values.\n    return vec4(max(pixel.rgb + vec3(offset * pixel.a), vec3(0.0)), pixel.a);\n}\n",
+    "arguments": [
+      [
+        "__sample",
+        "pixel"
+      ],
+      [
+        "float",
+        "offset"
+      ]
+    ]
+  },
+  {
+    "name": "gain",
+    "color": true,
+    "source": "\nkernel vec4 gain(__sample base, __sample alternate, float rgb, vec3 weights) {\n    vec3 s = max(unpremultiply(base).rgb, vec3(0.0));\n    vec3 h = max(unpremultiply(alternate).rgb, vec3(0.0));\n    if (rgb < 0.5) {\n        s = vec3(dot(s, weights));\n        h = vec3(dot(h, weights));\n    }\n    return vec4(log2((h + vec3(0.00001)) / (s + vec3(0.00001))), 1.0);\n}\n",
+    "arguments": [
+      [
+        "__sample",
+        "base"
+      ],
+      [
+        "__sample",
+        "alternate"
+      ],
+      [
+        "float",
+        "rgb"
+      ],
+      [
+        "vec3",
+        "weights"
+      ]
+    ]
+  },
+  {
+    "name": "monochrome",
+    "color": true,
+    "source": "\nkernel vec4 monochrome(__sample pixel, vec3 weights, vec3 first, vec2 last) {\n    vec4 p = unpremultiply(pixel);\n    vec3 rgb = max(p.rgb, 0.0);\n    rgb /= max(1.0, max(rgb.r, max(rgb.g, rgb.b)));\n    float hi = max(rgb.r, max(rgb.g, rgb.b));\n    float lo = min(rgb.r, min(rgb.g, rgb.b));\n    float delta = hi - lo;\n    float sensitivity = 1.0;\n    if (delta > 0.000001) {\n        float hue;\n        if (hi == rgb.r) { hue = mod((rgb.g - rgb.b) / delta, 6.0); }\n        else if (hi == rgb.g) { hue = (rgb.b - rgb.r) / delta + 2.0; }\n        else { hue = (rgb.r - rgb.g) / delta + 4.0; }\n        float magenta = (last.y + first.x) * 0.5;\n        float a = first.x, b = first.y;\n        if (hue >= 5.0) { a = magenta; b = first.x; }\n        else if (hue >= 4.0) { a = last.y; b = magenta; }\n        else if (hue >= 3.0) { a = last.x; b = last.y; }\n        else if (hue >= 2.0) { a = first.z; b = last.x; }\n        else if (hue >= 1.0) { a = first.y; b = first.z; }\n        float t = fract(hue);\n        // Relative chroma vanishes at neutral colors, including near-white RGB.\n        // HSL saturation instead stays at one along an edge leading into white.\n        float saturation = delta / max(0.000001, hi);\n        sensitivity = mix(1.0, mix(a, b, t*t*(3.0-2.0*t)), clamp(saturation,0.0,1.0));\n    }\n    float gray = max(0.0, dot(p.rgb, weights) * sensitivity);\n    return premultiply(vec4(vec3(gray),p.a));\n}\n",
+    "arguments": [
+      [
+        "__sample",
+        "pixel"
+      ],
+      [
+        "vec3",
+        "weights"
+      ],
+      [
+        "vec3",
+        "first"
+      ],
+      [
+        "vec2",
+        "last"
+      ]
+    ]
+  },
+  {
+    "name": "vignetteExposure",
+    "color": true,
+    "source": "\nkernel vec4 vignetteExposure(__sample pixel, vec4 extent, vec3 row0, vec3 row1,\n                             vec3 row2, float aspect, float amount, float exponent) {\n    vec2 source = (destCoord() - extent.xy) / extent.zw;\n    vec3 position = vec3(source.x, 1.0 - source.y, 1.0);\n    float denominator = dot(row2, position);\n    float radius = 1.0;\n    // A projective horizon can lie outside the retained crop. Bound its loss\n    // to the corner amount so neighboring blur samples stay finite.\n    if (abs(denominator) > 0.000001) {\n        vec2 crop = vec2(dot(row0, position), dot(row1, position)) / denominator;\n        vec2 centered = (2.0 * crop - 1.0) * vec2(aspect, 1.0);\n        radius = clamp(length(centered) / sqrt(aspect * aspect + 1.0), 0.0, 1.0);\n    }\n    float gain = exp2(-amount * pow(radius, exponent));\n    return vec4(pixel.rgb * gain, pixel.a);\n}\n",
+    "arguments": [
+      [
+        "__sample",
+        "pixel"
+      ],
+      [
+        "vec4",
+        "extent"
+      ],
+      [
+        "vec3",
+        "row0"
+      ],
+      [
+        "vec3",
+        "row1"
+      ],
+      [
+        "vec3",
+        "row2"
+      ],
+      [
+        "float",
+        "aspect"
+      ],
+      [
+        "float",
+        "amount"
+      ],
+      [
+        "float",
+        "exponent"
+      ]
+    ]
+  },
+  {
+    "name": "lutProfile",
+    "color": true,
+    "source": "\nfloat encodeLUT(float x, float profile) {\n    if (profile < 0.5) {\n        float v = abs(x);\n        return sign(x) * (v <= 0.0031308 ? 12.92*v : 1.055*pow(v,1.0/2.4)-0.055);\n    }\n    if (profile < 1.5) {\n        float v = abs(x);\n        return sign(x) * (v < 0.018 ? 4.5*v : 1.099*pow(v,0.45)-0.099);\n    }\n    if (profile < 2.5) {\n        return x >= 0.01125 ? (420.0+261.5*log((x+0.01)/0.19)/log(10.0))/1023.0\n            : (x*(171.2102946929-95.0)/0.01125+95.0)/1023.0;\n    }\n    if (profile < 3.5) {\n        return x < 0.01 ? 5.6*x+0.125 : 0.241514*log(x+0.00873)/log(10.0)+0.598206;\n    }\n    if (profile < 4.5) {\n        float v = x/0.9;\n        if (v < -0.014) return -0.36726845*log(1.0-14.98325*v)/log(10.0)+0.12783901;\n        if (v <= 0.014) return 1.9754798*v+0.12512219;\n        return 0.36726845*log(1.0+14.98325*v)/log(10.0)+0.12240537;\n    }\n    if (profile < 5.5) {\n        return x >= 0.00089 ? 0.344676*log(0.555556*x+0.009468)/log(10.0)+0.790453\n            : 8.735631*x+0.092864;\n    }\n    return x >= 0.000889 ? 0.245281*log(5.555556*x+0.064829)/log(10.0)+0.384316\n        : 8.799461*x+0.092864;\n}\nfloat decodeLUT(float x, float profile) {\n    if (profile < 0.5) {\n        float v = abs(x);\n        return sign(x) * (v <= 0.04045 ? v/12.92 : pow((v+0.055)/1.055,2.4));\n    }\n    if (profile < 1.5) {\n        float v = abs(x);\n        return sign(x) * (v < 0.081 ? v/4.5 : pow((v+0.099)/1.099,1.0/0.45));\n    }\n    if (profile < 2.5) {\n        return x >= 171.2102946929/1023.0 ? pow(10.0,(x*1023.0-420.0)/261.5)*0.19-0.01\n            : (x*1023.0-95.0)*0.01125/(171.2102946929-95.0);\n    }\n    if (profile < 3.5) {\n        return x < 0.181 ? (x-0.125)/5.6 : pow(10.0,(x-0.598206)/0.241514)-0.00873;\n    }\n    if (profile < 4.5) {\n        if (x < 0.097465473) return -0.9*(pow(10.0,(0.12783901-x)/0.36726845)-1.0)/14.98325;\n        if (x <= 0.15277891) return 0.9*(x-0.12512219)/1.9754798;\n        return 0.9*(pow(10.0,(x-0.12240537)/0.36726845)-1.0)/14.98325;\n    }\n    if (profile < 5.5) {\n        return x >= 0.100537775223865 ? (pow(10.0,(x-0.790453)/0.344676)-0.009468)/0.555556\n            : (x-0.092864)/8.735631;\n    }\n    return x >= 0.100686685370811 ? (pow(10.0,(x-0.384316)/0.245281)-0.064829)/5.555556\n        : (x-0.092864)/8.799461;\n}\nkernel vec4 lutProfile(__sample source, vec3 row0, vec3 row1, vec3 row2, float profile, float decodeMode) {\n    vec4 p = unpremultiply(source);\n    vec3 c = p.rgb;\n    if (decodeMode > 0.5) c = vec3(decodeLUT(c.r,profile),decodeLUT(c.g,profile),decodeLUT(c.b,profile));\n    c = vec3(dot(row0,c),dot(row1,c),dot(row2,c));\n    if (decodeMode < 0.5) c = vec3(encodeLUT(c.r,profile),encodeLUT(c.g,profile),encodeLUT(c.b,profile));\n    return premultiply(vec4(c,p.a));\n}\n",
+    "arguments": [
+      [
+        "__sample",
+        "source"
+      ],
+      [
+        "vec3",
+        "row0"
+      ],
+      [
+        "vec3",
+        "row1"
+      ],
+      [
+        "vec3",
+        "row2"
+      ],
+      [
+        "float",
+        "profile"
+      ],
+      [
+        "float",
+        "decodeMode"
+      ]
+    ]
+  },
+  {
+    "name": "halationInput",
+    "color": true,
+    "source": "\nkernel vec4 halationInput(__sample source, float exponent) {\n    vec4 p = unpremultiply(source);\n    vec3 positive = max(p.rgb, vec3(0.0));\n    // Shape the unit interval; preserve above-white headroom without power amplification.\n    vec3 shaped = pow(min(positive, vec3(1.0)), vec3(exponent))\n        + max(positive - vec3(1.0), vec3(0.0));\n    return premultiply(vec4(shaped, p.a));\n}\n",
+    "arguments": [
+      [
+        "__sample",
+        "source"
+      ],
+      [
+        "float",
+        "exponent"
+      ]
+    ]
+  },
+  {
+    "name": "halationAdd",
+    "color": true,
+    "source": "\nkernel vec4 halationAdd(__sample source, __sample redHalo, __sample greenHalo, float strength, float transmission, float ceiling, float monochrome) {\n    vec4 p = unpremultiply(source);\n    if (monochrome > 0.5) {\n        p.rgb = max(p.rgb + strength * unpremultiply(redHalo).rgb, vec3(0.0));\n        if (ceiling > 0.0) { p.rgb = min(p.rgb, vec3(ceiling)); }\n        return premultiply(p);\n    }\n    float red = unpremultiply(redHalo).r;\n    float green = unpremultiply(greenHalo).g;\n    p.r = max(p.r + strength * red, 0.0);\n    p.g = max(p.g + strength * transmission * green, 0.0);\n    if (ceiling > 0.0) { p.rg = min(p.rg, vec2(ceiling)); }\n    return premultiply(p);\n}\n",
+    "arguments": [
+      [
+        "__sample",
+        "source"
+      ],
+      [
+        "__sample",
+        "redHalo"
+      ],
+      [
+        "__sample",
+        "greenHalo"
+      ],
+      [
+        "float",
+        "strength"
+      ],
+      [
+        "float",
+        "transmission"
+      ],
+      [
+        "float",
+        "ceiling"
+      ],
+      [
+        "float",
+        "monochrome"
+      ]
+    ]
+  },
+  {
+    "name": "profileLUT",
+    "color": false,
+    "source": "\nkernel vec4 profileLUT(sampler source, sampler cube, vec3 low, vec3 span, float dimension) {\n    vec4 p = unpremultiply(sample(source,samplerCoord(source)));\n    vec3 t = clamp((p.rgb-low)/span,0.0,1.0)*(dimension-1.0);\n    vec3 a = floor(t), b = min(a+1.0,vec3(dimension-1.0)), f = t-a;\n    vec3 c000 = sample(cube,samplerTransform(cube,vec2(a.x,a.y+a.z*dimension)+vec2(0.5))).rgb;\n    vec3 c100 = sample(cube,samplerTransform(cube,vec2(b.x,a.y+a.z*dimension)+vec2(0.5))).rgb;\n    vec3 c010 = sample(cube,samplerTransform(cube,vec2(a.x,b.y+a.z*dimension)+vec2(0.5))).rgb;\n    vec3 c110 = sample(cube,samplerTransform(cube,vec2(b.x,b.y+a.z*dimension)+vec2(0.5))).rgb;\n    vec3 c001 = sample(cube,samplerTransform(cube,vec2(a.x,a.y+b.z*dimension)+vec2(0.5))).rgb;\n    vec3 c101 = sample(cube,samplerTransform(cube,vec2(b.x,a.y+b.z*dimension)+vec2(0.5))).rgb;\n    vec3 c011 = sample(cube,samplerTransform(cube,vec2(a.x,b.y+b.z*dimension)+vec2(0.5))).rgb;\n    vec3 c111 = sample(cube,samplerTransform(cube,vec2(b.x,b.y+b.z*dimension)+vec2(0.5))).rgb;\n    vec3 c = mix(mix(mix(c000,c100,f.x),mix(c010,c110,f.x),f.y),\n                 mix(mix(c001,c101,f.x),mix(c011,c111,f.x),f.y),f.z);\n    return premultiply(vec4(c,p.a));\n}\n",
+    "arguments": [
+      [
+        "sampler",
+        "source"
+      ],
+      [
+        "sampler",
+        "cube"
+      ],
+      [
+        "vec3",
+        "low"
+      ],
+      [
+        "vec3",
+        "span"
+      ],
+      [
+        "float",
+        "dimension"
+      ]
+    ]
+  },
+  {
+    "name": "lutDomain",
+    "color": true,
+    "source": "\nkernel vec4 lutDomain(__sample source, vec3 low, vec3 span) {\n    vec4 p = unpremultiply(source);\n    // Clamp HDR to SDR white before applying the LUT's declared domain.\n    p.rgb = (clamp(p.rgb, 0.0, 1.0) - low) / span;\n    return premultiply(p);\n}\n",
+    "arguments": [
+      [
+        "__sample",
+        "source"
+      ],
+      [
+        "vec3",
+        "low"
+      ],
+      [
+        "vec3",
+        "span"
+      ]
+    ]
+  },
+  {
+    "name": "lutHDRGain",
+    "color": true,
+    "source": "\nkernel vec4 lutHDRGain(__sample originalHDR, __sample originalSDR, __sample gradedSDR) {\n    vec4 h = unpremultiply(originalHDR);\n    vec3 s = clamp(unpremultiply(originalSDR).rgb, 0.0, 1.0);\n    vec3 graded = max(unpremultiply(gradedSDR).rgb, vec3(0.0));\n    // Match the linear-light offsets used by ISO gain-map generation.\n    // Offset reconstruction is identity when the grade is identity,\n    // and remains defined for black or zero-valued color channels.\n    vec3 gain = (max(h.rgb, vec3(0.0)) + vec3(0.00001)) / (s + vec3(0.00001));\n    vec3 result = max((graded + vec3(0.00001)) * gain - vec3(0.00001), vec3(0.0));\n    return premultiply(vec4(result, h.a));\n}\n",
+    "arguments": [
+      [
+        "__sample",
+        "originalHDR"
+      ],
+      [
+        "__sample",
+        "originalSDR"
+      ],
+      [
+        "__sample",
+        "gradedSDR"
+      ]
+    ]
+  },
+  {
+    "name": "badHDR",
+    "color": true,
+    "source": "\nkernel vec4 badHDR(__sample original, __sample blurred, float strength, float white, vec3 weights) {\n    vec4 p = unpremultiply(original);\n    // The SDR-range blurred copy becomes a multiplier from 1 to 0.5.\n    // Clamp the mask so HDR highlights cannot invert or darken to black.\n    float mask = clamp(dot(unpremultiply(blurred).rgb, weights) / white, 0.0, 1.0);\n    // One exposure multiplier preserves RGB ratios. Negative strength\n    // applies its reciprocal.\n    float multiplier = pow(1.0 - 0.5 * mask, strength);\n    return premultiply(vec4(p.rgb * multiplier, p.a));\n}\n",
+    "arguments": [
+      [
+        "__sample",
+        "original"
+      ],
+      [
+        "__sample",
+        "blurred"
+      ],
+      [
+        "float",
+        "strength"
+      ],
+      [
+        "float",
+        "white"
+      ],
+      [
+        "vec3",
+        "weights"
+      ]
+    ]
+  },
+  {
+    "name": "combinedOKLab",
+    "color": false,
+    "source": "\n// Bj\u00f6rn Ottosson's OKLab transform; RGB is linear sRGB, D65.\nvec3 toOKLab(vec3 c) {\n    vec3 lms = vec3(dot(c, vec3(0.4122214708,0.5363325363,0.0514459929)),\n                    dot(c, vec3(0.2119034982,0.6806995451,0.1073969566)),\n                    dot(c, vec3(0.0883024619,0.2817188376,0.6299787005)));\n    lms = sign(lms) * pow(abs(lms), vec3(1.0/3.0));\n    return vec3(dot(lms,vec3(0.2104542553,0.7936177850,-0.0040720468)),\n                dot(lms,vec3(1.9779984951,-2.4285922050,0.4505937099)),\n                dot(lms,vec3(0.0259040371,0.7827717662,-0.8086757660)));\n}\nvec3 fromOKLab(vec3 c) {\n    vec3 lms = vec3(c.x+0.3963377774*c.y+0.2158037573*c.z,\n                    c.x-0.1055613458*c.y-0.0638541728*c.z,\n                    c.x-0.0894841775*c.y-1.2914855480*c.z);\n    lms = lms*lms*lms;\n    return vec3(dot(lms,vec3(4.0767416621,-3.3077115913,0.2309699292)),\n                dot(lms,vec3(-1.2684380046,2.6097574011,-0.3413193965)),\n                dot(lms,vec3(-0.0041960863,-0.7034186147,1.7076147010)));\n}\nvec3 convertRGB(vec3 c, vec3 row0, vec3 row1, vec3 row2) {\n    return vec3(dot(row0,c),dot(row1,c),dot(row2,c));\n}\nfloat chromaMultiplier(float x, vec4 points, float hdrEnd) {\n    if (x <= 0.5) { return mix(points.x,points.y,clamp(x*2.0,0.0,1.0)); }\n    if (x <= 1.0) { return mix(points.y,points.z,(x-0.5)*2.0); }\n    if (hdrEnd <= 1.000001) { return points.z; }\n    return mix(points.z,points.w,clamp((x-1.0)/(hdrEnd-1.0),0.0,1.0));\n}\n\n    float sliceBend(float L,float C,vec4 bend,float apex) {\n        float endpoint=L<apex ? bend.x:bend.y;\n        float t=clamp(abs(L-apex)/max(0.000001,abs(endpoint-apex)),0.0,1.0);\n        float c=clamp(C/0.1,0.0,1.0);\n        return (L<apex ? bend.z:bend.w)*t*t*(3.0-2.0*t)*c*c*(3.0-2.0*c);\n    }\n    kernel vec4 combinedOKLab(sampler image,sampler tintTable,\n        float ceiling,float domain,float maximumChroma,vec4 chroma,vec4 lightness,\n        float hasTint,float hasWarp,\n        vec3 to0,vec3 to1,vec3 to2,vec3 from0,vec3 from1,vec3 from2,\n        vec4 v0,vec2 h0,vec4 b0,float l0,vec4 v1,vec2 h1,vec4 b1,float l1,vec4 v2,vec2 h2,vec4 b2,float l2,vec4 v3,vec2 h3,vec4 b3,float l3,vec4 v4,vec2 h4,vec4 b4,float l4,vec4 v5,vec2 h5,vec4 b5,float l5,vec4 v6,vec2 h6,vec4 b6,float l6) {\n        vec4 pixel=unpremultiply(sample(image,samplerCoord(image)));\n        vec3 lab=toOKLab(convertRGB(pixel.rgb,to0,to1,to2));\n        float multiplier=chromaMultiplier(length(lab.yz)/maximumChroma,chroma,domain)\n            * chromaMultiplier(lab.x,lightness,domain);\n        lab.yz *= max(0.0,multiplier);\n        if (hasWarp > 0.5) {\n            float scale=pow(ceiling,1.0/3.0);\n            vec3 q=lab/scale;\n            float c=length(q.yz);\n            vec3 warped=q;\n            if (c>0.0000000001) {\n                float h=atan(q.z,q.y);\n                if (h<h0.x) { h+=6.28318530718; }\n                vec3 adjustment=vec3(1.0,0.0,0.0);\n\n        if (h>=h0.x && h<=h0.y) {\n            float t=(h-h0.x)/(h0.y-h0.x);\n            float w=t*t*(3.0-2.0*t);\n            adjustment=mix(v0.xyz,v1.xyz,w);\n            adjustment.z += mix(sliceBend(q.x,c,b0,l0),sliceBend(q.x,c,b1,l1),w);\n            float r0=clamp(c/v0.w,0.0,1.0),r1=clamp(c/v1.w,0.0,1.0);\n            adjustment.y=mix(v0.y*r0*r0*(3.0-2.0*r0),v1.y*r1*r1*(3.0-2.0*r1),w);\n        }\n\n\n        if (h>=h1.x && h<=h1.y) {\n            float t=(h-h1.x)/(h1.y-h1.x);\n            float w=t*t*(3.0-2.0*t);\n            adjustment=mix(v1.xyz,v2.xyz,w);\n            adjustment.z += mix(sliceBend(q.x,c,b1,l1),sliceBend(q.x,c,b2,l2),w);\n            float r0=clamp(c/v1.w,0.0,1.0),r1=clamp(c/v2.w,0.0,1.0);\n            adjustment.y=mix(v1.y*r0*r0*(3.0-2.0*r0),v2.y*r1*r1*(3.0-2.0*r1),w);\n        }\n\n\n        if (h>=h2.x && h<=h2.y) {\n            float t=(h-h2.x)/(h2.y-h2.x);\n            float w=t*t*(3.0-2.0*t);\n            adjustment=mix(v2.xyz,v3.xyz,w);\n            adjustment.z += mix(sliceBend(q.x,c,b2,l2),sliceBend(q.x,c,b3,l3),w);\n            float r0=clamp(c/v2.w,0.0,1.0),r1=clamp(c/v3.w,0.0,1.0);\n            adjustment.y=mix(v2.y*r0*r0*(3.0-2.0*r0),v3.y*r1*r1*(3.0-2.0*r1),w);\n        }\n\n\n        if (h>=h3.x && h<=h3.y) {\n            float t=(h-h3.x)/(h3.y-h3.x);\n            float w=t*t*(3.0-2.0*t);\n            adjustment=mix(v3.xyz,v4.xyz,w);\n            adjustment.z += mix(sliceBend(q.x,c,b3,l3),sliceBend(q.x,c,b4,l4),w);\n            float r0=clamp(c/v3.w,0.0,1.0),r1=clamp(c/v4.w,0.0,1.0);\n            adjustment.y=mix(v3.y*r0*r0*(3.0-2.0*r0),v4.y*r1*r1*(3.0-2.0*r1),w);\n        }\n\n\n        if (h>=h4.x && h<=h4.y) {\n            float t=(h-h4.x)/(h4.y-h4.x);\n            float w=t*t*(3.0-2.0*t);\n            adjustment=mix(v4.xyz,v5.xyz,w);\n            adjustment.z += mix(sliceBend(q.x,c,b4,l4),sliceBend(q.x,c,b5,l5),w);\n            float r0=clamp(c/v4.w,0.0,1.0),r1=clamp(c/v5.w,0.0,1.0);\n            adjustment.y=mix(v4.y*r0*r0*(3.0-2.0*r0),v5.y*r1*r1*(3.0-2.0*r1),w);\n        }\n\n\n        if (h>=h5.x && h<=h5.y) {\n            float t=(h-h5.x)/(h5.y-h5.x);\n            float w=t*t*(3.0-2.0*t);\n            adjustment=mix(v5.xyz,v6.xyz,w);\n            adjustment.z += mix(sliceBend(q.x,c,b5,l5),sliceBend(q.x,c,b6,l6),w);\n            float r0=clamp(c/v5.w,0.0,1.0),r1=clamp(c/v6.w,0.0,1.0);\n            adjustment.y=mix(v5.y*r0*r0*(3.0-2.0*r0),v6.y*r1*r1*(3.0-2.0*r1),w);\n        }\n\n\n        if (h>=h6.x && h<=h6.y) {\n            float t=(h-h6.x)/(h6.y-h6.x);\n            float w=t*t*(3.0-2.0*t);\n            adjustment=mix(v6.xyz,v0.xyz,w);\n            adjustment.z += mix(sliceBend(q.x,c,b6,l6),sliceBend(q.x,c,b0,l0),w);\n            float r0=clamp(c/v6.w,0.0,1.0),r1=clamp(c/v0.w,0.0,1.0);\n            adjustment.y=mix(v6.y*r0*r0*(3.0-2.0*r0),v0.y*r1*r1*(3.0-2.0*r1),w);\n        }\n\n                warped=vec3(q.x+adjustment.y,c*adjustment.x*cos(h+adjustment.z),c*adjustment.x*sin(h+adjustment.z));\n            }\n            lab=warped*scale;\n        }\n        if (hasTint > 0.5) {\n            lab.yz += sample(tintTable,vec2(clamp(lab.x/domain,0.0,1.0)*511.0+0.5,0.5)).xy;\n        }\n        // Gamut handling is deferred until every OKLab operation is complete.\n        // Fit along a straight line toward neutral in linear working RGB.\n        // The RGB cube is convex, unlike fixed-L OKLab chroma slices near\n        // deep blue: this intersection is unique and continuous, with no\n        // branch-search jumps. In-gamut colors remain unchanged. Out-of-gamut\n        // colors may change perceptual lightness/hue slightly while fitting.\n        vec3 rgb=convertRGB(fromOKLab(lab),from0,from1,from2);\n        float gray=clamp(lab.x*lab.x*lab.x,0.0,ceiling);\n        vec3 delta=rgb-vec3(gray);\n        float fit=1.0;\n        float lowest=min(rgb.r,min(rgb.g,rgb.b));\n        float highest=max(rgb.r,max(rgb.g,rgb.b));\n        if (lowest<0.0) { fit=min(fit,gray/(gray-lowest)); }\n        if (highest>ceiling) { fit=min(fit,(ceiling-gray)/(highest-gray)); }\n        rgb=clamp(vec3(gray)+delta*fit,0.0,ceiling);\n        return premultiply(vec4(rgb,pixel.a));\n    }\n",
+    "arguments": [
+      [
+        "sampler",
+        "image"
+      ],
+      [
+        "sampler",
+        "tintTable"
+      ],
+      [
+        "float",
+        "ceiling"
+      ],
+      [
+        "float",
+        "domain"
+      ],
+      [
+        "float",
+        "maximumChroma"
+      ],
+      [
+        "vec4",
+        "chroma"
+      ],
+      [
+        "vec4",
+        "lightness"
+      ],
+      [
+        "float",
+        "hasTint"
+      ],
+      [
+        "float",
+        "hasWarp"
+      ],
+      [
+        "vec3",
+        "to0"
+      ],
+      [
+        "vec3",
+        "to1"
+      ],
+      [
+        "vec3",
+        "to2"
+      ],
+      [
+        "vec3",
+        "from0"
+      ],
+      [
+        "vec3",
+        "from1"
+      ],
+      [
+        "vec3",
+        "from2"
+      ],
+      [
+        "vec4",
+        "v0"
+      ],
+      [
+        "vec2",
+        "h0"
+      ],
+      [
+        "vec4",
+        "b0"
+      ],
+      [
+        "float",
+        "l0"
+      ],
+      [
+        "vec4",
+        "v1"
+      ],
+      [
+        "vec2",
+        "h1"
+      ],
+      [
+        "vec4",
+        "b1"
+      ],
+      [
+        "float",
+        "l1"
+      ],
+      [
+        "vec4",
+        "v2"
+      ],
+      [
+        "vec2",
+        "h2"
+      ],
+      [
+        "vec4",
+        "b2"
+      ],
+      [
+        "float",
+        "l2"
+      ],
+      [
+        "vec4",
+        "v3"
+      ],
+      [
+        "vec2",
+        "h3"
+      ],
+      [
+        "vec4",
+        "b3"
+      ],
+      [
+        "float",
+        "l3"
+      ],
+      [
+        "vec4",
+        "v4"
+      ],
+      [
+        "vec2",
+        "h4"
+      ],
+      [
+        "vec4",
+        "b4"
+      ],
+      [
+        "float",
+        "l4"
+      ],
+      [
+        "vec4",
+        "v5"
+      ],
+      [
+        "vec2",
+        "h5"
+      ],
+      [
+        "vec4",
+        "b5"
+      ],
+      [
+        "float",
+        "l5"
+      ],
+      [
+        "vec4",
+        "v6"
+      ],
+      [
+        "vec2",
+        "h6"
+      ],
+      [
+        "vec4",
+        "b6"
+      ],
+      [
+        "float",
+        "l6"
+      ]
+    ]
+  }
+]

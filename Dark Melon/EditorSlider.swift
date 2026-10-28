@@ -10,6 +10,7 @@ private struct SliderTintLevelKey: EnvironmentKey {
     static let defaultValue = 0.85
 }
 extension EnvironmentValues {
+    @Entry var sliderTicks: [Double] = []
     fileprivate var sliderTintLevel: Double {
         get { self[SliderTintLevelKey.self] }
         set { self[SliderTintLevelKey.self] = newValue }
@@ -24,6 +25,9 @@ extension EnvironmentValues {
     }
 }
 extension View {
+    func editorSliderTicks(_ values: [Double]) -> some View {
+        environment(\.sliderTicks, values)
+    }
     /// Any shape style, including gradients with repeated stops for hard bands.
     func editorSliderTrack(_ style: some ShapeStyle) -> some View {
         environment(\.sliderTrack, AnyShapeStyle(style))
@@ -50,22 +54,19 @@ enum EditorSliderTracks {
         }
         return LinearGradient(stops: stops, startPoint: .leading, endPoint: .trailing)
     }
-    // Signed amplitude reverses each complementary pair across the neutral center.
-    // These tracks are fixed, so generate them once rather than on slider updates.
-    static let dyeResponse: [LinearGradient] = (0..<3).map { channel in
-        let stops = (0...320).map { index in
-            let x = Double(index) / 320
-            let wave = (1 - 2 * x) * sin(40 * .pi * x)
-            let primary = 0.5 + 0.5 * wave
-            let complement = 0.5 - 0.5 * wave
-            let color = Color(.sRGB,
-                              red: channel == 0 ? primary : complement,
-                              green: channel == 1 ? primary : complement,
-                              blue: channel == 2 ? primary : complement)
-            return Gradient.Stop(color: color, location: x)
-        }
-        return LinearGradient(stops: stops, startPoint: .leading, endPoint: .trailing)
-    }
+    static let density: [ProcessingColorSpace: [LinearGradient]] = Dictionary(uniqueKeysWithValues:
+        ProcessingColorSpace.allCases.map { space in
+            (space, ColorSliceGeometry.cache[space]!.map { slice in
+                LinearGradient(stops: (0...64).map { index in
+                    let x = Double(index) / 64
+                    let lightness = slice.lower + x * (slice.upper - slice.lower)
+                    let rgb = OKLabColor.linear(SIMD3(lightness, 0.1 * cos(slice.hue), 0.1 * sin(slice.hue)), space: .sRGB)
+                    return Gradient.Stop(color: Color(.sRGBLinear,
+                        red: rgb.x.clamped(to: 0...1), green: rgb.y.clamped(to: 0...1),
+                        blue: rgb.z.clamped(to: 0...1)), location: x)
+                }, startPoint: .leading, endPoint: .trailing)
+            })
+        })
     static let tone = LinearGradient(colors: [.black, .white], startPoint: .leading, endPoint: .trailing)
     static let temperature = LinearGradient(colors: [.blue, Color(white: 0.8), .orange], startPoint: .leading, endPoint: .trailing)
     static let tint = LinearGradient(colors: [.green, Color(white: 0.8), Color(red: 1, green: 0, blue: 1)], startPoint: .leading, endPoint: .trailing)
@@ -81,6 +82,7 @@ struct EditorSlider<Value: BinaryFloatingPoint>: View {
     let onEditingChanged: (Bool) -> Void
     @Environment(\.isEnabled) private var enabled
     @Environment(\.controlResetAction) private var reset
+    @Environment(\.sliderTicks) private var ticks
     @Environment(\.sliderTrack) private var track
     @Environment(\.sliderTint) private var tint
     @Environment(\.sliderTintLevel) private var tintLevel
@@ -136,6 +138,14 @@ struct EditorSlider<Value: BinaryFloatingPoint>: View {
                 Capsule().fill(track)
                     .frame(height: EditorGraphStyle.trackWidth)
                     .padding(.horizontal, inset)
+                Path { path in
+                    let span = Double(bounds.upperBound - bounds.lowerBound)
+                    for tick in ticks where span > 0 && tick >= Double(bounds.lowerBound) && tick <= Double(bounds.upperBound) {
+                        let x = inset + CGFloat((tick - Double(bounds.lowerBound)) / span) * travel
+                        path.move(to: CGPoint(x: x, y: geometry.size.height / 2 - 5))
+                        path.addLine(to: CGPoint(x: x, y: geometry.size.height / 2 + 5))
+                    }
+                }.stroke(.white, lineWidth: 1).allowsHitTesting(false)
                 EditorGraphHandle(color: tint, isDragging: dragging, tintLevel: tintLevel)
                     .environment(\.controlResetAction, nil)
                     .position(x: thumb, y: geometry.size.height / 2)
@@ -161,7 +171,7 @@ struct EditorSlider<Value: BinaryFloatingPoint>: View {
             }
         }
         .frame(height: 28)
-        .opacity(enabled ? 1 : 0.4)
+        .modifier(DisabledControlAppearance())
         .background {
             // Keep the macOS focus responder behind the pointer gesture surface.
             Color.clear.focusable(enabled, interactions: .edit)

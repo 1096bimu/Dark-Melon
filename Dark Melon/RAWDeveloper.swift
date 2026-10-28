@@ -128,50 +128,21 @@ actor RAWDeveloper {
     private lazy var vignette = Vignette()
 
     private lazy var badHDR = BadHDR()
-    private lazy var hdfKernel = CIColorKernel(source: """
-        kernel vec4 hdfAdd(__sample pixel, __sample blurred, float amount) {
-            vec4 p = unpremultiply(pixel);
-            vec3 glow = unpremultiply(blurred).rgb;
-            return premultiply(vec4(max(p.rgb + amount * glow, vec3(0.0)), p.a));
-        }
-        """)
+    private lazy var hdfKernel = MetalImageKernels.color("hdfAdd")
 
     // Soft Light: https://www.w3.org/TR/compositing-1/#blendingsoftlight
-    private lazy var clarityKernel = CIColorKernel(source: """
-        kernel vec4 clarityAdjust(__sample pixel, __sample blurred, float amount, float ceiling) {
-            vec4 p = unpremultiply(pixel);
-            vec3 base = clamp(p.rgb / ceiling, 0.0, 1.0);
-            vec3 low = unpremultiply(blurred).rgb / ceiling;
-            vec3 highPass = clamp(vec3(0.5) + base - low, 0.0, 1.0);
-            if (amount < 0.0) { highPass = 1.0 - highPass; }
-            vec3 d = mix(((16.0 * base - 12.0) * base + 4.0) * base,
-                         sqrt(base), step(vec3(0.25), base));
-            vec3 darken = base - (1.0 - 2.0 * highPass) * base * (1.0 - base);
-            vec3 lighten = base + (2.0 * highPass - 1.0) * (d - base);
-            vec3 blended = mix(darken, lighten, step(vec3(0.5), highPass));
-            vec3 result = clamp(mix(base, blended, clamp(abs(amount), 0.0, 2.0)), 0.0, 1.0);
-            return premultiply(vec4(result * ceiling, p.a));
-        }
-        """)
+    private lazy var clarityKernel = MetalImageKernels.color("clarityAdjust")
 
-    private lazy var monochromeKernel = CIColorKernel(source: MonochromeKernel.source)
+    private lazy var monochromeKernel = MetalImageKernels.color("monochrome")
 
 
     private lazy var colorPipeline = OKLabColorPipeline()
 
-    private lazy var toneKernel = CIKernel(source: """
-        kernel vec4 toneMap(sampler source, sampler table, float black, float span,
-                            float lastIndex) {
-            vec4 pixel = unpremultiply(sample(source, samplerCoord(source)));
-            vec3 t = (pixel.rgb - vec3(black)) / span;
-            vec3 u = clamp(t, 0.0, 1.0) * lastIndex + vec3(0.5);
-            vec3 mapped = vec3(
-                sample(table, samplerTransform(table, vec2(u.r, 0.5))).r,
-                sample(table, samplerTransform(table, vec2(u.g, 0.5))).g,
-                sample(table, samplerTransform(table, vec2(u.b, 0.5))).b);
-            return premultiply(vec4(mapped, pixel.a));
-        }
-        """)
+    // Preserve the original shader for the common case: no matrix work or
+    // matrix parameters at all when Dye Response mixers are unused.
+    private lazy var plainToneKernel = MetalImageKernels.general("toneMap")
+
+    private lazy var filmResponse = FilmResponse()
 
     private var overviewCache: (UUID, CGSize, CGImage)?
 
@@ -343,18 +314,7 @@ actor RAWDeveloper {
         return balanced
     }
 
-    private let toneLocatorKernel = CIColorKernel(source: """
-        kernel vec4 toneLocator(__sample sourcePixel, __sample preview, vec3 weights,
-                                float position, float width, float clipping) {
-            vec3 rgb = unpremultiply(sourcePixel).rgb;
-            float distance = abs(dot(rgb, weights) - position);
-            float mask = 1.0 - smoothstep(width * 0.35, width, distance);
-            if (clipping > 0.5) { mask = step(position, max(rgb.r, max(rgb.g, rgb.b))); }
-            vec3 highlight = clipping > 0.5 ? vec3(1.0, 0.0, 0.0) : vec3(0.21404114);
-            vec4 base = unpremultiply(preview);
-            return premultiply(vec4(mix(base.rgb, highlight, mask * 0.9), base.a));
-        }
-        """)
+    private let toneLocatorKernel = MetalImageKernels.color("toneLocator")
 
     /// One GPU composite over the cached preview; never enters the export or analysis pipeline.
     func toneLocator(_ source: CGImage, preview: CGImage, mapping: ToneMapping, hdr: Bool, clipping: Bool = false) throws -> CGImage {
@@ -388,12 +348,7 @@ actor RAWDeveloper {
         return try lutPipeline.apply(transformed, id: lutPipeline.activeID(mapping))
     }
 
-    private lazy var offsetKernel = CIColorKernel(source: """
-        kernel vec4 inputOffset(__sample pixel, float offset) {
-            // Equal linear-light addition. Bound negative RGB, retain HDR values.
-            return vec4(max(pixel.rgb + vec3(offset * pixel.a), vec3(0.0)), pixel.a);
-        }
-        """)
+    private lazy var offsetKernel = MetalImageKernels.color("inputOffset")
 
     private func adjustedInput(_ source: CIImage, mapping: ToneMapping) throws -> CIImage {
         var image = source
@@ -415,8 +370,9 @@ actor RAWDeveloper {
             image = try filmGrain!.apply(to: image, source: image, settings: mapping.grain,
                                         weights: colorSpace.luminance, ceiling: 0)
         }
-        return try badHDR.apply(to: image, settings: mapping.badHDR, whitePoint: mapping.white,
+        image = try badHDR.apply(to: image, settings: mapping.badHDR, whitePoint: mapping.white,
                                 weights: colorSpace.luminance)
+        return try filmResponse.apply(to: image, mapping: mapping)
     }
 
     private func developedImage(_ source: CIImage, mapping: ToneMapping, hdr: Bool) throws -> CIImage {
@@ -430,7 +386,7 @@ actor RAWDeveloper {
             color.saturationStart = 1; color.saturationEnd = 1; color.saturationMid = 1; color.saturationHDR = 1
             color.luminanceSaturationStart = 1; color.luminanceSaturationEnd = 1; color.luminanceSaturationMid = 1; color.luminanceSaturationHDR = 1
         }
-        // Shared by preview/export: offset → HDF → vignette → halation → grain → BadHDR → tone → RGB WB → OKLab → clarity.
+        // Shared by preview/export: offset → HDF → vignette → halation → grain → BadHDR → film response (A → log curves → B) → tone → RGB WB → OKLab → clarity.
         // RAW decoder white balance is already part of the decoded source.
         let toned = try applyTone(image, curves: mapping.channelCurves(hdr: hdr))
         let balanced = try applyWhiteBalance(toned, mapping: mapping)
@@ -444,13 +400,13 @@ actor RAWDeveloper {
     private func applyHDF(_ base: CIImage, mapping: ToneMapping) throws -> CIImage {
         guard mapping.hdf != 0 else { return base }
         let scale = EffectResolution.scale(shortSide: min(base.extent.width, base.extent.height))
-        let radius = min(200, max(50, mapping.hdfRadius)) * scale
+        let radius = max(0, mapping.hdfRadius) * scale
         // Preserve scene-linear highlight energy before either rendition clips or compresses it.
         let blurred = base.clampedToExtent()
             .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: radius])
             .cropped(to: base.extent)
         guard let result = hdfKernel?.apply(extent: base.extent, arguments: [
-            base, blurred, min(0.2, max(0, mapping.hdf))
+            base, blurred, mapping.hdf
         ]) else { throw DevelopmentError.decode }
         return result
     }
@@ -470,7 +426,7 @@ actor RAWDeveloper {
         return result
     }
 
-    private func applyTone(_ image: CIImage, curves: [ToneCurve]) throws -> CIImage {
+    func applyTone(_ image: CIImage, curves: [ToneCurve]) throws -> CIImage {
         let curve = curves[0]
         let pixels = curve.values.indices.flatMap { i in
             [Float(curves[0].values[i]), Float(curves[1].values[i]), Float(curves[2].values[i]), Float(1)]
@@ -480,7 +436,7 @@ actor RAWDeveloper {
                             size: CGSize(width: curve.values.count, height: 1),
                             format: .RGBAf, colorSpace: nil)
         let tableBounds = table.extent
-        guard let mapped = toneKernel?.apply(extent: image.extent, roiCallback: { index, rect in
+        guard let mapped = plainToneKernel?.apply(extent: image.extent, roiCallback: { index, rect in
             index == 1 ? tableBounds : rect
         }, arguments: [image, CISampler(image: table, options: [
             kCISamplerFilterMode: kCISamplerFilterLinear,
@@ -831,6 +787,51 @@ actor RAWDeveloper {
         try cachedExport(url, mapping: mapping, settings: settings).count
     }
 
+    /// Decode once and materialize one tile at a time, avoiding a graph holding
+    /// up to 64 independent full-resolution developments alive until encoding.
+    func variationExport(_ url: URL, mapping: ToneMapping, settings: HEIFSettings,
+                         variation: VariationExport,
+                         progress: @escaping @MainActor @Sendable (Int) -> Void = { _ in }) async throws -> Data {
+        try Task.checkCancellation()
+        let access = url.startAccessingSecurityScopedResource()
+        defer { if access { url.stopAccessingSecurityScopedResource() } }
+        let decoded = try sourceImage(url, whiteBalance: mapping.rawWhiteBalance).image
+        let source = try materialized(decoded)
+        let size = mapping.transform?.resolution(width: Int(source.extent.width), height: Int(source.extent.height), estimate: .maximum) ?? source.extent.size
+        let width = max(1, Int((size.width * settings.scale).rounded()))
+        let height = max(1, Int((size.height * settings.scale).rounded()))
+        guard width >= variation.grid, height >= variation.grid,
+              let canvas = CGContext(data: nil, width: width, height: height, bitsPerComponent: 32,
+                bytesPerRow: width * 16, space: linearSpace,
+                bitmapInfo: CGBitmapInfo.floatComponents.rawValue | CGBitmapInfo.byteOrder32Little.rawValue | CGImageAlphaInfo.premultipliedLast.rawValue)
+        else { throw HEIFExportError.encoding }
+        canvas.interpolationQuality = .none
+        for (index, generation) in variation.generations.enumerated() {
+            try Task.checkCancellation()
+            try autoreleasepool {
+                var edit = mapping
+                guard let mixers = DyeMixers.seeded(generation) else { throw HEIFExportError.encoding }
+                edit.dyeMixers = mixers
+                // Keep the original HDR-dependent film effects and log-LUT input,
+                // but always choose the SDR rendition for the finished tile.
+                let developed = try mappedImage(source, mapping: edit, hdr: false)
+                let rect = variation.tile(index, width: width, height: height)
+                let resized = developed.transformed(by: CGAffineTransform(translationX: -developed.extent.minX, y: -developed.extent.minY))
+                    .transformed(by: CGAffineTransform(scaleX: rect.width / developed.extent.width, y: rect.height / developed.extent.height))
+                guard let tile = context.createCGImage(resized, from: CGRect(origin: .zero, size: rect.size),
+                    format: .RGBAh, colorSpace: linearSpace) else { throw HEIFExportError.encoding }
+                canvas.draw(tile, in: rect)
+            }
+            await progress(index + 1)
+        }
+        try Task.checkCancellation()
+        guard let bitmap = canvas.makeImage() else { throw HEIFExportError.encoding }
+        let properties = ExportMetadata.properties(ExportMetadata.read(url), width: width, height: height,
+            mapping: mapping, rawExposure: Double(rawSettings?.values[.exposure] ?? 0), effectiveISO: settings.effectiveISO)
+        let gallery = CIImage(cgImage: bitmap).settingProperties(properties).settingContentHeadroom(1)
+        return settings.format == .heif ? try encodeSDR(gallery, settings: settings) : try encodeStandardImage(gallery, settings: settings)
+    }
+
     func exportImage(_ source: CIImage, mapping: ToneMapping, settings: HEIFSettings) throws -> Data {
         try encodeExport(sourceSize: source.extent.integral.size, mapping: mapping, settings: settings, sourceProperties: source.properties) { hdr in
             try self.mappedImage(source, mapping: mapping, hdr: hdr)
@@ -923,17 +924,7 @@ actor RAWDeveloper {
         return data as Data
     }
 
-    private lazy var gainKernel = CIColorKernel(source: """
-        kernel vec4 gain(__sample base, __sample alternate, float rgb, vec3 weights) {
-            vec3 s = max(unpremultiply(base).rgb, vec3(0.0));
-            vec3 h = max(unpremultiply(alternate).rgb, vec3(0.0));
-            if (rgb < 0.5) {
-                s = vec3(dot(s, weights));
-                h = vec3(dot(h, weights));
-            }
-            return vec4(log2((h + vec3(0.00001)) / (s + vec3(0.00001))), 1.0);
-        }
-        """)
+    private lazy var gainKernel = MetalImageKernels.color("gain")
 
     func encodeHEIF(sdr: CIImage, hdr: CIImage, settings: HEIFSettings, reusePrepared: Bool = false) throws -> Data {
         try Task.checkCancellation()

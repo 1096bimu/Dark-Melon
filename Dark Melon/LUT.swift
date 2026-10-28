@@ -147,32 +147,8 @@ nonisolated final class LUTPipeline {
     private let profileTransform = LUTProfileTransform()
     // Explicit float sampling avoids the native cube filter's quantization of
     // encoded log values, whose inverse transfer can amplify small LUT errors.
-    private let profileCube = CIKernel(source: """
-        kernel vec4 profileLUT(sampler source, sampler cube, vec3 low, vec3 span, float dimension) {
-            vec4 p = unpremultiply(sample(source,samplerCoord(source)));
-            vec3 t = clamp((p.rgb-low)/span,0.0,1.0)*(dimension-1.0);
-            vec3 a = floor(t), b = min(a+1.0,vec3(dimension-1.0)), f = t-a;
-            vec3 c000 = sample(cube,samplerTransform(cube,vec2(a.x,a.y+a.z*dimension)+vec2(0.5))).rgb;
-            vec3 c100 = sample(cube,samplerTransform(cube,vec2(b.x,a.y+a.z*dimension)+vec2(0.5))).rgb;
-            vec3 c010 = sample(cube,samplerTransform(cube,vec2(a.x,b.y+a.z*dimension)+vec2(0.5))).rgb;
-            vec3 c110 = sample(cube,samplerTransform(cube,vec2(b.x,b.y+a.z*dimension)+vec2(0.5))).rgb;
-            vec3 c001 = sample(cube,samplerTransform(cube,vec2(a.x,a.y+b.z*dimension)+vec2(0.5))).rgb;
-            vec3 c101 = sample(cube,samplerTransform(cube,vec2(b.x,a.y+b.z*dimension)+vec2(0.5))).rgb;
-            vec3 c011 = sample(cube,samplerTransform(cube,vec2(a.x,b.y+b.z*dimension)+vec2(0.5))).rgb;
-            vec3 c111 = sample(cube,samplerTransform(cube,vec2(b.x,b.y+b.z*dimension)+vec2(0.5))).rgb;
-            vec3 c = mix(mix(mix(c000,c100,f.x),mix(c010,c110,f.x),f.y),
-                         mix(mix(c001,c101,f.x),mix(c011,c111,f.x),f.y),f.z);
-            return premultiply(vec4(c,p.a));
-        }
-        """)
-    private let domain = CIColorKernel(source: """
-        kernel vec4 lutDomain(__sample source, vec3 low, vec3 span) {
-            vec4 p = unpremultiply(source);
-            // Clamp HDR to SDR white before applying the LUT's declared domain.
-            p.rgb = (clamp(p.rgb, 0.0, 1.0) - low) / span;
-            return premultiply(p);
-        }
-        """)
+    private let profileCube = MetalImageKernels.general("profileLUT")
+    private let domain = MetalImageKernels.color("lutDomain")
     func isAvailable(_ id: UUID?, hdrEnabled: Bool = true) -> Bool {
         guard hdrEnabled || configuration(for: id)?.input.isLog != true else { return false }
         return id.flatMap { store.cube(for: $0) } != nil
@@ -185,19 +161,7 @@ nonisolated final class LUTPipeline {
         isAvailable(mapping.lutID, hdrEnabled: mapping.hdrEnabled) ? mapping.lutID : nil
     }
 
-    private let hdrGain = CIColorKernel(source: """
-        kernel vec4 lutHDRGain(__sample originalHDR, __sample originalSDR, __sample gradedSDR) {
-            vec4 h = unpremultiply(originalHDR);
-            vec3 s = clamp(unpremultiply(originalSDR).rgb, 0.0, 1.0);
-            vec3 graded = max(unpremultiply(gradedSDR).rgb, vec3(0.0));
-            // Match the linear-light offsets used by ISO gain-map generation.
-            // Offset reconstruction is identity when the grade is identity,
-            // and remains defined for black or zero-valued color channels.
-            vec3 gain = (max(h.rgb, vec3(0.0)) + vec3(0.00001)) / (s + vec3(0.00001));
-            vec3 result = max((graded + vec3(0.00001)) * gain - vec3(0.00001), vec3(0.0));
-            return premultiply(vec4(result, h.a));
-        }
-        """)
+    private let hdrGain = MetalImageKernels.color("lutHDRGain")
 
     func applyHDR(_ hdr: CIImage, sdr: CIImage, gradedSDR: CIImage) throws -> CIImage {
         guard let output = hdrGain?.apply(extent: hdr.extent, arguments: [hdr, sdr, gradedSDR]) else {

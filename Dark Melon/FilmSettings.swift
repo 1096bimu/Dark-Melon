@@ -15,7 +15,7 @@ extension View {
 
 /// A session-only capture, shared by the editor and all export paths.
 nonisolated struct FilmSettings: Sendable {
-    static let film = SettingsPasteSelection(items: [.contrast, .rawWhiteBalance, .chromaCurve, .lightnessChromaCurve,
+    static let film = SettingsPasteSelection(items: [.contrast, .contrastDistribution, .rawWhiteBalance, .chromaCurve, .lightnessChromaCurve,
         .vertices, .hueTwister, .dyeResponse, .grain, .halation, .lut])
     static let digital = SettingsPasteSelection(items: film.selectedItems.subtracting([.rawWhiteBalance, .chromaCurve]).union([.rgbWhiteBalance, .clarity]))
     static func restoredSelection(_ saved: SettingsPasteSelection) -> SettingsPasteSelection {

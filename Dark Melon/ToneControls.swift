@@ -107,7 +107,8 @@ struct SlopeEditor: View {
                 }
                 HStack {
                     Image(systemName: "slider.horizontal.below.sun.min").frame(width: 22).accessibilityHidden(true)
-                    EditorSlider(value: isoExposure, in: ToneISOProxy.range, onEditingChanged: onISOEditingChanged) { Text("ISO") }
+                    EditorSlider(value: isoExposure, in: ToneISOProxy.range, onEditingChanged: onISOEditingChanged, label: { Text("ISO") })
+                        .editorSliderTicks([0, 1, 2, 3, 4, 5])
                         .controlReset { isoExposure.wrappedValue = ToneISOProxy.exposure(white: defaults.white) }
                         .labelsHidden()
                 }
@@ -169,7 +170,7 @@ struct SlopeEditor: View {
                                               if mapping.concentration != $0 { onContrastChanged() }
                                               mapping.concentration = $0
                                               mapping.setAutomaticHDRTarget()
-                                          }), in: -1...1) { Text("Contrast") }
+                                          }), in: -1...1, label: { Text("Contrast") })
                         .controlReset { mapping.concentration = defaults.concentration; mapping.setAutomaticHDRTarget() }
                         .editorSliderTrack(EditorSliderTracks.contrast(tone: mapping.tonePosition, white: mapping.white))
                         .labelsHidden()
@@ -215,6 +216,7 @@ struct SlopeEditor: View {
                             onHDRGainAdjustment()
                         }
                     }) { Text("HDR Gain") }
+                        .editorSliderTicks([1, 2, 4])
                         .controlReset { mapping.hdrGain = defaults.hdrGain; onHDRGainAdjustment() }
                         .labelsHidden()
                 }
@@ -233,7 +235,7 @@ struct SlopeEditor: View {
                     EditorSlider(value: Binding(get: { mapping.hdrRolloff }, set: {
                         mapping.hdrRolloff = $0
                         onHDRGainAdjustment()
-                    }), in: -1...1) { Text("HDR Rolloff") }
+                    }), in: -1...1, label: { Text("HDR Rolloff") })
                         .controlReset { mapping.hdrRolloff = defaults.hdrRolloff; onHDRGainAdjustment() }
                         .labelsHidden()
                 }

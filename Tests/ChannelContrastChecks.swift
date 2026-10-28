@@ -21,7 +21,7 @@ import Foundation
             mapping.channelContrast = [0.2,-0.2,0.1]
             let offsets = mapping.dyeContrastOffsets
             assert(abs(offsets.reduce(0,+)) < 1e-12)
-            assert(offsets.allSatisfy { (-1.0000001...1.0000001).contains(contrast+$0) })
+            assert(offsets.allSatisfy { (-0.8...0.8).contains($0) })
         }
         mapping.concentration = 0.2
         mapping.channelContrast = [0.1,-0.1,0]
@@ -60,7 +60,11 @@ import Foundation
                 context.render(output,toBitmap:&pixel,rowBytes:16,bounds:image.extent,format:.RGBAf,colorSpace:space.linear)
                 let curves = mapping.channelCurves(hdr: hdr)
                 for c in 0..<3 {
-                    assert(abs(Double(pixel[c])-curves[c].value(at:input)) < 0.002)
+                    let h = log2(input / max(1e-6,mapping.tonePosition))
+                    let base = 1 / (1 + exp(-h/2))
+                    let layer = 1 / (1 + exp(-h*(1+mapping.dyeContrastOffsets[c])/2))
+                    let exposed = input * exp2(8*(layer-base))
+                    assert(abs(Double(pixel[c])-curves[c].value(at:exposed)) < 0.002)
                 }
             }
         }

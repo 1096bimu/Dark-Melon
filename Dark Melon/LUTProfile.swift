@@ -48,73 +48,7 @@ nonisolated struct LUTConfiguration: Codable, Equatable, Sendable {
 
 nonisolated final class LUTProfileTransform {
     private static let linearSRGB = CGColorSpace(name: CGColorSpace.extendedLinearSRGB)!
-    private let kernel = CIColorKernel(source: """
-        float encodeLUT(float x, float profile) {
-            if (profile < 0.5) {
-                float v = abs(x);
-                return sign(x) * (v <= 0.0031308 ? 12.92*v : 1.055*pow(v,1.0/2.4)-0.055);
-            }
-            if (profile < 1.5) {
-                float v = abs(x);
-                return sign(x) * (v < 0.018 ? 4.5*v : 1.099*pow(v,0.45)-0.099);
-            }
-            if (profile < 2.5) {
-                return x >= 0.01125 ? (420.0+261.5*log((x+0.01)/0.19)/log(10.0))/1023.0
-                    : (x*(171.2102946929-95.0)/0.01125+95.0)/1023.0;
-            }
-            if (profile < 3.5) {
-                return x < 0.01 ? 5.6*x+0.125 : 0.241514*log(x+0.00873)/log(10.0)+0.598206;
-            }
-            if (profile < 4.5) {
-                float v = x/0.9;
-                if (v < -0.014) return -0.36726845*log(1.0-14.98325*v)/log(10.0)+0.12783901;
-                if (v <= 0.014) return 1.9754798*v+0.12512219;
-                return 0.36726845*log(1.0+14.98325*v)/log(10.0)+0.12240537;
-            }
-            if (profile < 5.5) {
-                return x >= 0.00089 ? 0.344676*log(0.555556*x+0.009468)/log(10.0)+0.790453
-                    : 8.735631*x+0.092864;
-            }
-            return x >= 0.000889 ? 0.245281*log(5.555556*x+0.064829)/log(10.0)+0.384316
-                : 8.799461*x+0.092864;
-        }
-        float decodeLUT(float x, float profile) {
-            if (profile < 0.5) {
-                float v = abs(x);
-                return sign(x) * (v <= 0.04045 ? v/12.92 : pow((v+0.055)/1.055,2.4));
-            }
-            if (profile < 1.5) {
-                float v = abs(x);
-                return sign(x) * (v < 0.081 ? v/4.5 : pow((v+0.099)/1.099,1.0/0.45));
-            }
-            if (profile < 2.5) {
-                return x >= 171.2102946929/1023.0 ? pow(10.0,(x*1023.0-420.0)/261.5)*0.19-0.01
-                    : (x*1023.0-95.0)*0.01125/(171.2102946929-95.0);
-            }
-            if (profile < 3.5) {
-                return x < 0.181 ? (x-0.125)/5.6 : pow(10.0,(x-0.598206)/0.241514)-0.00873;
-            }
-            if (profile < 4.5) {
-                if (x < 0.097465473) return -0.9*(pow(10.0,(0.12783901-x)/0.36726845)-1.0)/14.98325;
-                if (x <= 0.15277891) return 0.9*(x-0.12512219)/1.9754798;
-                return 0.9*(pow(10.0,(x-0.12240537)/0.36726845)-1.0)/14.98325;
-            }
-            if (profile < 5.5) {
-                return x >= 0.100537775223865 ? (pow(10.0,(x-0.790453)/0.344676)-0.009468)/0.555556
-                    : (x-0.092864)/8.735631;
-            }
-            return x >= 0.100686685370811 ? (pow(10.0,(x-0.384316)/0.245281)-0.064829)/5.555556
-                : (x-0.092864)/8.799461;
-        }
-        kernel vec4 lutProfile(__sample source, vec3 row0, vec3 row1, vec3 row2, float profile, float decodeMode) {
-            vec4 p = unpremultiply(source);
-            vec3 c = p.rgb;
-            if (decodeMode > 0.5) c = vec3(decodeLUT(c.r,profile),decodeLUT(c.g,profile),decodeLUT(c.b,profile));
-            c = vec3(dot(row0,c),dot(row1,c),dot(row2,c));
-            if (decodeMode < 0.5) c = vec3(encodeLUT(c.r,profile),encodeLUT(c.g,profile),encodeLUT(c.b,profile));
-            return premultiply(vec4(c,p.a));
-        }
-        """)
+    private let kernel = MetalImageKernels.color("lutProfile")
 
     func encode(_ image: CIImage, profile: LUTProfile) throws -> CIImage {
         guard let linear = image.matchedFromWorkingSpace(to: Self.linearSRGB) else { throw LUTError.invalid }

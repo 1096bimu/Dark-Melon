@@ -13,6 +13,8 @@ final class PreviewViewport {
 
 /// Keeps HDR presentation on the image layer while zooming and panning.
 struct HDRImagePreview: NSViewRepresentable {
+    @AppStorage("previewMouseControls") private var mouseControls = false
+    @AppStorage("previewReverseMouseScroll") private var reverseMouseScroll = false
     let sdrImage: CGImage
     @Environment(\.hdrScreenSaverActive) private var screenSaverActive
     let image: CGImage
@@ -35,6 +37,8 @@ struct HDRImagePreview: NSViewRepresentable {
     func makeNSView(context: Context) -> ImageDisplay { ImageDisplay(viewport: viewport) }
 
     func updateNSView(_ view: ImageDisplay, context: Context) {
+        view.mouseControls = mouseControls
+        view.reverseMouseScroll = reverseMouseScroll
         view.cropChanged = cropChanged
         view.transformChanged = { cropTransform = $0 }
         view.cropTransform = cropTransform
@@ -83,6 +87,16 @@ struct HDRImagePreview: NSViewRepresentable {
             cropRatio = ratio
         }
 
+        var reverseMouseScroll = false
+        var mouseControls = false {
+            didSet {
+                toolTip = mouseControls
+                    ? String(localized: "Scroll to zoom. Drag to pan. Double-click to zoom in or fit.")
+                    : String(localized: "Pinch to zoom. Swipe with two fingers to pan. Double-click to fit.")
+            }
+        }
+        private var panStart: (point: CGPoint, offset: CGPoint)?
+        private var contextPoint = CGPoint.zero
         private var sampleCenter: CGPoint?
         private var sampleRadius: CGFloat = 0
         var sample: ((CGPoint, CGFloat) -> Void)?
@@ -413,9 +427,18 @@ struct HDRImagePreview: NSViewRepresentable {
 
         private func changeZoom(_ factor: CGFloat, event: NSEvent) {
             guard !picking else { return }
+            changeZoom(factor, at: convert(event.locationInWindow, from: nil))
+        }
+
+        private var nativeZoom: CGFloat {
+            guard imageSize.width > 0, imageSize.height > 0, bounds.width > 0, bounds.height > 0 else { return 1 }
+            let fit = min(bounds.width / imageSize.width, bounds.height / imageSize.height)
+            return 1 / (fit * (window?.backingScaleFactor ?? 1))
+        }
+
+        private func changeZoom(_ factor: CGFloat, at point: CGPoint, allowBelowFit: Bool = false) {
             let old = zoom
-            zoom = min(16, max(1, zoom * factor))
-            let point = convert(event.locationInWindow, from: nil)
+            zoom = min(max(16, nativeZoom * 2), max(allowBelowFit ? min(1, nativeZoom) : 1, zoom * factor))
             let relative = CGPoint(x: point.x - bounds.midX, y: point.y - bounds.midY)
             let anchor = cropRatio == nil ? relative : (cropTransform.unproject(relative, in: CropGeometry.frame(in: bounds, ratio: cropRatio!)) ?? .zero)
             let ratio = zoom / old
@@ -425,9 +448,21 @@ struct HDRImagePreview: NSViewRepresentable {
             rememberViewport()
         }
 
-        override func magnify(with event: NSEvent) { changeZoom(1 + event.magnification, event: event) }
+        override func magnify(with event: NSEvent) {
+            if !mouseControls { changeZoom(1 + event.magnification, event: event) }
+        }
         override func scrollWheel(with event: NSEvent) {
-            guard !picking, event.hasPreciseScrollingDeltas,
+            guard !picking else { return }
+            if mouseControls {
+                guard event.scrollingDeltaY != 0, event.momentumPhase.isEmpty else { return }
+                // Wheel deltas are accelerated by macOS. Use direction only:
+                // six wheel steps double/halve magnification, regardless of speed.
+                let direction: CGFloat = event.scrollingDeltaY > 0 ? 1 : -1
+                let step = direction * (reverseMouseScroll ? 1 : -1) / 6
+                changeZoom(pow(2, step), event: event)
+                return
+            }
+            guard event.hasPreciseScrollingDeltas,
                   !event.phase.isEmpty || !event.momentumPhase.isEmpty else { return }
             let delta = CGPoint(x: event.scrollingDeltaX, y: -event.scrollingDeltaY)
             let movement = cropRatio == nil ? delta : cropTransform.panDelta(delta)
@@ -457,13 +492,19 @@ struct HDRImagePreview: NSViewRepresentable {
                 return
             }
             if event.clickCount == 2 {
+                if mouseControls, zoom <= 1.001 {
+                    changeZoom(max(2, nativeZoom) / zoom, at: location)
+                    return
+                }
                 zoom = 1
                 offset = .zero
                 positionImage()
                 rememberViewport()
+            } else if mouseControls {
+                panStart = (location, offset)
             }
         }
-        override func mouseUp(with event: NSEvent) { transformDrag = nil }
+        override func mouseUp(with event: NSEvent) { transformDrag = nil; panStart = nil }
 
         override func mouseDragged(with event: NSEvent) {
             scheduleHoverUpdate()
@@ -485,6 +526,41 @@ struct HDRImagePreview: NSViewRepresentable {
                 CATransaction.commit()
                 return
             }
+            if mouseControls, let start = panStart {
+                let delta = CGPoint(x: point.x - start.point.x, y: point.y - start.point.y)
+                let movement = cropRatio == nil ? delta : cropTransform.panDelta(delta)
+                offset = CGPoint(x: start.offset.x + movement.x, y: start.offset.y + movement.y)
+                positionImage()
+                rememberViewport()
+            }
+        }
+
+        override func menu(for event: NSEvent) -> NSMenu? {
+            contextPoint = convert(event.locationInWindow, from: nil)
+            let menu = NSMenu()
+            menu.autoenablesItems = false
+            for (title, action) in [(String(localized: "100% Zoom"), #selector(zoom100)),
+                                    (String(localized: "200% Zoom"), #selector(zoom200))] {
+                let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
+                item.target = self
+                menu.addItem(item)
+            }
+            menu.addItem(.separator())
+            let balance = NSMenuItem(title: String(localized: "White Balance"), action: #selector(sampleContextWhiteBalance), keyEquivalent: "")
+            balance.target = self
+            balance.isEnabled = cropRatio == nil && imageLayer.frame.contains(contextPoint)
+            menu.addItem(balance)
+            return menu
+        }
+        @objc private func zoom100() { changeZoom(nativeZoom / zoom, at: contextPoint, allowBelowFit: true) }
+        @objc private func zoom200() { changeZoom(2 * nativeZoom / zoom, at: contextPoint, allowBelowFit: true) }
+        @objc private func sampleContextWhiteBalance() {
+            let rect = imageLayer.frame
+            guard rect.width > 0, rect.height > 0, imageSize.width > 0 else { return }
+            sampleCenter = nil
+            circle.path = nil
+            sample?(CGPoint(x: (contextPoint.x - rect.minX) / rect.width,
+                            y: (contextPoint.y - rect.minY) / rect.height), 10 / imageSize.width)
         }
     }
 }

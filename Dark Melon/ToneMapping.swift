@@ -26,6 +26,7 @@ nonisolated struct ToneMapping: Codable, Equatable, Sendable {
     // Log2 relative derivative weights, from ¼× to 4×.
     var contrastDistribution = [0.0, 0.0, 0.0, 0.0]
     var channelContrast = [0.0, 0.0, 0.0]
+    var dyeMixers = DyeMixers()
     var hdrTarget = 4.0
     var hdrGain = 1.0
     var hdrRolloff = 0.0
@@ -36,9 +37,6 @@ nonisolated struct ToneMapping: Codable, Equatable, Sendable {
     /// Rendering headroom and effect ceilings must cover the multiplied curve.
     var hdrMax: Double {
         guard hdrEnabled else { return 1 }
-        if dyeContrastOffsets.contains(where: { $0 != 0 }) {
-            return (0..<3).map { channelMapping($0).hdrMax }.max()!
-        }
         let start = curve(hdr: false).value(at: peakPosition)
         let endpoint = hdrHasContinuationRoom
             ? start + (hdrTarget - start) * (1 - 0.5 * hdrCurvature) : 1
@@ -59,38 +57,19 @@ nonisolated struct ToneMapping: Codable, Equatable, Sendable {
         return result
     }
 
-    /// Remove the common component. Scale all deltas together near the contrast
-    /// limits so independent clipping cannot introduce a shared contrast offset.
+    /// Relative film-layer slopes. Independent of output contrast: equal RGB
+    /// settings remain neutral, even at the main Contrast slider's limits.
     var dyeContrastOffsets: [Double] {
         let relative = channelContrast.map { $0 - channelContrast[0] }
         let mean = relative.reduce(0, +) / 3
         let deltas = relative.map { $0 - mean }
-        var scale = 1.0
-        for delta in deltas {
-            if delta > 0 { scale = min(scale, (1 - concentration) / delta) }
-            if delta < 0 { scale = min(scale, (-1 - concentration) / delta) }
-        }
-        return deltas.map { $0 * max(0, scale) }
-    }
-
-    /// Channel offsets share the same tone position and clipping point. Each
-    /// HDR continuation follows its own SDR tangent, before common gain/rolloff.
-    private func channelMapping(_ channel: Int) -> ToneMapping {
-        var result = self
-        result.channelContrast = [0, 0, 0]
-        let offset = dyeContrastOffsets[channel]
-        if offset != 0 {
-            result.concentration = min(1, max(-1, concentration + offset))
-            result.setAutomaticHDRTarget()
-        }
-        return result
+        let largest = deltas.map { abs($0) }.max() ?? 0
+        let scale = largest > 0.8 ? 0.8 / largest : 1
+        return deltas.map { $0 * scale }
     }
 
     func channelCurves(hdr: Bool) -> [ToneCurve] {
-        guard dyeContrastOffsets.contains(where: { $0 != 0 }) else {
-            return Array(repeating: curve(hdr: hdr), count: 3)
-        }
-        return (0..<3).map { channelMapping($0).curve(hdr: hdr) }
+        Array(repeating: curve(hdr: hdr), count: 3)
     }
 
     static let minimumRange = 1.0 / 2048

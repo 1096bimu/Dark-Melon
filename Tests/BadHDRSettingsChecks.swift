@@ -20,7 +20,7 @@ import Foundation
         legacy["mapping"] = mapping
         let partial = try DevelopmentRecipe.decode(JSONSerialization.data(withJSONObject: legacy))
         assert(partial.mapping.badHDR == BadHDRSettings(strength: -0.5))
-        for invalid in [BadHDRSettings(strength: 4.01), BadHDRSettings(strength: -4.01), BadHDRSettings(radius: 0.49), BadHDRSettings(radius: 3.01)] {
+        for invalid in [BadHDRSettings(strength: 16.01), BadHDRSettings(strength: -16.01), BadHDRSettings(radius: -0.01), BadHDRSettings(radius: 32.01)] {
             var recipe = clean; recipe.mapping.badHDR = invalid
             do { _ = try DevelopmentRecipe.decode(recipe.encoded()); fatalError("Invalid effect accepted") }
             catch RecipeError.invalid { }

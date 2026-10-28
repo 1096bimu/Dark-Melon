@@ -5,6 +5,8 @@ import UniformTypeIdentifiers
 struct BatchExportView: View {
     let directory: URL
     var film: FilmSettings? = nil
+    var recipeOverrides: [URL: DevelopmentRecipe] = [:]
+    var pendingURLs: Set<URL> = []
     let queue: ExportQueue
     @Environment(\.dismiss) private var dismiss
     @State private var browser = ImageBrowserModel()
@@ -26,7 +28,7 @@ struct BatchExportView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 12) {
-                ImageFileBrowser(selectedURL: nil, open: { _ in }, model: browser, selection: $selection)
+                ImageFileBrowser(selectedURL: nil, open: { _ in }, model: browser, selection: $selection, expandedGrid: true, pendingURLs: pendingURLs)
                     .disabled(busy)
                 HStack {
                     Button("Select All") { selection = Set(browser.batchFiles.map(\.url)) }
@@ -88,12 +90,13 @@ struct BatchExportView: View {
         guard !sources.isEmpty else { return }
         busy = true; completed = 0; failures = []; status = String(localized: "Preparing export settings…")
         let capturedFilm = film
+        let capturedRecipes = recipeOverrides
         let maximizeRange = UserDefaults.standard.bool(forKey: RAWSettings.maximizeRangePreferenceKey)
         let files = sources
         job = Task {
             defer { busy = false }
             do {
-                let prepared = try await ExportPlan.prepare(files: files, film: capturedFilm, maximizeRAWRange: maximizeRange) { done, total in
+                let prepared = try await ExportPlan.prepare(files: files, film: capturedFilm, maximizeRAWRange: maximizeRange, recipeOverrides: capturedRecipes) { done, total in
                     completed = done
                     status = String(localized: "Preparing settings: \(done) of \(total)")
                 }

@@ -38,9 +38,6 @@ nonisolated struct DevelopmentRecipe: Codable, Equatable, Sendable {
             if halation["inputCurve"] == nil, let strength = halation["strength"] {
                 halation["inputCurve"] = strength
             }
-            if let transmission = halation["transmission"] as? Double, transmission > 0.5, transmission <= 1 {
-                halation["transmission"] = 0.5
-            }
             mapping["halation"] = halation
             document["mapping"] = mapping
         }
@@ -152,23 +149,24 @@ nonisolated struct DevelopmentRecipe: Codable, Equatable, Sendable {
             guard within(Double(wb.temperature), 2000...50000), within(Double(wb.tint), -150...150) else { throw RecipeError.invalid }
         }
         guard m.vertexWarp.count == OKLabVertexWarp.count,
-              m.vertexWarp.allSatisfy({ within($0.darkerHue, -Double.pi...Double.pi) && within($0.lighterHue, -Double.pi...Double.pi) && within($0.chroma, 0...2) && within($0.lightness, -0.25...0.25) && within($0.rotation, -1...1) && ($0.hueOffset.map { within($0, -Double.pi...Double.pi) } ?? true) }),
+              m.vertexWarp.allSatisfy({ within($0.darkerHue, -Double.pi...Double.pi) && within($0.lighterHue, -Double.pi...Double.pi) && within($0.chroma, AdjustmentLimits.chroma) && within($0.lightness, AdjustmentLimits.density) && within($0.rotation, -1...1) && ($0.hueOffset.map { within($0, -Double.pi...Double.pi) } ?? true) }),
               m.hls.count == 6,
               within(m.offset, -0.3...0.3), within(m.white, 0...1), m.white >= ToneMapping.minimumRange * 0.999,
               within(m.tonePosition, 0...1), within(m.concentration, -1...1),
-              m.contrastDistribution.count == 4, m.contrastDistribution.allSatisfy({ within($0, -2...2) }),
-              m.channelContrast.count == 3, m.channelContrast.allSatisfy({ within($0, -0.2...0.2) }),
+              m.contrastDistribution.count == 4, m.contrastDistribution.allSatisfy({ within($0, AdjustmentLimits.distributionLog) }),
+              m.dyeMixers.isValid,
+              m.channelContrast.count == 3, m.channelContrast.allSatisfy({ within($0, -1...1) }),
               within(m.hdrRolloff, -1...1), within(m.hdrTarget, 1...20), m.hdrGain.isFinite, m.hdrGain >= 0,
-              within(m.clarity, -2...2), within(m.clarityRadius, 15...90),
-              within(m.hdf, 0...0.2), within(m.hdfRadius, 50...200),
-              within(m.vignette.amount, 0...4), within(m.vignette.spread, 0...1),
-              within(m.badHDR.strength, -4...4), within(m.badHDR.radius, 0.5...3),
-              within(m.halation.inputCurve, 0...1), within(m.halation.radius, 0.5...3), within(m.halation.transmission, 0...0.5),
-              within(m.grain.size, 0.2...3), within(m.grain.strength, 0...5), within(m.grain.distribution, 0...1),
+              within(m.clarity, AdjustmentLimits.signedStrength), within(m.clarityRadius, 0...960),
+              within(m.hdf, AdjustmentLimits.strength), within(m.hdfRadius, 0...3200),
+              within(m.vignette.amount, AdjustmentLimits.vignetteStops), within(m.vignette.spread, 0...1),
+              within(m.badHDR.strength, AdjustmentLimits.signedStrength), within(m.badHDR.radius, AdjustmentLimits.radius),
+              within(m.halation.inputCurve, 0...1), within(m.halation.radius, AdjustmentLimits.radius), within(m.halation.transmission, 0...1),
+              within(m.grain.size, AdjustmentLimits.grainSize), within(m.grain.strength, AdjustmentLimits.strength), within(m.grain.distribution, 0...1),
               [m.whiteBalance.red, m.whiteBalance.green, m.whiteBalance.blue].allSatisfy({ within($0, 0.000001...10000) }),
               (0..<5).allSatisfy({ within(m.blackAndWhite.value(at: $0), 0...2) }),
               m.hls.allSatisfy({ within($0.shadowHue, -30...30) && within($0.midtoneHue, -30...30) && within($0.highlightHue, -30...30) && within($0.saturation, 0...2) && within($0.lightness, -1...1) }),
-              [m.color.saturationStart, m.color.saturationEnd, m.color.luminanceSaturationStart, m.color.luminanceSaturationEnd, m.color.saturationMid, m.color.saturationHDR, m.color.luminanceSaturationMid, m.color.luminanceSaturationHDR].allSatisfy({ within($0, 0...2) }),
+              [m.color.saturationStart, m.color.saturationEnd, m.color.luminanceSaturationStart, m.color.luminanceSaturationEnd, m.color.saturationMid, m.color.saturationHDR, m.color.luminanceSaturationMid, m.color.luminanceSaturationHDR].allSatisfy({ within($0, AdjustmentLimits.chroma) }),
               [m.color.splitTone.amountCurveA].allSatisfy({ within($0, -8...8) }),
               within(m.color.splitTone.shadowHue, 0...360), within(m.color.splitTone.highlightHue, 0...360),
               within(m.color.splitTone.shadowAmount, 0...2), within(m.color.splitTone.highlightAmount, 0...2),

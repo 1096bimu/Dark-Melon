@@ -54,7 +54,7 @@ struct ControlInfo: View {
         }
         .buttonStyle(.borderless)
         .accessibilityLabel("About \(topic.title)")
-        .help("About \(topic.title)")
+        .help(topic.explanation)
         .popover(isPresented: $showing) {
             VStack(alignment: .leading, spacing: 8) {
                 Text(topic.title).font(.headline)
@@ -66,5 +66,7 @@ struct ControlInfo: View {
             .frame(idealWidth: 300, maxWidth: 340, alignment: .leading)
             .presentationCompactAdaptation(.popover)
         }
+        // Information is still useful when its adjustment is locked/unavailable.
+        .environment(\.isEnabled, true)
     }
 }
