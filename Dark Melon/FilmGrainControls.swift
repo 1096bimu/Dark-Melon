@@ -6,19 +6,25 @@ struct FilmGrainControls: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label("Film Grain", systemImage: "film").font(.headline)
+            Text("Film Grain").font(.headline)
             HStack {
                 Text("Size")
                 AdjustmentField(title: "Size", value: $settings.size, range: AdjustmentLimits.grainSize, digits: 2, scale: 1)
 
             }
-            EditorSlider(value: $settings.size, in: 0.2...3, label: { Text("Grain size") }).controlReset { settings.size = defaults.grain.size }.labelsHidden()
+            HStack {
+                Image(systemName: "circle.dashed").frame(width: 22).accessibilityHidden(true)
+                EditorSlider(value: $settings.size, in: 0.2...3, label: { Text("Grain size") }).controlReset { settings.size = defaults.grain.size }.labelsHidden()
+            }
             HStack {
                 Text("Strength")
                 AdjustmentField(title: "Strength", value: $settings.strength, range: AdjustmentLimits.strength, digits: 2, scale: 1)
 
             }
-            EditorSlider(value: $settings.strength, in: 0...5, label: { Text("Grain strength") }).controlReset { settings.strength = defaults.grain.strength }.labelsHidden()
+            HStack {
+                Image(systemName: "circle.bottomrighthalf.pattern.checkered").frame(width: 22).accessibilityHidden(true)
+                EditorSlider(value: $settings.strength, in: 0...5, label: { Text("Grain strength") }).controlReset { settings.strength = defaults.grain.strength }.labelsHidden()
+            }
             HStack {
                 Text("Distribution")
                 AdjustmentField(title: "Distribution", value: $settings.distribution, range: 0...1, digits: 0, scale: 100, unit: "%")

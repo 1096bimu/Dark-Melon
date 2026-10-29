@@ -25,7 +25,6 @@ import Foundation
         photo.hdf = 0.12
         photo.hdfRadius = 130
         photo.vignette.amount = 2
-        photo.offset = 0.01
         let result = lock.applying(to: photo)
         assert(result.white == photo.white && result.tonePosition == photo.tonePosition)
         assert(result.concentration == film.concentration)

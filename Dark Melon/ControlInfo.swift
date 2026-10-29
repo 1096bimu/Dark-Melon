@@ -3,10 +3,11 @@ import SwiftUI
 /// Short, accessible explanations shared by control headings and graph titles.
 struct ControlInfo: View {
     enum Topic {
-        case shadowBias, iso, tone, contrast, contrastDistribution, hdrGain, hdrRolloff, saturation, luminanceSaturation
+        case colorChrome, shadowBias, iso, tone, contrast, contrastDistribution, hdrGain, hdrRolloff, saturation, luminanceSaturation
 
         var title: String {
             switch self {
+            case .colorChrome: String(localized: "Color Chrome")
             case .shadowBias: String(localized: "Shadow Bias")
             case .iso: String(localized: "ISO")
             case .tone: String(localized: "Tone")
@@ -20,6 +21,8 @@ struct ControlInfo: View {
         }
         var explanation: String {
             switch self {
+            case .colorChrome:
+                String(localized: "This switch makes color transformations look more natural instead of mathematically correct, it will not have any effect when no transform is applied.")
             case .shadowBias:
                 String(localized: "Crops out the signal floor that would be irrelevant in normal photos. Set to zero if you need extreme shadow detail.")
             case .iso:

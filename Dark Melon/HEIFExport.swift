@@ -118,25 +118,21 @@ struct HEIFExportOptions: View {
     @State private var worker: RAWDeveloper?
     @State private var measuredSettings: HEIFSettings?
     @State private var sizeError: String?
+    @State private var lutOutputsSDR = false
     @FocusState private var editingDimension: Dimension?
     private enum Dimension: Hashable { case width, height }
     private var outputHDREnabled: Bool {
         if variationGrid != nil { return false }
         if percentageOnly { return hdrEnabled } // A batch can contain both HDR and log-LUT SDR outputs.
         guard hdrEnabled else { return false }
-        guard let id = mapping.lutID, LUTStore.shared.configuration(for: id).input.isLog,
-              LUTStore.shared.cube(for: id) != nil else { return true }
-        return false
+        return !lutOutputsSDR
     }
     private var baseSize: CGSize { mapping.transform?.resolution(width: width, height: height, estimate: .maximum) ?? CGSize(width: width, height: height) }
     private var outputWidth: Int { max(1, Int((Double(baseSize.width) * settings.scale).rounded())) }
     private var outputHeight: Int { max(1, Int((Double(baseSize.height) * settings.scale).rounded())) }
 
-    private func sessionWorker() -> RAWDeveloper {
-        if let worker { return worker }
-        let created = RAWDeveloper(colorSpace: colorSpace, rawSettings: rawSettings, exporting: true, memoryLimitMB: BatchExportBudget.singleFileMegabytes)
-        worker = created
-        return created
+    @concurrent private static func makeWorker(space: ProcessingColorSpace, raw: RAWSettings) async -> RAWDeveloper {
+        RAWDeveloper(colorSpace: space, rawSettings: raw, exporting: true, memoryLimitMB: BatchExportBudget.singleFileMegabytes)
     }
 
     private func syncDimensions() {
@@ -186,6 +182,13 @@ struct HEIFExportOptions: View {
                 }
                 .pickerStyle(.segmented)
                 .padding()
+                if worker == nil {
+                    HStack {
+                        ProgressView().controlSize(.small)
+                        Text("Preparing export…")
+                        Spacer()
+                    }.padding(.horizontal).padding(.bottom, 8)
+                }
                 options(for: settings.format)
             }
             .navigationTitle(variationGrid == nil ? "Export Image" : "Variation Export")
@@ -196,11 +199,11 @@ struct HEIFExportOptions: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save…") {
                         finishDimensionEditing()
-                        let worker = sessionWorker()
+                        guard let worker else { return }
                         dismiss()
                         save(worker)
                     }
-                    .disabled(variationGrid.map { outputWidth < $0.wrappedValue || outputHeight < $0.wrappedValue } ?? false)
+                    .disabled(worker == nil || (variationGrid.map { outputWidth < $0.wrappedValue || outputHeight < $0.wrappedValue } ?? false))
                 }
             }
         }
@@ -209,10 +212,15 @@ struct HEIFExportOptions: View {
         .onChange(of: settings.scale) { _, _ in syncDimensions() }
         .onChange(of: editingDimension) { previous, _ in commitDimension(previous) }
         .task {
+            let created = await Self.makeWorker(space: colorSpace, raw: rawSettings)
+            guard !Task.isCancelled else { return }
+            lutOutputsSDR = await created.exportOutputsSDR(mapping)
+            guard !Task.isCancelled else { return }
+            worker = created
             guard variationGrid == nil else { return }
             // This session retains developed buffers and the last encoded file.
             // Save receives the same worker, including an encode still in flight.
-            let worker = sessionWorker()
+            let worker = created
             var attempted: HEIFSettings?
             while !Task.isCancelled {
                 do { try await Task.sleep(for: .seconds(1)) }
@@ -295,7 +303,10 @@ struct HEIFExportOptions: View {
                     } else if measuredSettings == settings, sizeError != nil {
                         Text("Unavailable").help(sizeError ?? "")
                     } else {
-                        Text("Calculating…")
+                        HStack(spacing: 8) {
+                            ProgressView().controlSize(.small)
+                            Text("Calculating…")
+                        }
                     }
                 }
                 .foregroundStyle(.secondary)

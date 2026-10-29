@@ -125,15 +125,15 @@ import AppKit
         if old.colorSpace != new.colorSpace { return String(localized: "Color space") }
         if old.rawSettings != new.rawSettings { return String(localized: "RAW") }
         let a = old.mapping, b = new.mapping
-        if a.lutID != b.lutID { return String(localized: "LUT") }
+        if a.lutID != b.lutID || a.lutStrength != b.lutStrength { return String(localized: "LUT") }
         if a.transform != b.transform { return String(localized: "Transform") }
         if a.whiteBalance != b.whiteBalance || a.rawWhiteBalance != b.rawWhiteBalance { return String(localized: "White Balance") }
         if a.color != b.color { return String(localized: "Color") }
         if a.vertexWarp != b.vertexWarp || a.hls != b.hls || a.blackAndWhite != b.blackAndWhite { return String(localized: "Color") }
         if a.vignette != b.vignette || a.clarity != b.clarity || a.hdf != b.hdf || a.grain != b.grain || a.halation != b.halation || a.badHDR != b.badHDR || a.clarityRadius != b.clarityRadius || a.hdfRadius != b.hdfRadius { return String(localized: "Effects") }
         if a.tonePosition != b.tonePosition { return String(localized: "Tone") }
-        if a.offset != b.offset { return String(localized: "Offset") }
-        if a.dyeMixers != b.dyeMixers || a.channelContrast != b.channelContrast { return String(localized: "Cross Processing") }
+        if a.dyePurity != b.dyePurity || a.dyeMixers != b.dyeMixers || a.channelContrast != b.channelContrast { return String(localized: "Cross Processing") }
+        if a.shadowFloor != b.shadowFloor { return String(localized: "Shadow Floor") }
         if a.concentration != b.concentration { return String(localized: "Contrast") }
         if a.contrastDistribution != b.contrastDistribution { return String(localized: "Contrast Distribution") }
         if a.white != b.white { return String(localized: "White point") }

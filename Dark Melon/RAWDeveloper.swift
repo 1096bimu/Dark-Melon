@@ -58,6 +58,7 @@ nonisolated struct PreviewImages: @unchecked Sendable {
     var surfaceHDR: PreviewSurface? = nil
     var fullSurfaceSDR: PreviewSurface? = nil
     var fullSurfaceHDR: PreviewSurface? = nil
+    var hasHDROutput = true
 }
 
 actor RAWDeveloper {
@@ -206,7 +207,7 @@ actor RAWDeveloper {
         guard let transform = mapping.transform else {
             return PreviewImages(source: source, sdr: fullSDR, hdr: fullHDR, fullSDR: fullSDR, fullHDR: fullHDR,
                 surfaceSDR: fullSDRSurface, surfaceHDR: fullHDRSurface,
-                fullSurfaceSDR: fullSDRSurface, fullSurfaceHDR: fullHDRSurface)
+                fullSurfaceSDR: fullSDRSurface, fullSurfaceHDR: fullHDRSurface, hasHDROutput: outputHDR)
         }
         let cropped = try finalLUTPair(sdr: transform.apply(to: sdr),
                                       hdr: mapping.hdrEnabled ? transform.apply(to: hdr) : sdr, mapping: mapping)
@@ -218,16 +219,16 @@ actor RAWDeveloper {
         try Task.checkCancellation()
         return PreviewImages(source: source, sdr: croppedSDR, hdr: croppedHDR, fullSDR: fullSDR, fullHDR: fullHDR,
             surfaceSDR: croppedSDRSurface, surfaceHDR: croppedHDRSurface,
-            fullSurfaceSDR: fullSDRSurface, fullSurfaceHDR: fullHDRSurface)
+            fullSurfaceSDR: fullSDRSurface, fullSurfaceHDR: fullHDRSurface, hasHDROutput: outputHDR)
     }
 
     private func finalLUTPair(sdr: CIImage, hdr: CIImage, mapping: ToneMapping) throws -> (sdr: CIImage, hdr: CIImage) {
         guard lutPipeline.isAvailable(mapping.lutID, hdrEnabled: mapping.hdrEnabled) else { return (sdr, hdr) }
         if lutPipeline.outputsSDR(mapping) {
-            let graded = try lutPipeline.apply(hdr, id: mapping.lutID).settingContentHeadroom(1)
+            let graded = try lutPipeline.apply(hdr, id: mapping.lutID, strength: mapping.lutStrength, baseline: sdr).settingContentHeadroom(1)
             return (graded, graded)
         }
-        let graded = try lutPipeline.apply(sdr, id: mapping.lutID)
+        let graded = try lutPipeline.apply(sdr, id: mapping.lutID, strength: mapping.lutStrength)
         let gradedHDR = mapping.hdrEnabled ? try lutPipeline.applyHDR(hdr, sdr: sdr, gradedSDR: graded) : graded
         return (graded, gradedHDR)
     }
@@ -330,11 +331,60 @@ actor RAWDeveloper {
         return try displayPreview(try mapping.transform?.apply(to: image) ?? image, hdr: hdr, headroom: mapping.hdrMax)
     }
 
+    /// Sample the pointwise SDR rendering transform. Spatial effects cannot be
+    /// represented by a 3D LUT: adjacent grid entries are colors, not neighbors.
+    func exportSDRLUT(mapping: ToneMapping, dimension: Int = 33) throws -> Data {
+        guard (2...65).contains(dimension) else { throw LUTError.invalid }
+        var settings = mapping
+        settings.transform = nil
+        settings.hdf = 0
+        settings.vignette.amount = 0
+        settings.halation.inputCurve = 0
+        settings.grain.strength = 0
+        settings.badHDR.strength = 0
+        settings.clarity = 0
+        let count = dimension * dimension * dimension
+        var pixels = [Float]()
+        pixels.reserveCapacity(count * 4)
+        for b in 0..<dimension { for g in 0..<dimension { for r in 0..<dimension {
+            pixels.append(contentsOf: [Float(r) / Float(dimension - 1),
+                Float(g) / Float(dimension - 1), Float(b) / Float(dimension - 1), 1])
+        } } }
+        let srgb = CGColorSpace(name: CGColorSpace.sRGB)!
+        let input = CIImage(bitmapData: pixels.withUnsafeBytes { Data($0) },
+            bytesPerRow: dimension * 16, size: CGSize(width: dimension, height: dimension * dimension),
+            format: .RGBAf, colorSpace: srgb)
+        let output = try mappedImage(input, mapping: settings, hdr: false)
+        var rendered = [Float](repeating: 0, count: count * 4)
+        context.render(output, toBitmap: &rendered, rowBytes: dimension * 16,
+            bounds: input.extent, format: .RGBAf, colorSpace: srgb)
+        try Task.checkCancellation()
+        var text = """
+        TITLE "Dark Melon SDR"
+        # Input: encoded sRGB. Output: encoded sRGB.
+        # Spatial effects, crop and RAW decoder settings excluded.
+        LUT_3D_SIZE \(dimension)
+        DOMAIN_MIN 0 0 0
+        DOMAIN_MAX 1 1 1
+
+        """
+        let locale = Locale(identifier: "en_US_POSIX")
+        for index in 0..<count {
+            let rgb = (0..<3).map { rendered[index * 4 + $0] }
+            guard rgb.allSatisfy(\.isFinite) else { throw LUTError.invalid }
+            text += String(format: "%.7f %.7f %.7f\n", locale: locale,
+                min(1, max(0, rgb[0])), min(1, max(0, rgb[1])), min(1, max(0, rgb[2])))
+        }
+        return Data(text.utf8)
+    }
+
     func mappedImage(_ image: CIImage, mapping: ToneMapping, hdr: Bool) throws -> CIImage {
         if lutPipeline.outputsSDR(mapping) {
             let developed = try developedImage(image, mapping: mapping, hdr: true)
             let transformed = try mapping.transform?.apply(to: developed) ?? developed
-            return try lutPipeline.apply(transformed, id: mapping.lutID).settingContentHeadroom(1)
+            let base = mapping.lutStrength < 1 ? try developedImage(image, mapping: mapping, hdr: false) : transformed
+            return try lutPipeline.apply(transformed, id: mapping.lutID, strength: mapping.lutStrength,
+                baseline: mapping.transform?.apply(to: base) ?? base).settingContentHeadroom(1)
         }
         if hdr && mapping.hdrEnabled && lutPipeline.isAvailable(mapping.lutID, hdrEnabled: mapping.hdrEnabled) {
             let input = try adjustedInput(image, mapping: mapping)
@@ -345,20 +395,13 @@ actor RAWDeveloper {
         }
         let developed = try developedImage(image, mapping: mapping, hdr: hdr)
         let transformed = try mapping.transform?.apply(to: developed) ?? developed
-        return try lutPipeline.apply(transformed, id: lutPipeline.activeID(mapping))
+        return try lutPipeline.apply(transformed, id: lutPipeline.activeID(mapping), strength: mapping.lutStrength)
     }
 
-    private lazy var offsetKernel = MetalImageKernels.color("inputOffset")
+    private lazy var shadowFloorKernel = MetalImageKernels.color("shadowFloor")
 
     private func adjustedInput(_ source: CIImage, mapping: ToneMapping) throws -> CIImage {
         var image = source
-        if mapping.offset != 0 {
-            guard let adjusted = offsetKernel?.apply(extent: source.extent,
-                                                     arguments: [source, mapping.offset]) else {
-                throw DevelopmentError.decode
-            }
-            image = adjusted
-        }
         image = try applyHDF(image, mapping: mapping)
         image = try vignette.apply(to: image, settings: mapping.vignette, transform: mapping.transform)
         if mapping.hdrEnabled && mapping.halation.inputCurve > 0 {
@@ -372,7 +415,15 @@ actor RAWDeveloper {
         }
         image = try badHDR.apply(to: image, settings: mapping.badHDR, whitePoint: mapping.white,
                                 weights: colorSpace.luminance)
-        return try filmResponse.apply(to: image, mapping: mapping)
+        image = try filmResponse.apply(to: image, mapping: mapping)
+        if mapping.shadowFloor > 0 {
+            guard let adjusted = shadowFloorKernel?.apply(extent: image.extent,
+                arguments: [image, mapping.shadowFloor]) else {
+                throw DevelopmentError.decode
+            }
+            image = adjusted
+        }
+        return image
     }
 
     private func developedImage(_ source: CIImage, mapping: ToneMapping, hdr: Bool) throws -> CIImage {
@@ -386,7 +437,7 @@ actor RAWDeveloper {
             color.saturationStart = 1; color.saturationEnd = 1; color.saturationMid = 1; color.saturationHDR = 1
             color.luminanceSaturationStart = 1; color.luminanceSaturationEnd = 1; color.luminanceSaturationMid = 1; color.luminanceSaturationHDR = 1
         }
-        // Shared by preview/export: offset → HDF → vignette → halation → grain → BadHDR → film response (A → log curves → B) → tone → RGB WB → OKLab → clarity.
+        // Shared by preview/export: HDF → vignette → halation → grain → BadHDR → film response (A → log curves → B) → tone → RGB WB → OKLab → clarity.
         // RAW decoder white balance is already part of the decoded source.
         let toned = try applyTone(image, curves: mapping.channelCurves(hdr: hdr))
         let balanced = try applyWhiteBalance(toned, mapping: mapping)
@@ -754,7 +805,9 @@ actor RAWDeveloper {
         if lutPipeline.outputsSDR(mapping) {
             let developed = try finishDevelopment(input, mapping: mapping, hdr: true)
             let transformed = try mapping.transform?.apply(to: developed) ?? developed
-            let rendered = try materialized(lutPipeline.apply(transformed, id: mapping.lutID).settingContentHeadroom(1))
+            let base = mapping.lutStrength < 1 ? try finishDevelopment(input, mapping: mapping, hdr: false) : developed
+            let rendered = try materialized(lutPipeline.apply(transformed, id: mapping.lutID,
+                strength: mapping.lutStrength, baseline: mapping.transform?.apply(to: base) ?? base).settingContentHeadroom(1))
             exportRender?.sdr = rendered; exportRender?.hdr = rendered
             exportRender?.input = nil; exportRender?.referenceSDR = nil
             return rendered
@@ -772,7 +825,7 @@ actor RAWDeveloper {
         if let gradedSDR, let reference = exportRender?.referenceSDR {
             graded = try lutPipeline.applyHDR(transformed, sdr: reference, gradedSDR: gradedSDR)
         } else {
-            graded = try lutPipeline.apply(transformed, id: lutPipeline.activeID(mapping))
+            graded = try lutPipeline.apply(transformed, id: lutPipeline.activeID(mapping), strength: mapping.lutStrength)
         }
         let rendered = try materialized(graded)
         if hdr { exportRender?.hdr = rendered } else { exportRender?.sdr = rendered }
@@ -782,6 +835,8 @@ actor RAWDeveloper {
         }
         return rendered
     }
+
+    func exportOutputsSDR(_ mapping: ToneMapping) -> Bool { lutPipeline.outputsSDR(mapping) }
 
     func encodedSize(_ url: URL, mapping: ToneMapping, settings: HEIFSettings) throws -> Int {
         try cachedExport(url, mapping: mapping, settings: settings).count

@@ -17,6 +17,14 @@ nonisolated enum CropGeometry {
                    + log(ratios[i + 1].value) * (p - Double(i)))
     }
 
+    static func position(for ratio: Double) -> Double {
+        guard ratio.isFinite, ratio > ratios[0].value else { return 0 }
+        for i in 0..<(ratios.count - 1) where ratio <= ratios[i + 1].value {
+            return Double(i) + log(ratio / ratios[i].value) / log(ratios[i + 1].value / ratios[i].value)
+        }
+        return Double(ratios.count - 1)
+    }
+
     static func frame(in bounds: CGRect, ratio: Double) -> CGRect {
         let width = min(bounds.width, bounds.height * ratio)
         let height = width / ratio
@@ -220,3 +228,42 @@ private struct CropProjection: GeometryEffect {
     }
 }
 #endif
+
+
+/// Uses the library's name so renaming a LUT is reflected here as well.
+struct ActiveLUTControls: View {
+    @Binding var mapping: ToneMapping
+    @State private var dimension: Int?
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("LUT").font(.headline)
+            if let id = mapping.lutID {
+                HStack {
+                    Text(EditLibrary.shared.entries.first(where: { $0.lutID == id })?.name ?? "LUT")
+                        .lineLimit(2)
+                    Spacer()
+                    Button("Remove") { mapping.lutID = nil; mapping.lutStrength = 1 }
+                }
+                if let dimension {
+                    Text("\(dimension) × \(dimension) × \(dimension)")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                HStack {
+                    Text("Strength")
+                    Spacer()
+                    AdjustmentField(title: "Strength", value: $mapping.lutStrength, range: 0...1, digits: 2)
+                }
+                EditorSlider(value: $mapping.lutStrength, in: 0...1) { Text("Strength") }
+                    .labelsHidden().controlReset { mapping.lutStrength = 1 }
+            }
+        }
+        .padding()
+        .task(id: mapping.lutID) {
+            dimension = nil
+            guard let id = mapping.lutID else { return }
+            let size = await Task.detached { LUTStore.shared.cube(for: id)?.dimension }.value
+            guard !Task.isCancelled else { return }
+            dimension = size
+        }
+    }
+}

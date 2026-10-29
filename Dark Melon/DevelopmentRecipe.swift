@@ -125,7 +125,6 @@ nonisolated struct DevelopmentRecipe: Codable, Equatable, Sendable {
             result.draftSnapshot = DraftSnapshot(edit: SnapshotEdit(validated),
                 modifiedAt: timestamp.map { Date(timeIntervalSinceReferenceDate: $0) })
         }
-        result.mapping.offset = result.mapping.offset.clamped(to: -0.02...0.02)
         // Preserve older recipes while bringing their multiplier into the current range.
         result.mapping.hdrGain = result.mapping.hdrGain == 0 ? 0 : max(1, result.mapping.hdrGain)
         return result
@@ -139,6 +138,7 @@ nonisolated struct DevelopmentRecipe: Codable, Equatable, Sendable {
         }
         if let transform = mapping.transform, !transform.isValid { throw RecipeError.invalid }
         let m = mapping
+        guard m.lutStrength.isFinite, (0...1).contains(m.lutStrength) else { throw RecipeError.invalid }
         if let nodes = m.color.splitTone.nodes {
             guard nodes.count <= 6, Set(nodes.map(\.id)).count == nodes.count,
                   nodes.allSatisfy({ $0.lightness.isFinite && (0...5).contains($0.lightness) &&
@@ -151,10 +151,11 @@ nonisolated struct DevelopmentRecipe: Codable, Equatable, Sendable {
         guard m.vertexWarp.count == OKLabVertexWarp.count,
               m.vertexWarp.allSatisfy({ within($0.darkerHue, -Double.pi...Double.pi) && within($0.lighterHue, -Double.pi...Double.pi) && within($0.chroma, AdjustmentLimits.chroma) && within($0.lightness, AdjustmentLimits.density) && within($0.rotation, -1...1) && ($0.hueOffset.map { within($0, -Double.pi...Double.pi) } ?? true) }),
               m.hls.count == 6,
-              within(m.offset, -0.3...0.3), within(m.white, 0...1), m.white >= ToneMapping.minimumRange * 0.999,
-              within(m.tonePosition, 0...1), within(m.concentration, -1...1),
+              within(m.white, 0...1), m.white >= ToneMapping.minimumRange * 0.999,
+              within(m.shadowFloor, 0...Double(Float.greatestFiniteMagnitude)), within(m.tonePosition, 0...1), within(m.concentration, -1...1),
               m.contrastDistribution.count == 4, m.contrastDistribution.allSatisfy({ within($0, AdjustmentLimits.distributionLog) }),
               m.dyeMixers.isValid,
+              m.dyePurity.count == 3, m.dyePurity.allSatisfy({ within($0, 0...1) }),
               m.channelContrast.count == 3, m.channelContrast.allSatisfy({ within($0, -1...1) }),
               within(m.hdrRolloff, -1...1), within(m.hdrTarget, 1...20), m.hdrGain.isFinite, m.hdrGain >= 0,
               within(m.clarity, AdjustmentLimits.signedStrength), within(m.clarityRadius, 0...960),

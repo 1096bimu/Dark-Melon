@@ -8,11 +8,13 @@ import UIKit
 nonisolated enum PasteItem: String, CaseIterable, Codable, Sendable, Identifiable {
     // Preserve saved selections from the experimental Skew control.
     case contrastDistribution = "skew"
-    case tone, contrast, whitePoint, hdrGain, hdrRolloff, rgbWhiteBalance, rawWhiteBalance
-    case chromaCurve, lightnessChromaCurve, vertices, hueTwister, splitTone
+    case shadowFloor, tone, contrast, whitePoint, hdrGain, hdrRolloff, rgbWhiteBalance, rawWhiteBalance
+    case colorChrome, chromaCurve, lightnessChromaCurve, vertices, hueTwister, splitTone
     case dyeResponse, clarity, hdf, grain, halation, vignette, badHDR
     case transform, lut
-    case rawDecoder, exposure, shadowBias, offset, luminanceNoise, colorNoise, sharpness, detail, edgeContrast, moire, lensCorrection, highlightRecovery
+    // Decode-only retired selection; never shown or applied.
+    case offset
+    case rawDecoder, exposure, shadowBias, luminanceNoise, colorNoise, sharpness, detail, edgeContrast, moire, lensCorrection, highlightRecovery
     var id: Self { self }
     var title: String {
         switch self {
@@ -21,9 +23,11 @@ nonisolated enum PasteItem: String, CaseIterable, Codable, Sendable, Identifiabl
         case .contrastDistribution: "Contrast Distribution"
         case .whitePoint: "White Point"
         case .hdrGain: "HDR Gain"
+        case .shadowFloor: "Shadow Floor"
         case .hdrRolloff: "HDR Rolloff"
         case .rgbWhiteBalance: "RGB White Balance"
         case .rawWhiteBalance: "RAW Kelvin White Balance"
+        case .colorChrome: "Color Chrome"
         case .chromaCurve: "Chroma → Chroma"
         case .lightnessChromaCurve: "Lightness → Chroma"
         case .vertices: "Color Nodes"
@@ -65,11 +69,11 @@ nonisolated enum PasteItem: String, CaseIterable, Codable, Sendable, Identifiabl
         default: nil
         }
     }
-    static let toneItems: [Self] = [.tone,.contrast,.contrastDistribution,.whitePoint,.hdrGain,.hdrRolloff]
+    static let toneItems: [Self] = [.tone,.contrast,.contrastDistribution,.whitePoint,.hdrGain,.hdrRolloff,.shadowFloor]
     static let balanceItems: [Self] = [.rgbWhiteBalance,.rawWhiteBalance]
-    static let colorItems: [Self] = [.chromaCurve,.lightnessChromaCurve,.vertices,.hueTwister,.splitTone]
+    static let colorItems: [Self] = [.colorChrome,.chromaCurve,.lightnessChromaCurve,.vertices,.hueTwister,.splitTone]
     static let effectItems: [Self] = [.dyeResponse,.clarity,.hdf,.grain,.halation,.vignette,.badHDR]
-    static let rawItems: [Self] = [.rawDecoder,.exposure,.shadowBias,.offset,.luminanceNoise,.colorNoise,.sharpness,.detail,.edgeContrast,.moire,.lensCorrection,.highlightRecovery]
+    static let rawItems: [Self] = [.rawDecoder,.exposure,.shadowBias,.luminanceNoise,.colorNoise,.sharpness,.detail,.edgeContrast,.moire,.lensCorrection,.highlightRecovery]
 }
 
 /// Legacy group flags keep existing Library entries and internal reset callers compatible.
@@ -103,7 +107,7 @@ nonisolated struct SettingsPasteSelection: Codable, Sendable, Equatable {
 
     func applying(_ source: ToneMapping, to destination: ToneMapping) -> ToneMapping {
         var result = destination
-        if contains(.offset) { result.offset = source.offset }
+        if contains(.shadowFloor) { result.shadowFloor = source.shadowFloor }
         if contains(.whitePoint) { result.white = source.white }
         if contains(.tone) { result.tonePosition = source.tonePosition }
         if contains(.contrast) { result.concentration = source.concentration }
@@ -116,6 +120,7 @@ nonisolated struct SettingsPasteSelection: Codable, Sendable, Equatable {
         if contains(.rawWhiteBalance), destination.rawWhiteBalance != nil, let balance = source.rawWhiteBalance {
             result.rawWhiteBalance = balance
         }
+        if contains(.colorChrome) { result.color.colorChrome = source.color.colorChrome }
         if contains(.chromaCurve) {
             result.color.saturationStart = source.color.saturationStart
             result.color.saturationMid = source.color.saturationMid
@@ -142,7 +147,7 @@ nonisolated struct SettingsPasteSelection: Codable, Sendable, Equatable {
         }
         if contains(.vertices) { result.color.monochrome = source.color.monochrome; result.hls = source.hls; result.blackAndWhite = source.blackAndWhite }
         if contains(.splitTone) { result.color.splitTone = source.color.splitTone }
-        if contains(.dyeResponse) { result.channelContrast = source.channelContrast; result.dyeMixers = source.dyeMixers }
+        if contains(.dyeResponse) { result.channelContrast = source.channelContrast; result.dyeMixers = source.dyeMixers; result.dyePurity = source.dyePurity }
         if contains(.clarity) { result.clarity = source.clarity; result.clarityRadius = source.clarityRadius }
         if contains(.hdf) { result.hdf = source.hdf; result.hdfRadius = source.hdfRadius }
         if contains(.grain) { result.grain = source.grain }
@@ -150,7 +155,7 @@ nonisolated struct SettingsPasteSelection: Codable, Sendable, Equatable {
         if contains(.vignette) { result.vignette = source.vignette }
         if contains(.badHDR) { result.badHDR = source.badHDR }
         if contains(.transform) { result.transform = source.transform }
-        if contains(.lut) { result.lutID = source.lutID }
+        if contains(.lut) { result.lutID = source.lutID; result.lutStrength = source.lutStrength }
         return result
     }
 

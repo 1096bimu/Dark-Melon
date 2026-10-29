@@ -231,7 +231,7 @@ struct SlopeEditor: View {
                     }), range: -1...1, digits: 0, scale: 100, unit: "%")
                 }
                 HStack {
-                    Image(systemName: "line.diagonal").frame(width: 22).accessibilityHidden(true)
+                    Image(systemName: "surfboard").frame(width: 22).accessibilityHidden(true)
                     EditorSlider(value: Binding(get: { mapping.hdrRolloff }, set: {
                         mapping.hdrRolloff = $0
                         onHDRGainAdjustment()
@@ -241,6 +241,22 @@ struct SlopeEditor: View {
                 }
             }
             .disabled(!mapping.hdrEnabled).filmLock(.hdrRolloff)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Shadow Floor")
+                    Spacer()
+                    AdjustmentField(title: "Shadow Floor", value: $mapping.shadowFloor, range: 0...Double(Float.greatestFiniteMagnitude), digits: 3)
+                }
+                HStack {
+                    Image(systemName: "film.circle.fill").frame(width: 22).accessibilityHidden(true)
+                    EditorSlider(value: $mapping.shadowFloor, in: 0...0.05) { Text("Shadow Floor") }
+                        .labelsHidden()
+                        .controlReset { mapping.shadowFloor = defaults.shadowFloor }
+                }
+            }
+            .filmLock(.shadowFloor)
+            .help("Clips each linear RGB channel below this level to the same floor before tone mapping. Zero disables the floor.")
+
         }
         .font(.callout.monospacedDigit())
         .padding()
@@ -278,7 +294,7 @@ struct HistogramToneCurve: View {
                 var path = Path()
                 for index in 0...2000 {
                     let input = Double(index) / 2000 * inputMaximum
-                    let p = point(input, curve.value(at: input))
+                    let p = point(input, curve.value(at: max(input, mapping.shadowFloor)))
                     if index == 0 { path.move(to: p) } else { path.addLine(to: p) }
                 }
                 context.stroke(path, with: .color(.black.opacity(0.8)), lineWidth: 4)

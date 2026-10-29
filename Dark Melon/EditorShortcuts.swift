@@ -28,6 +28,7 @@ private struct ImageInfoFocus: FocusedValueKey {
 private struct TutorialFocus: FocusedValueKey {
     typealias Value = () -> Void
 }
+private struct LUTExportFocus: FocusedValueKey { typealias Value = () -> Void }
 private struct VariationExportFocus: FocusedValueKey { typealias Value = () -> Void }
 private struct BatchExportFocus: FocusedValueKey {
     typealias Value = () -> Void
@@ -35,6 +36,10 @@ private struct BatchExportFocus: FocusedValueKey {
 private struct CopyDevelopmentFocus: FocusedValueKey { typealias Value = () -> Void }
 private struct PasteDevelopmentFocus: FocusedValueKey { typealias Value = () -> Void }
 extension FocusedValues {
+    var exportSDRLUT: (() -> Void)? {
+        get { self[LUTExportFocus.self] }
+        set { self[LUTExportFocus.self] = newValue }
+    }
     var variationExport: (() -> Void)? {
         get { self[VariationExportFocus.self] }
         set { self[VariationExportFocus.self] = newValue }
@@ -78,6 +83,7 @@ struct EditorCommands: Commands {
     @FocusedValue(\.toggleEditorPicker) private var togglePicker
     @FocusedBinding(\.editorPanel) private var panel
     @FocusedBinding(\.imageInfoVisible) private var imageInfoVisible
+    @FocusedValue(\.exportSDRLUT) private var exportSDRLUT
     @FocusedValue(\.variationExport) private var variationExport
     @FocusedValue(\.batchExport) private var batchExport
     @FocusedValue(\.startTutorial) private var startTutorial
@@ -136,6 +142,8 @@ struct EditorCommands: Commands {
                 .disabled(startTutorial == nil)
         }
         CommandMenu("Tools") {
+            Button("Export SDR LUT…") { exportSDRLUT?() }
+                .disabled(exportSDRLUT == nil)
             Button("Variation Export…") { variationExport?() }
                 .disabled(variationExport == nil)
             Divider()

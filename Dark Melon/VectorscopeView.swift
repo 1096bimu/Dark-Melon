@@ -13,6 +13,14 @@ struct VectorscopeView: View {
     var resetRAWBalance: (() -> Void)? = nil
     var convertWhiteBalance: (() -> Void)? = nil
     var commitRAWBalance: () -> Void = {}
+    private func setRAWBalance(temperature: Float) {
+        guard var whiteBalance = mapping.rawWhiteBalance else { return }
+        whiteBalance.temperature = temperature
+        whiteBalance.tint = 0
+        mapping.rawWhiteBalance = whiteBalance
+        commitRAWBalance()
+    }
+
     private var balance: WhiteBalance {
         get { mapping.whiteBalance }
         nonmutating set { mapping.whiteBalance = newValue }
@@ -181,6 +189,12 @@ struct VectorscopeView: View {
                         if let convertWhiteBalance {
                             HStack {
                                 Spacer()
+                                Button("D") { setRAWBalance(temperature: 5500) }
+                                    .help("5500 K · Tint 0")
+                                    .filmLock(.rawWhiteBalance)
+                                Button("T") { setRAWBalance(temperature: 3200) }
+                                    .help("3200 K · Tint 0")
+                                    .filmLock(.rawWhiteBalance)
                                 Button("Convert to WB", action: convertWhiteBalance)
                                     .disabled(balance == WhiteBalance() || lockedItems.contains(.rgbWhiteBalance) || lockedItems.contains(.rawWhiteBalance))
                             }

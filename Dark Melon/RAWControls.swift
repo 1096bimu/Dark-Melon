@@ -122,8 +122,9 @@ struct RAWControls: View {
     @Environment(\.resetMapping) private var defaults
     @AppStorage("showAdvancedRAWControls") private var showAdvancedRAWControls = false
     @Environment(\.lockedFilmItems) private var lockedItems
+    @Binding var colorSpace: ProcessingColorSpace
+    var colorSpaceDisabled = false
     @Binding var settings: RAWSettings
-    @Binding var offset: Double
     let isRAW: Bool
     let commit: () -> Void
     let reset: () -> Void
@@ -139,6 +140,13 @@ struct RAWControls: View {
                 Button("Max Range", action: maxRange).disabled(!isRAW || maximizingRange || lockedItems.contains(.exposure) || lockedItems.contains(.shadowBias))
                 Button("Reset RAW", action: reset).disabled(!isRAW || maximizingRange)
             }
+            Picker("Color space", selection: $colorSpace) {
+                ForEach(ProcessingColorSpace.allCases) { space in
+                    Text(space.rawValue).tag(space)
+                }
+            }
+            .pickerStyle(.segmented)
+            .disabled(colorSpaceDisabled)
             if isRAW {
                 Picker("RAW 9", selection: Binding(get: { settings.decoderMode }, set: {
                     settings.decoderMode = $0; commit()
@@ -177,23 +185,7 @@ struct RAWControls: View {
                         .accessibilityLabel(LocalizedStringKey(control.rawValue))
                     }
                     .disabled(!settings.supported.contains(control) || lockedItems.contains(where: { $0.rawAdjustment == control }))
-                    if control == .shadowBias && showAdvancedRAWControls {
-                        VStack(alignment: .leading, spacing: 6) {
-                            HStack {
-                                Text("Offset")
-                                Text(offset, format: .number.precision(.fractionLength(4)))
-                                    .monospacedDigit()
-                            }
-                            HStack {
-                                Image(systemName: "plusminus").frame(width: 22).accessibilityHidden(true)
-                                EditorSlider(value: $offset, in: -0.02...0.02, label: { Text("Offset") })
-                                    .controlReset { offset = defaults.offset }
-                                    .labelsHidden()
-                            }
-                            .filmLock(.offset)
-                            .help("Adds an equal offset to linear RGB before tone mapping. Negative values clip shadows; positive values lift black.")
-                        }
-                    }
+
                 }
             } else {
                 Text("Open a RAW image to adjust decoder settings.").foregroundStyle(.secondary)

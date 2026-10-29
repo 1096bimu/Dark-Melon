@@ -11,17 +11,35 @@ static float glslMod(float x, float y) { return x - y * floor(x / y); }
 
 
 extern "C" float4 filmResponse(sample_t pixel, float3 a0, float3 a1, float3 a2,
-                         float3 b0, float3 b1, float3 b2, float3 slopes, float reference) {
+                         float3 b0, float3 b1, float3 b2, float3 slopes, float reference, float3 purity) {
     float4 p = unpremultiply(pixel);
     float3 exposed = max(float3(dot(a0,p.rgb), dot(a1,p.rgb), dot(a2,p.rgb)), float3(0.0));
     float3 h = log2(max(exposed,float3(1e-20)) / reference);
     float3 base = float3(1.0) / (float3(1.0) + exp(-h * 0.5));
     float3 layer = float3(1.0) / (float3(1.0) + exp(-h * slopes * 0.5));
-    float3 response = exposed * exp2(8.0 * (layer - base));
-    float3 returned = float3(dot(b0,response), dot(b1,response), dot(b2,response));
-    return premultiply(float4(max(returned,float3(0.0)),p.a));
+    // Three-band cross-absorption, compensated against the same dyes at
+    // each channel's neutral exposure to preserve the existing gray response.
+    float3 impurity = 1.0 - purity;
+    float3 densityDelta = float3(0.0);
+    for (int i = 0; i < 3; ++i) {
+        float3 neutralLayer = 1.0 / (1.0 + exp(-h[i] * slopes * 0.5));
+        float3 weights = i == 0 ? float3(0.0, 0.08, 0.03)
+                       : i == 1 ? float3(0.16, 0.0, 0.10)
+                                : float3(0.06, 0.20, 0.0);
+        densityDelta[i] = 3.0 * dot(weights * impurity, neutralLayer - layer);
+    }
+    float3 response = exposed * exp2(8.0 * (layer - base - densityDelta));
+    float3 returned = max(float3(dot(b0,response), dot(b1,response), dot(b2,response)), float3(0.0));
+    return premultiply(float4(returned,p.a));
 }
 
+
+// A shared RGB curve endpoint: every channel below the floor is clipped.
+extern "C" float4 shadowFloor(sample_t pixel, float floorValue) {
+    float4 p = unpremultiply(pixel);
+    p.rgb = max(p.rgb, float3(floorValue));
+    return premultiply(p);
+}
 
 extern "C" float4 hdfAdd(sample_t pixel, sample_t blurred, float amount) {
     float4 p = unpremultiply(pixel);
@@ -68,12 +86,6 @@ extern "C" float4 toneLocator(sample_t sourcePixel, sample_t preview, float3 wei
     float3 highlight = clipping > 0.5 ? float3(1.0, 0.0, 0.0) : float3(0.21404114);
     float4 base = unpremultiply(preview);
     return premultiply(float4(mix(base.rgb, highlight, mask * 0.9), base.a));
-}
-
-
-extern "C" float4 inputOffset(sample_t pixel, float offset) {
-    // Equal linear-light addition. Bound negative RGB, retain HDR values.
-    return float4(max(pixel.rgb + float3(offset * pixel.a), float3(0.0)), pixel.a);
 }
 
 
@@ -319,15 +331,20 @@ float chromaMultiplier(float x, float4 points, float hdrEnd) {
     // Seven hue controls, matching OKLabVertexWarp.count and Swift argument packing.
     extern "C" float4 combinedOKLab(coreimage::sampler image,coreimage::sampler tintTable,
         float ceiling,float domain,float maximumChroma,float4 chroma,float4 lightness,
-        float hasTint,float hasWarp,
+        float hasTint,float hasWarp,float colorChrome,
         float3 to0,float3 to1,float3 to2,float3 from0,float3 from1,float3 from2,
         float4 v0,float2 h0,float4 b0,float l0,float4 v1,float2 h1,float4 b1,float l1,float4 v2,float2 h2,float4 b2,float l2,float4 v3,float2 h3,float4 b3,float l3,float4 v4,float2 h4,float4 b4,float l4,float4 v5,float2 h5,float4 b5,float l5,float4 v6,float2 h6,float4 b6,float l6) {
         float4 pixel=unpremultiply(image.sample(image.coord()));
         float3 lab=toOKLab(convertRGB(pixel.rgb,to0,to1,to2));
         float multiplier=chromaMultiplier(length(lab.yz)/maximumChroma,chroma,domain)
             * chromaMultiplier(lab.x,lightness,domain);
+        float originalChroma = length(lab.yz);
         lab.yz *= max(0.0,multiplier);
+        if (colorChrome > 0.5) {
+            lab.x = max(0.0, lab.x + originalChroma - length(lab.yz));
+        }
         if (hasWarp > 0.5) {
+            float vertexInputChroma = length(lab.yz);
             float scale=pow(ceiling,1.0/3.0);
             float3 q=lab/scale;
             float c=length(q.yz);
@@ -409,6 +426,9 @@ float chromaMultiplier(float x, float4 points, float hdrEnd) {
                 warped=float3(q.x+adjustment.y,c*adjustment.x*cos(h+adjustment.z),c*adjustment.x*sin(h+adjustment.z));
             }
             lab=warped*scale;
+            if (colorChrome > 0.5) {
+                lab.x = max(0.0, lab.x + vertexInputChroma - length(lab.yz));
+            }
         }
         if (hasTint > 0.5) {
             lab.yz += tintTable.sample(float2(clamp(lab.x/domain,0.0,1.0)*511.0+0.5,0.5)).xy;

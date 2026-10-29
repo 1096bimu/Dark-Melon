@@ -57,7 +57,7 @@ struct ContentView: View {
         return development
     }
     @State private var browserPaste: BrowserRecipeTarget?
-    @State private var exportSession: (development: RAWDevelopment, recipe: DevelopmentRecipe)?
+    @State private var exportSession: ImageExportSession?
     @State private var fileActionBusy = false
     @State private var deleteEditURLs: [URL] = []
     @State private var pasteEditURLs: [URL] = []
@@ -104,7 +104,7 @@ struct ContentView: View {
     @State private var histogram: HistogramData?
     @State private var histogramError: String?
     @State private var exportSettings = HEIFSettings.restored()
-    @State private var showingExportOptions = false
+    @State private var exportingLUT = false
     @State private var variationExportMode = false
     @AppStorage("variationExport.grid") private var variationGrid = 2
     @State private var exporting = false
@@ -119,10 +119,25 @@ struct ContentView: View {
     @State private var tutorial = EditingTutorial()
     @State private var pendingPicker: EditorPickerTool?
     @State private var previewHover = PreviewHoverState()
-    @State private var displayMode = PreviewHistogramMode.hdrLinear
+    @AppStorage("preview.prefersHDR") private var prefersHDR = true
+    @State private var prefersSDRHistogram = false
+    private var canPreviewHDR: Bool {
+        development != nil && !loading && mapping.hdrEnabled && previewImages?.hasHDROutput == true
+    }
     private var hdrPreview: Bool {
-        get { !comparingOriginal && displayMode.hdr }
-        nonmutating set { displayMode.hdr = newValue }
+        get { !comparingOriginal && prefersHDR && canPreviewHDR }
+        nonmutating set {
+            guard canPreviewHDR else { return }
+            prefersHDR = newValue
+            if newValue { prefersSDRHistogram = false }
+        }
+    }
+    private var showingSDRHistogram: Bool { prefersSDRHistogram && !hdrPreview }
+    private var sdrHistogramBinding: Binding<Bool> {
+        Binding(get: { showingSDRHistogram }, set: {
+            prefersSDRHistogram = $0
+            if $0 && canPreviewHDR { prefersHDR = false }
+        })
     }
     @State private var renderedPreviewImages: PreviewImages?
     private var previewImages: PreviewImages? {
@@ -249,6 +264,8 @@ struct ContentView: View {
                 cropRatioPosition = saved.ratioPosition
                 cropTransform = CropTransform(rotation: saved.rotation, horizontal: saved.horizontal, vertical: saved.vertical)
                 cropPolygon = saved.points
+            } else if let development {
+                cropRatioPosition = CropGeometry.position(for: Double(development.width) / Double(max(1, development.height)))
             }
             cropping = true
         }
@@ -283,7 +300,7 @@ struct ContentView: View {
             result.blackAndWhite = BlackAndWhiteSettings()
             result.blackAndWhite.isEnabled = mapping.blackAndWhite.isEnabled
         }
-        if panel == .effects { result.channelContrast = [0, 0, 0]; result.dyeMixers = DyeMixers(); result.clarity = 0; result.hdf = 0; result.grain.strength = 0; result.halation.inputCurve = 0; result.vignette.amount = 0; result.badHDR = BadHDRSettings() }
+        if panel == .effects { result.channelContrast = [0, 0, 0]; result.dyeMixers = DyeMixers(); result.dyePurity = [1, 1, 1]; result.clarity = 0; result.hdf = 0; result.grain.strength = 0; result.halation.inputCurve = 0; result.vignette.amount = 0; result.badHDR = BadHDRSettings() }
         return result
     }
 
@@ -515,7 +532,7 @@ struct ContentView: View {
                 if panel == .color {
                     ColorPanelHeader(settings: $mapping.color, vertices: $mapping.vertexWarp,
                         comparing: $comparingColor).padding(12)
-                    HueChromaScope(controls: $mapping.vertexWarp, monochrome: $mapping.color.monochrome, source: mapping.color.monochrome ? development?.preview : (hdrPreview ? previewImages?.hdr : previewImages?.sdr),
+                    HueChromaScope(controls: $mapping.vertexWarp, monochrome: $mapping.color.monochrome, colorChrome: $mapping.color.colorChrome, source: mapping.color.monochrome ? development?.preview : (hdrPreview ? previewImages?.hdr : previewImages?.sdr),
                         revision: mapping.color.monochrome ? development?.id ?? previewRevision : previewRevision, space: colorSpace,
                         headroom: previewMapping.hdrMax, hdr: hdrPreview,
                         hoverTransform: mapping.color.monochrome && !cropping ? previewMapping.transform : nil)
@@ -532,12 +549,16 @@ struct ContentView: View {
                         resetPerspective: { if !cropping { toggleTransform() }; cropTransform.horizontal = resetDefaults.mapping.transform?.horizontal ?? 0; cropTransform.vertical = resetDefaults.mapping.transform?.vertical ?? 0 },
                         resetRotation: { if !cropping { toggleTransform() }; cropTransform.rotation = resetDefaults.mapping.transform?.rotation ?? 0 },
                         resetAll: resetTransform).filmLock(.transform)
+                    ActiveLUTControls(mapping: $mapping).filmLock(.lut)
                 } else if panel == .raw {
-                    RAWControls(settings: $rawSettings, offset: $mapping.offset, isRAW: development?.isRAW == true, commit: {
+                    RAWControls(colorSpace: Binding(get: { colorSpace }, set: { selected in
+                        guard selected != colorSpace else { return }
+                        colorSpace = selected
+                        if let sourceURL { load(sourceURL, resetEdits: false) }
+                    }), colorSpaceDisabled: loading, settings: $rawSettings, isRAW: development?.isRAW == true, commit: {
                         if let sourceURL { load(sourceURL, resetEdits: false) }
                     }, reset: {
                         if let defaults = resetDefaults.rawSettings, let sourceURL {
-                            mapping.offset = resetDefaults.mapping.offset
                             rawSettings = defaults
                             load(sourceURL, resetEdits: false)
                         }
@@ -551,7 +572,7 @@ struct ContentView: View {
                         if let candidate = DyeMixers.seeded(generation) {
                             mapping.dyeMixers = candidate
                         }
-                    }, channelContrast: $mapping.channelContrast, clarity: $mapping.clarity, radius: $mapping.clarityRadius, hdf: $mapping.hdf, hdfRadius: $mapping.hdfRadius, grain: $mapping.grain, halation: $mapping.halation, vignette: $mapping.vignette, hdrEnabled: mapping.hdrEnabled, monochrome: mapping.color.monochrome, comparing: $comparingEffects)
+                    }, dyePurity: $mapping.dyePurity, channelContrast: $mapping.channelContrast, clarity: $mapping.clarity, radius: $mapping.clarityRadius, hdf: $mapping.hdf, hdfRadius: $mapping.hdfRadius, grain: $mapping.grain, halation: $mapping.halation, vignette: $mapping.vignette, hdrEnabled: mapping.hdrEnabled, monochrome: mapping.color.monochrome, comparing: $comparingEffects)
                 } else {
                     tonePanel
                 }
@@ -570,6 +591,7 @@ struct ContentView: View {
             .focusedSceneValue(\.startTutorial, { startTutorial() })
             .focusedSceneValue(\.toggleEditorPicker, pickerShortcutAction)
             #if os(macOS)
+            .focusedSceneValue(\.exportSDRLUT, development == nil || loading || exportingLUT ? nil : { exportSDRLUT() })
             .focusedSceneValue(\.variationExport, development == nil || loading ? nil : { beginExportOptions(variation: true) })
             .focusedSceneValue(\.batchExport, browserModel.directory == nil ? nil : { showingBatchExport = true })
             #endif
@@ -643,7 +665,6 @@ struct ContentView: View {
                     mapping.tonePosition = white
                     mapping.setAutomaticHDRTarget()
                 }
-                if !loading { hdrPreview = false }
             }
             .task(id: ToneLocatorRequest(active: adjustingTone || adjustingWhitePoint, clipping: adjustingWhitePoint, mapping: previewMapping,
                                          revision: previewRevision, hdr: hdrPreview)) {
@@ -804,28 +825,15 @@ struct ContentView: View {
                         .toggleStyle(.button)
                         .disabled(loading || (development == nil && lockedFilm == nil))
                         .help("Capture film settings and apply them as unsaved edits when opening another photo. Unlock to stop applying them.")
-                    Picker("Color space", selection: Binding(get: { colorSpace }, set: { selected in
-                        guard selected != colorSpace else { return }
-                        colorSpace = selected
-                        if let sourceURL { load(sourceURL, resetEdits: false) }
-                    })) {
-                        ForEach(ProcessingColorSpace.allCases) { space in
-                            Text(space.rawValue).tag(space)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-                    .fixedSize()
-                    .disabled(loading)
-                    Toggle("HDR", isOn: Binding(get: { hdrPreview }, set: { enabled in
+                    Toggle("HDR", isOn: Binding(get: { prefersHDR }, set: { enabled in
                         hdrPreview = enabled
                         tutorial.previewToggled(hdr: enabled)
                     }))
                         .toggleStyle(.button)
                         .keyboardShortcut("h", modifiers: [])
-                        .disabled(!mapping.hdrEnabled)
+                        .disabled(!canPreviewHDR)
                         .help("Toggle HDR or SDR display of the developed image")
-                        .accessibilityValue(hdrPreview ? "HDR" : "SDR")
+                        .accessibilityValue(prefersHDR ? "HDR" : "SDR")
                 }
                 #if os(macOS)
                 if !exportQueue.jobs.isEmpty {
@@ -859,8 +867,7 @@ struct ContentView: View {
                     else { pasteMultipleEdits(selection, urls: pasteEditURLs) }
                 }
             }
-            .sheet(isPresented: $showingExportOptions, onDismiss: {
-                exportSession = nil
+            .sheet(item: $exportSession, onDismiss: {
                 #if os(macOS)
                 let window = exportPresentationWindow
                 exportPresentationWindow = nil
@@ -869,8 +876,7 @@ struct ContentView: View {
                     chooseExportDestination(prepared.plan, worker: prepared.worker, window: window)
                 }
                 #endif
-            }) {
-                if let session = exportSession {
+            }) { session in
                     HEIFExportOptions(settings: $exportSettings, width: session.development.width,
                                       height: session.development.height, hdrEnabled: session.recipe.mapping.hdrEnabled,
                                       sourceURL: session.development.url, mapping: session.recipe.mapping,
@@ -878,7 +884,6 @@ struct ContentView: View {
                                       rawSettings: session.recipe.rawSettings ?? session.development.rawDefaults ?? RAWSettings(),
                                       variationGrid: variationExportMode ? $variationGrid : nil,
                                       save: { prepareExport(development: session.development, recipe: session.recipe, worker: $0) })
-                }
             }
             .fileExporter(isPresented: $showingSave, document: exportDocument,
                           contentType: exportContentType, defaultFilename: exportName) { (result: Result<URL, Error>) in
@@ -1037,9 +1042,6 @@ struct ContentView: View {
                         saved.mapping.rawWhiteBalance = mapping.rawWhiteBalance
                         savedRecipe = saved
                     }
-                }
-                if resetEdits {
-                    hdrPreview = mapping.hdrEnabled
                 }
                 if resetEdits {
                     cropPolygon = mapping.transform?.points ?? cropPolygon
@@ -1383,8 +1385,8 @@ struct ContentView: View {
                         mapping: $mapping, sdrSource: previewImages?.sdr,
                         revision: previewRevision, colorSpace: colorSpace, hdrPreview: hdrPreview,
                         comparingOriginal: $comparingOriginalMouse,
-                        showingSDR: $displayMode.sdrHistogram,
-                        hoverTransform: !displayMode.sdrHistogram && !cropping ? previewMapping.transform : nil,
+                        showingSDR: sdrHistogramBinding,
+                        hoverTransform: !showingSDRHistogram && !cropping ? previewMapping.transform : nil,
                         onWhitePointEditingChanged: { editing in
                             adjustingWhitePoint = editing
                             toneLocatorImage = nil
@@ -1411,8 +1413,8 @@ struct ContentView: View {
            rawExposure: development?.isRAW == true ? Double(rawSettings.values[.exposure] ?? 0) : 0,
            onToneChanged: { tutorial.record(.tone) },
            onContrastChanged: { tutorial.record(.contrast) },
-           onISOAdjustment: { hdrPreview = false },
-           onHDRGainAdjustment: { hdrPreview = mapping.hdrEnabled },
+           onISOAdjustment: {},
+           onHDRGainAdjustment: {},
            onToneEditingChanged: { editing in
                adjustingTone = editing
                if !editing { toneLocatorImage = nil }
@@ -1719,7 +1721,7 @@ struct ContentView: View {
         variationExportMode = variation
         guard let source = target?.development ?? development else { return }
         let original = target?.recipe ?? currentRecipe
-        exportSession = (source, lockedFilm?.applying(to: original) ?? original)
+        let session = ImageExportSession(development: source, recipe: lockedFilm?.applying(to: original) ?? original)
         #if os(macOS)
         // Capture the editor before the options sheet takes focus. Attaching the
         // save panel to that closing sheet would dismiss the save panel with it.
@@ -1727,7 +1729,7 @@ struct ContentView: View {
         while let parent = window?.sheetParent { window = parent }
         exportPresentationWindow = window
         #endif
-        showingExportOptions = true
+        exportSession = session
     }
 
     private func prepareExport(development: RAWDevelopment, recipe: DevelopmentRecipe, worker: RAWDeveloper) {
@@ -1759,6 +1761,33 @@ struct ContentView: View {
         #endif
     }
 
+    private func exportSDRLUT() {
+        #if os(macOS)
+        let captured = mapping
+        let worker = RAWDeveloper(colorSpace: colorSpace,
+            lutConfiguration: captured.lutID.map { LUTStore.shared.configuration(for: $0) })
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [UTType(filenameExtension: "cube") ?? .data]
+        panel.nameFieldStringValue = "Dark Melon Look.cube"
+        panel.title = String(localized: "Export SDR LUT")
+        panel.message = String(localized: "33 × 33 × 33 · sRGB input and output. Includes per-pixel tone and color adjustments and the selected LUT. Excludes RAW decoding, grain, blur, halation, vignette, Clarity, BadHDR, and transforms.")
+        panel.canCreateDirectories = true
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            exportingLUT = true
+            Task {
+                defer { exportingLUT = false }
+                do {
+                    let data = try await worker.exportSDRLUT(mapping: captured)
+                    let access = url.startAccessingSecurityScopedResource()
+                    defer { if access { url.stopAccessingSecurityScopedResource() } }
+                    try data.write(to: url, options: .atomic)
+                } catch { errorMessage = error.localizedDescription }
+            }
+        }
+        #endif
+    }
+
     #if os(macOS)
     private func chooseExportDestination(_ plan: ExportPlan, worker: RAWDeveloper, window: NSWindow?) {
         guard let item = plan.items.first else { return }
@@ -1777,27 +1806,6 @@ struct ContentView: View {
     }
     #endif
 
-}
-
-/// Only valid preview/histogram combinations can be represented.
-private enum PreviewHistogramMode {
-    case hdrLinear, sdrLinear, sdrOutput
-
-    var hdr: Bool {
-        get { self == .hdrLinear }
-        set {
-            if newValue { self = .hdrLinear }
-            else if self == .hdrLinear { self = .sdrLinear }
-        }
-    }
-
-    var sdrHistogram: Bool {
-        get { self == .sdrOutput }
-        set {
-            if newValue { self = .sdrOutput }
-            else if self == .sdrOutput { self = .sdrLinear }
-        }
-    }
 }
 
 private struct LinearHistogram: View {
@@ -2041,4 +2049,10 @@ private struct FullSourceRequest: Equatable {
     let source: UUID?
     let previewReady: Bool
     let loading: Bool
+}
+
+private struct ImageExportSession: Identifiable {
+    let id = UUID()
+    let development: RAWDevelopment
+    let recipe: DevelopmentRecipe
 }

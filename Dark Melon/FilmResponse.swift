@@ -19,8 +19,8 @@ nonisolated final class FilmResponse {
     func apply(to image: CIImage, mapping: ToneMapping) throws -> CIImage {
         let offsets = mapping.dyeContrastOffsets
         let mixers = mapping.dyeMixers
-        guard !mixers.isIdentity || offsets.contains(where: { abs($0) > 1e-12 }) else { return image }
-        guard mixers.isValid else { throw Failure.processing }
+        guard mapping.dyePurity != [1, 1, 1] || !mixers.isIdentity || offsets.contains(where: { abs($0) > 1e-12 }) else { return image }
+        guard mixers.isValid, mapping.dyePurity.count == 3, mapping.dyePurity.allSatisfy({ $0.isFinite && (0...1).contains($0) }) else { throw Failure.processing }
         let rows = [mixers.a, mixers.b].flatMap { matrix in
             stride(from: 0, to: 9, by: 3).map { i in
                 CIVector(x: matrix[i], y: matrix[i + 1], z: matrix[i + 2])
@@ -29,7 +29,8 @@ nonisolated final class FilmResponse {
         let slopes = CIVector(x: 1 + offsets[0], y: 1 + offsets[1], z: 1 + offsets[2])
         // Tone can be exactly zero. Only the logarithm's reference needs a floor.
         guard let result = kernel?.apply(extent: image.extent,
-            arguments: [image] + rows + [slopes, max(1e-6, mapping.tonePosition)]) else {
+            arguments: [image] + rows + [slopes, max(1e-6, mapping.tonePosition),
+                CIVector(x: mapping.dyePurity[0], y: mapping.dyePurity[1], z: mapping.dyePurity[2])]) else {
             throw Failure.processing
         }
         return result

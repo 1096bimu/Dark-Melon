@@ -2,6 +2,7 @@ import Foundation
 
 nonisolated struct ColorAdjustments: Codable, Equatable, Sendable {
     var monochrome = false
+    var colorChrome = false
     var saturationStart = 1.0
     var saturationEnd = 1.0
     var saturationMid = 1.0
@@ -15,10 +16,11 @@ nonisolated struct ColorAdjustments: Codable, Equatable, Sendable {
     var isIdentity: Bool { !monochrome && saturationStart == 1 && saturationEnd == 1 && saturationMid == 1 && saturationHDR == 1 && isLuminanceSaturationIdentity && splitTone.isIdentity }
     init() {}
     private enum CodingKeys: String, CodingKey {
-        case monochrome, saturationStart, saturationEnd, saturationMid, saturationHDR, luminanceSaturationStart, luminanceSaturationEnd, luminanceSaturationMid, luminanceSaturationHDR, splitTone
+        case colorChrome, monochrome, saturationStart, saturationEnd, saturationMid, saturationHDR, luminanceSaturationStart, luminanceSaturationEnd, luminanceSaturationMid, luminanceSaturationHDR, splitTone
     }
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
+        colorChrome = try values.decodeIfPresent(Bool.self, forKey: .colorChrome) ?? false
         monochrome = try values.decodeIfPresent(Bool.self, forKey: .monochrome) ?? false
         saturationStart = try values.decodeIfPresent(Double.self, forKey: .saturationStart) ?? 1
         saturationEnd = try values.decodeIfPresent(Double.self, forKey: .saturationEnd) ?? 1

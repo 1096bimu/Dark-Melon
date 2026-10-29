@@ -46,6 +46,7 @@ struct HueChromaScope: View {
     @Environment(\.resetMapping) private var defaults
     @Binding var controls: [OKLabVertexAdjustment]
     @Binding var monochrome: Bool
+    @Binding var colorChrome: Bool
     @State private var selected: Int?
     let source: CGImage?
     let revision: UUID
@@ -152,12 +153,16 @@ struct HueChromaScope: View {
                     OKLabVertexWarp.setMonochrome(enabled, controls: &controls)
                 })).toggleStyle(.switch).filmLock(.vertices)
                 Spacer()
-                Button("Reset") {
-                    controls = defaults.vertexWarp
-                    if monochrome { OKLabVertexWarp.setMonochrome(true, controls: &controls) }
+                HStack(spacing: 6) {
+                    Text("Color Chrome")
+                    ControlInfo(.colorChrome)
+                    Toggle("Color Chrome", isOn: $colorChrome)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                        .filmLock(.colorChrome)
+                        .disabled(monochrome)
                 }
             }
-            .filmLock(.vertices)
             Group {
             if let i=selected {
                 HStack {

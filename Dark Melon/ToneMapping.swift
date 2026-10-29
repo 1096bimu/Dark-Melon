@@ -2,6 +2,12 @@ import Foundation
 
 nonisolated struct ToneMapping: Codable, Equatable, Sendable {
     var lutID: UUID? = nil
+    // Optional storage keeps old library presets and snapshots decodable.
+    private var lutAmount: Double?
+    var lutStrength: Double {
+        get { lutAmount ?? 1 }
+        set { lutAmount = newValue == 1 ? nil : newValue }
+    }
     var transform: TransformSettings? = nil
     var whiteBalance = WhiteBalance()
     var rawWhiteBalance: RAWWhiteBalance?
@@ -17,7 +23,11 @@ nonisolated struct ToneMapping: Codable, Equatable, Sendable {
     var grain = FilmGrainSettings()
     var halation = HalationSettings()
     var vignette = VignetteSettings()
-    var offset = 0.0
+    private var storedShadowFloor: Double?
+    var shadowFloor: Double {
+        get { storedShadowFloor ?? 0 }
+        set { storedShadowFloor = newValue == 0 ? nil : newValue }
+    }
     var white = 0.5
     var tonePosition = 0.040
     var toneUsesSourceLuminance = true
@@ -27,6 +37,11 @@ nonisolated struct ToneMapping: Codable, Equatable, Sendable {
     var contrastDistribution = [0.0, 0.0, 0.0, 0.0]
     var channelContrast = [0.0, 0.0, 0.0]
     var dyeMixers = DyeMixers()
+    private var storedDyePurity: [Double]?
+    var dyePurity: [Double] {
+        get { storedDyePurity ?? [1, 1, 1] }
+        set { storedDyePurity = newValue == [1, 1, 1] ? nil : newValue }
+    }
     var hdrTarget = 4.0
     var hdrGain = 1.0
     var hdrRolloff = 0.0

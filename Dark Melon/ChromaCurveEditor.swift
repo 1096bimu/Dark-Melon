@@ -16,6 +16,8 @@ struct ChromaCurveEditor: View {
     private var labels: [String] { ["0", "SDR ½", "SDR", "HDR"] }
     private var levels: [Double] { [0, sdrMaximum/2, sdrMaximum, sdrMaximum*cbrt(hdrMax)] }
 
+    private func position(_ index: Int) -> Double { Double(index) / 3 }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
@@ -29,7 +31,7 @@ struct ChromaCurveEditor: View {
                 ZStack {
                     Path { path in
                         for i in 0..<4 {
-                            let x = 14 + CGFloat(i)/3*width
+                            let x = 14 + CGFloat(position(i))*width
                             path.move(to: CGPoint(x: x, y: 14))
                             path.addLine(to: CGPoint(x: x, y: 14+height))
                         }
@@ -38,14 +40,14 @@ struct ChromaCurveEditor: View {
                     }.stroke(EditorGraphStyle.guideColor, style: EditorGraphStyle.guide)
                     Path { path in
                         for i in 0..<4 {
-                            let p = CGPoint(x: 14+CGFloat(i)/3*width,y: 14+(1-values[i].clamped(to: 0...2)/2)*height)
+                            let p = CGPoint(x: 14+CGFloat(position(i))*width,y: 14+(1-values[i].clamped(to: 0...2)/2)*height)
                             if i == 0 { path.move(to: p) } else { path.addLine(to: p) }
                         }
                     }.stroke(EditorGraphStyle.trackColor, style: EditorGraphStyle.trackStroke)
                     ForEach(0..<4) { index in
                         EditorGraphHandle(isDragging: dragging == index)
                             .controlReset { controls[index].wrappedValue = resetValues[index] }
-                            .position(x: 14+CGFloat(index)/3*width,y: 14+(1-values[index].clamped(to: 0...2)/2)*height)
+                            .position(x: 14+CGFloat(position(index))*width,y: 14+(1-values[index].clamped(to: 0...2)/2)*height)
                             .gesture(DragGesture(minimumDistance: 0,coordinateSpace: .named(title))
                                 .updating($dragging) { _, state, _ in state = index }
                                 .onChanged {

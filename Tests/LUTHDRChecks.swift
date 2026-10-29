@@ -18,6 +18,15 @@ import Foundation
         try cube.write(to: file, atomically: true, encoding: .utf8)
         let id = try store.importFile(file)
         let pipeline = LUTPipeline(store: store)
+        var mapping = ToneMapping()
+        mapping.lutStrength = 0.37
+        let restored = try JSONDecoder().decode(ToneMapping.self, from: JSONEncoder().encode(mapping))
+        precondition(restored.lutStrength == 0.37)
+        var legacy = try JSONSerialization.jsonObject(with: JSONEncoder().encode(mapping)) as! [String: Any]
+        legacy.removeValue(forKey: "lutAmount")
+        let old = try JSONDecoder().decode(ToneMapping.self, from: JSONSerialization.data(withJSONObject: legacy))
+        precondition(old.lutStrength == 1)
+
         func image(_ rgb: SIMD3<Double>, alpha: Double = 1) -> CIImage {
             CIImage(color: CIColor(red: rgb.x, green: rgb.y, blue: rgb.z, alpha: alpha, colorSpace: space.linear)!)
                 .cropped(to: CGRect(x: 0, y: 0, width: 64, height: 64))
@@ -28,6 +37,16 @@ import Foundation
                            format: .RGBAf, colorSpace: space.linear)
             return rgba.map(Double.init)
         }
+        let input = image(SIMD3(0.2, 0.4, 0.6))
+        let before = pixel(input)
+        let full = pixel(try pipeline.apply(input, id: id))
+        let half = pixel(try pipeline.apply(input, id: id, strength: 0.5))
+        let zero = pixel(try pipeline.apply(input, id: id, strength: 0))
+        for channel in 0..<4 {
+            precondition(abs(zero[channel] - before[channel]) < 0.0001)
+            precondition(abs(half[channel] - (before[channel] + full[channel]) * 0.5) < 0.0001)
+        }
+
         func check(_ actual: [Double], _ expected: [Double], tolerance: Double = 0.0001) {
             assert(zip(actual, expected).allSatisfy { abs($0-$1) < tolerance }, "\(actual) != \(expected)")
         }

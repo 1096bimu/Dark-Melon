@@ -170,7 +170,18 @@ nonisolated final class LUTPipeline {
         return output
     }
 
-    func apply(_ image: CIImage, id: UUID?) throws -> CIImage {
+    func apply(_ image: CIImage, id: UUID?, strength: Double = 1, baseline: CIImage? = nil) throws -> CIImage {
+        let amount = min(1, max(0, strength))
+        let original = baseline ?? image
+        if amount == 0 { return original }
+        let graded = try applyFull(image, id: id)
+        if amount == 1 { return graded }
+        return original.applyingFilter("CIDissolveTransition", parameters: [
+            kCIInputTargetImageKey: graded, kCIInputTimeKey: amount
+        ])
+    }
+
+    private func applyFull(_ image: CIImage, id: UUID?) throws -> CIImage {
         guard let id, let cube = store.cube(for: id) else { return image }
         let span = cube.maximum - cube.minimum
         let configuration = configuration(for: id) ?? LUTConfiguration()

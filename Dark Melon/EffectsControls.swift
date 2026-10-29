@@ -8,6 +8,7 @@ struct EffectsControls: View {
     var randomizeDye: (Double) -> Void
     @AppStorage("dyeRandomStrength") private var randomStrength = 1.0
     @State private var brewHues: [Double] = []
+    @Binding var dyePurity: [Double]
     @Binding var channelContrast: [Double]
     @Binding var clarity: Double
     @Binding var radius: Double
@@ -43,17 +44,17 @@ struct EffectsControls: View {
                 Text("Effects").font(.headline)
                 Spacer()
                 HoldCompareButton(comparing: $comparing)
-                    .disabled(dyeMixers.isIdentity && channelContrast.dropFirst().allSatisfy { $0 == channelContrast[0] } && clarity == 0 && hdf == 0 && grain.strength == 0 && vignette.amount == 0 && (!hdrEnabled || halation.inputCurve == 0) && badHDR.strength == 0)
+                    .disabled(dyePurity == [1, 1, 1] && dyeMixers.isIdentity && channelContrast.dropFirst().allSatisfy { $0 == channelContrast[0] } && clarity == 0 && hdf == 0 && grain.strength == 0 && vignette.amount == 0 && (!hdrEnabled || halation.inputCurve == 0) && badHDR.strength == 0)
                 Button("Reset Effects") {
                     if !lockedItems.contains(.badHDR) { badHDR = defaults.badHDR }
-                    if !lockedItems.contains(.dyeResponse) { channelContrast = defaults.channelContrast; dyeMixers = defaults.dyeMixers }
+                    if !lockedItems.contains(.dyeResponse) { channelContrast = defaults.channelContrast; dyeMixers = defaults.dyeMixers; dyePurity = defaults.dyePurity }
                     if !lockedItems.contains(.grain) { grain = defaults.grain }
                     if !lockedItems.contains(.halation) { halation = defaults.halation }
                     if !lockedItems.contains(.clarity) { clarity = defaults.clarity; radius = defaults.clarityRadius }
                     if !lockedItems.contains(.hdf) { hdf = defaults.hdf; hdfRadius = defaults.hdfRadius }
                     if !lockedItems.contains(.vignette) { vignette = defaults.vignette }
                 }
-                    .disabled(dyeMixers == defaults.dyeMixers && channelContrast == defaults.channelContrast && clarity == defaults.clarity && radius == defaults.clarityRadius && hdf == defaults.hdf && hdfRadius == defaults.hdfRadius && grain == defaults.grain && halation == defaults.halation && vignette == defaults.vignette && badHDR == defaults.badHDR)
+                    .disabled(dyePurity == defaults.dyePurity && dyeMixers == defaults.dyeMixers && channelContrast == defaults.channelContrast && clarity == defaults.clarity && radius == defaults.clarityRadius && hdf == defaults.hdf && hdfRadius == defaults.hdfRadius && grain == defaults.grain && halation == defaults.halation && vignette == defaults.vignette && badHDR == defaults.badHDR)
             }
             VStack(alignment: .leading, spacing: 8) {
                 Text("Cross Processing").fontWeight(.medium)
@@ -98,6 +99,22 @@ struct EffectsControls: View {
                 }
                 .help("Sets the range for the next Brew. Zero produces identity matrices; 100% uses the original range; 300% triples it. Existing matrices are unchanged until you brew.")
                 DyeMatrixField(mixers: $dyeMixers, rgb: $channelContrast)
+                Text("Dye Purity").fontWeight(.medium)
+                ForEach(0..<3, id: \.self) { channel in
+                    let name = ["Cyan", "Magenta", "Yellow"][channel]
+                    let value = Binding<Double>(get: { dyePurity[channel] }, set: { dyePurity[channel] = $0 })
+                    HStack {
+                        Circle().fill([Color.cyan, .pink, .yellow][channel])
+                            .frame(width: 12, height: 12).frame(width: 22)
+                        EditorSlider(value: value, in: 0...1)
+                            .controlReset { dyePurity[channel] = defaults.dyePurity[channel] }
+                            .accessibilityLabel(Text(LocalizedStringKey(name)))
+                        AdjustmentField(title: LocalizedStringKey(name), value: value, range: 0...1,
+                                        digits: 0, scale: 100, unit: "%")
+                    }
+                }
+                .help("Lower purity introduces absorption in other color bands. Neutral compensation preserves the existing gray response. 100% leaves the dye unchanged.")
+
             }
             .onAppear { if brewHues.isEmpty { refreshBrewTrack() } }
             .filmLock(.dyeResponse)
@@ -195,13 +212,19 @@ struct EffectsControls: View {
                     AdjustmentField(title: "Vignette amount", value: $vignette.amount, range: AdjustmentLimits.vignetteStops, digits: 2, scale: 1, unit: "stops").filmLock(.vignette)
 
                 }
-                EditorSlider(value: $vignette.amount, in: 0...4, label: { Text("Vignette amount") }).controlReset { vignette.amount = defaults.vignette.amount }.filmLock(.vignette).labelsHidden()
+                HStack {
+                    Image(systemName: "livephoto").frame(width: 22).accessibilityHidden(true)
+                    EditorSlider(value: $vignette.amount, in: 0...4, label: { Text("Vignette amount") }).controlReset { vignette.amount = defaults.vignette.amount }.filmLock(.vignette).labelsHidden()
+                }
                 HStack {
                     Text("Spread")
                     AdjustmentField(title: "Vignette spread", value: $vignette.spread, range: 0...1, digits: 0, scale: 100, unit: "%").filmLock(.vignette)
 
                 }
-                EditorSlider(value: $vignette.spread, in: 0...1, label: { Text("Vignette spread") }).controlReset { vignette.spread = defaults.vignette.spread }.filmLock(.vignette).labelsHidden()
+                HStack {
+                    Image(systemName: "circle.dashed").frame(width: 22).accessibilityHidden(true)
+                    EditorSlider(value: $vignette.spread, in: 0...1, label: { Text("Vignette spread") }).controlReset { vignette.spread = defaults.vignette.spread }.filmLock(.vignette).labelsHidden()
+                }
             }
             Divider()
             VStack(alignment: .leading, spacing: 6) {

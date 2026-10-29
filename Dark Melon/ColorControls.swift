@@ -25,10 +25,9 @@ struct ColorControls: View {
             HStack {
                 Text("Split Tone").font(.headline)
                 Spacer()
-                Button("Reset") { settings.splitTone = defaults.color.splitTone }
-                    .disabled(settings.splitTone == defaults.color.splitTone).filmLock(.splitTone)
             }
             SplitToneGradientEditor(settings: $settings.splitTone, space: colorSpace, ceiling: hdrMax).filmLock(.splitTone)
+
 
 
         }

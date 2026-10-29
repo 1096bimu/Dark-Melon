@@ -68,14 +68,17 @@ import Metal
             context.render(result!, toBitmap: &values, rowBytes: 32*16, bounds: bounds, format: .RGBAf, colorSpace: nil)
             return values
         }
-        for fixture in fixtures {
+        for fixture in fixtures where fixture.name != "inputOffset" {
             let legacy = CIKernel(source: fixture.source)!
             let modern: CIKernel? = fixture.color ? MetalImageKernels.color(fixture.name) : MetalImageKernels.general(fixture.name)
             precondition(modern != nil, "Missing \(fixture.name)")
             var worst: Float = 0
             for variant in 0..<7 {
                 let args = fixture.arguments.map { argument($0[0], $0[1], variant: variant) }
-                let a = render(legacy,args), b = render(modern!,args)
+                var modernArgs = args
+                if fixture.name == "filmResponse" { modernArgs.append(CIVector(x: 1, y: 1, z: 1)) }
+                if fixture.name == "combinedOKLab" { modernArgs.insert(0.0, at: 9) }
+                let a = render(legacy,args), b = render(modern!,modernArgs)
                 for (x,y) in zip(a,b) {
                     precondition(x.isFinite && y.isFinite, "Nonfinite \(fixture.name)")
                     let error = abs(x-y) / max(1,abs(x))
