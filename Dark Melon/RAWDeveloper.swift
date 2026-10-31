@@ -59,6 +59,8 @@ nonisolated struct PreviewImages: @unchecked Sendable {
     var fullSurfaceSDR: PreviewSurface? = nil
     var fullSurfaceHDR: PreviewSurface? = nil
     var hasHDROutput = true
+    var renderMilliseconds = 0.0
+    var gpuMilliseconds: Double? = nil
 }
 
 actor RAWDeveloper {
@@ -190,7 +192,21 @@ actor RAWDeveloper {
             surface: surface)
     }
 
+    private var previewGPUTime: Double?
+    // Only previews() batches work; detail and other callers submit immediately.
+    // This actor does not suspend while a batch is being encoded.
+    private var previewBatch: MTLCommandBuffer?
+    private var toneTables: [(curves: [ToneCurve], image: CIImage)] = []
+
     func previews(_ source: CGImage, mapping: ToneMapping) throws -> PreviewImages {
+        try Task.checkCancellation()
+        let renderStart = ProcessInfo.processInfo.systemUptime
+        if interactive {
+            guard let command = previewCommands?.makeCommandBuffer() else { throw DevelopmentError.decode }
+            previewBatch = command
+        }
+        previewGPUTime = interactive ? 0 : nil
+        defer { previewGPUTime = nil; previewBatch = nil }
         // Keep the reference pair in linear light until the final LUT and display
         // conversion; an 8-bit SDR intermediate would corrupt highlight RGB gains.
         let input = try materialized(adjustedInput(CIImage(cgImage: source), mapping: mapping))
@@ -201,25 +217,34 @@ actor RAWDeveloper {
         let full = try finalLUTPair(sdr: sdr, hdr: hdr, mapping: mapping)
         let fullSDRSurface = try displaySurface(full.sdr, hdr: false)
         let fullHDRSurface = outputHDR ? try displaySurface(full.hdr, hdr: true) : fullSDRSurface
-        let fullSDR = try displayPreview(fullSDRSurface.image, hdr: false, headroom: mapping.hdrMax)
-        let fullHDR = outputHDR
-            ? try displayPreview(fullHDRSurface.image, hdr: true, headroom: mapping.hdrMax) : fullSDR
         guard let transform = mapping.transform else {
+            try finishPreviewBatch()
+            let fullSDR = try displayPreview(fullSDRSurface.image, hdr: false, headroom: mapping.hdrMax)
+            let fullHDR = outputHDR
+                ? try displayPreview(fullHDRSurface.image, hdr: true, headroom: mapping.hdrMax) : fullSDR
             return PreviewImages(source: source, sdr: fullSDR, hdr: fullHDR, fullSDR: fullSDR, fullHDR: fullHDR,
                 surfaceSDR: fullSDRSurface, surfaceHDR: fullHDRSurface,
-                fullSurfaceSDR: fullSDRSurface, fullSurfaceHDR: fullHDRSurface, hasHDROutput: outputHDR)
+                fullSurfaceSDR: fullSDRSurface, fullSurfaceHDR: fullHDRSurface, hasHDROutput: outputHDR,
+                renderMilliseconds: (ProcessInfo.processInfo.systemUptime - renderStart) * 1000,
+                gpuMilliseconds: previewGPUTime)
         }
         let cropped = try finalLUTPair(sdr: transform.apply(to: sdr),
                                       hdr: mapping.hdrEnabled ? transform.apply(to: hdr) : sdr, mapping: mapping)
         let croppedSDRSurface = try displaySurface(cropped.sdr, hdr: false)
         let croppedHDRSurface = outputHDR ? try displaySurface(cropped.hdr, hdr: true) : croppedSDRSurface
+        try finishPreviewBatch()
+        let fullSDR = try displayPreview(fullSDRSurface.image, hdr: false, headroom: mapping.hdrMax)
+        let fullHDR = outputHDR
+            ? try displayPreview(fullHDRSurface.image, hdr: true, headroom: mapping.hdrMax) : fullSDR
         let croppedSDR = try displayPreview(croppedSDRSurface.image, hdr: false, headroom: mapping.hdrMax)
         let croppedHDR = outputHDR
             ? try displayPreview(croppedHDRSurface.image, hdr: true, headroom: mapping.hdrMax) : croppedSDR
         try Task.checkCancellation()
         return PreviewImages(source: source, sdr: croppedSDR, hdr: croppedHDR, fullSDR: fullSDR, fullHDR: fullHDR,
             surfaceSDR: croppedSDRSurface, surfaceHDR: croppedHDRSurface,
-            fullSurfaceSDR: fullSDRSurface, fullSurfaceHDR: fullHDRSurface, hasHDROutput: outputHDR)
+            fullSurfaceSDR: fullSDRSurface, fullSurfaceHDR: fullHDRSurface, hasHDROutput: outputHDR,
+                renderMilliseconds: (ProcessInfo.processInfo.systemUptime - renderStart) * 1000,
+                gpuMilliseconds: previewGPUTime)
     }
 
     private func finalLUTPair(sdr: CIImage, hdr: CIImage, mapping: ToneMapping) throws -> (sdr: CIImage, hdr: CIImage) {
@@ -231,6 +256,25 @@ actor RAWDeveloper {
         let graded = try lutPipeline.apply(sdr, id: mapping.lutID, strength: mapping.lutStrength)
         let gradedHDR = mapping.hdrEnabled ? try lutPipeline.applyHDR(hdr, sdr: sdr, gradedSDR: graded) : graded
         return (graded, gradedHDR)
+    }
+
+    /// Reference windows retain final pixels, so source deletion or later edits
+    /// cannot change them. This worker uses eager, non-interactive CGImage output.
+    func referenceImages(_ development: RAWDevelopment, mapping: ToneMapping) throws -> PreviewImages {
+        try Task.checkCancellation()
+        let access = development.url.startAccessingSecurityScopedResource()
+        defer { if access { development.url.stopAccessingSecurityScopedResource() } }
+        let input = try materialized(adjustedInput(development.linearSource, mapping: mapping))
+        let logLUT = lutPipeline.outputsSDR(mapping)
+        let sdr = try finishDevelopment(input, mapping: mapping, hdr: logLUT)
+        let hdr = mapping.hdrEnabled && !logLUT ? try finishDevelopment(input, mapping: mapping, hdr: true) : sdr
+        let pair = try finalLUTPair(sdr: mapping.transform?.apply(to: sdr) ?? sdr,
+            hdr: mapping.transform?.apply(to: hdr) ?? hdr, mapping: mapping)
+        let outputHDR = mapping.hdrEnabled && !logLUT
+        let sdrBitmap = try displayPreview(pair.sdr, hdr: false, headroom: 1)
+        let hdrBitmap = outputHDR ? try displayPreview(pair.hdr, hdr: true, headroom: mapping.hdrMax) : sdrBitmap
+        return PreviewImages(source: development.preview, sdr: sdrBitmap, hdr: hdrBitmap,
+            fullSDR: sdrBitmap, fullHDR: hdrBitmap, hasHDROutput: outputHDR)
     }
 
     func preview(_ source: CGImage, mapping: ToneMapping, hdr: Bool = true) throws -> CGImage {
@@ -401,6 +445,7 @@ actor RAWDeveloper {
     private lazy var shadowFloorKernel = MetalImageKernels.color("shadowFloor")
 
     private func adjustedInput(_ source: CIImage, mapping: ToneMapping) throws -> CIImage {
+        try Task.checkCancellation()
         var image = source
         image = try applyHDF(image, mapping: mapping)
         image = try vignette.apply(to: image, settings: mapping.vignette, transform: mapping.transform)
@@ -432,6 +477,7 @@ actor RAWDeveloper {
     }
 
     private func finishDevelopment(_ image: CIImage, mapping: ToneMapping, hdr: Bool) throws -> CIImage {
+        try Task.checkCancellation()
         var color = mapping.color
         if mapping.blackAndWhite.isEnabled {
             color.saturationStart = 1; color.saturationEnd = 1; color.saturationMid = 1; color.saturationHDR = 1
@@ -478,14 +524,23 @@ actor RAWDeveloper {
     }
 
     func applyTone(_ image: CIImage, curves: [ToneCurve]) throws -> CIImage {
+        try Task.checkCancellation()
         let curve = curves[0]
-        let pixels = curve.values.indices.flatMap { i in
-            [Float(curves[0].values[i]), Float(curves[1].values[i]), Float(curves[2].values[i]), Float(1)]
+        let table: CIImage
+        if let cached = toneTables.first(where: { $0.curves == curves }) {
+            table = cached.image
+        } else {
+            var pixels = [Float](repeating: 1, count: curve.values.count * 4)
+            for i in curve.values.indices {
+                for channel in 0..<3 { pixels[i * 4 + channel] = Float(curves[channel].values[i]) }
+            }
+            let data = pixels.withUnsafeBytes { Data($0) }
+            table = CIImage(bitmapData: data, bytesPerRow: pixels.count * 4,
+                size: CGSize(width: curve.values.count, height: 1), format: .RGBAf, colorSpace: nil)
+            // SDR/HDR plus a comparison pair, bounded independently of slider history.
+            if toneTables.count >= 4 { toneTables.removeFirst() }
+            toneTables.append((curves, table))
         }
-        let data = pixels.withUnsafeBytes { Data($0) }
-        let table = CIImage(bitmapData: data, bytesPerRow: pixels.count * 4,
-                            size: CGSize(width: curve.values.count, height: 1),
-                            format: .RGBAf, colorSpace: nil)
         let tableBounds = table.extent
         guard let mapped = plainToneKernel?.apply(extent: image.extent, roiCallback: { index, rect in
             index == 1 ? tableBounds : rect
@@ -503,26 +558,49 @@ actor RAWDeveloper {
         let bounded = hdr ? image : image.applyingFilter("CIColorClamp", parameters: [
             "inputMinComponents": CIVector(x: 0, y: 0, z: 0, w: 0),
             "inputMaxComponents": CIVector(x: 1, y: 1, z: 1, w: 1)])
-        guard interactive, let device = previewDevice, let command = previewCommands?.makeCommandBuffer() else {
-            return PreviewSurface(image: bounded, colorSpace: linearSpace, hdr: hdr)
+        guard interactive else { return PreviewSurface(image: bounded, colorSpace: linearSpace, hdr: hdr) }
+        let cached = try renderPreviewTexture(bounded, format: .rgba16Float)
+        return PreviewSurface(image: cached, colorSpace: linearSpace, hdr: hdr)
+    }
+
+    /// Explicit command buffers measure every preview processing stage, including
+    /// the full-float pre-tone intermediate. Timing excludes CPU preparation.
+    private func renderPreviewTexture(_ image: CIImage, format: MTLPixelFormat) throws -> CIImage {
+        try Task.checkCancellation()
+        guard let device = previewDevice,
+              let command = previewBatch ?? previewCommands?.makeCommandBuffer() else {
+            throw DevelopmentError.decode
         }
-        // Evaluate effects once into a GPU texture. Both the display and deferred
-        // scope bitmaps reuse it; neither has to rerun the development graph.
-        let extent = bounded.extent.integral
-        let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .rgba16Float,
+        let extent = image.extent.integral
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: format,
             width: Int(extent.width), height: Int(extent.height), mipmapped: false)
         descriptor.storageMode = .private
         descriptor.usage = [.shaderRead, .shaderWrite, .renderTarget]
         guard let texture = device.makeTexture(descriptor: descriptor) else { throw DevelopmentError.decode }
-        let normalized = bounded.transformed(by: CGAffineTransform(translationX: -extent.minX, y: -extent.minY))
+        let normalized = image.transformed(by: CGAffineTransform(translationX: -extent.minX, y: -extent.minY))
         context.render(normalized, to: texture, commandBuffer: command,
                        bounds: CGRect(origin: .zero, size: extent.size), colorSpace: linearSpace)
+        if previewBatch == nil { try completePreviewCommand(command) }
+        guard let cached = CIImage(mtlTexture: texture, options: [.colorSpace: linearSpace]) else { throw DevelopmentError.decode }
+        return cached.transformed(by: CGAffineTransform(translationX: extent.minX, y: extent.minY))
+    }
+
+    private func finishPreviewBatch() throws {
+        guard let command = previewBatch else { return }
+        try completePreviewCommand(command)
+        previewBatch = nil
+    }
+
+    private func completePreviewCommand(_ command: MTLCommandBuffer) throws {
+        try Task.checkCancellation()
         command.commit()
         command.waitUntilCompleted()
         try Task.checkCancellation()
-        guard command.status == .completed,
-              let cached = CIImage(mtlTexture: texture, options: [.colorSpace: linearSpace]) else { throw DevelopmentError.decode }
-        return PreviewSurface(image: cached, colorSpace: linearSpace, hdr: hdr)
+        guard command.status == .completed else { throw DevelopmentError.decode }
+        if let elapsed = previewGPUTime {
+            let start = command.gpuStartTime, end = command.gpuEndTime
+            previewGPUTime = start > 0 && end >= start ? elapsed + (end - start) * 1000 : nil
+        }
     }
 
     private func displayPreview(_ image: CIImage, hdr: Bool, headroom: Double) throws -> CGImage {
@@ -767,6 +845,9 @@ actor RAWDeveloper {
     private var exportRender: ExportRender?
 
     private func materialized(_ image: CIImage) throws -> CIImage {
+        if interactive {
+            return try renderPreviewTexture(image, format: .rgba32Float)
+        }
         guard let bitmap = context.createCGImage(image, from: image.extent, format: .RGBAf,
                                                  colorSpace: linearSpace) else { throw HEIFExportError.encoding }
         try Task.checkCancellation()

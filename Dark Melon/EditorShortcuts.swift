@@ -142,11 +142,13 @@ struct EditorCommands: Commands {
                 .disabled(startTutorial == nil)
         }
         CommandMenu("Tools") {
+            #if DEBUG
             Button("Export SDR LUT…") { exportSDRLUT?() }
                 .disabled(exportSDRLUT == nil)
             Button("Variation Export…") { variationExport?() }
                 .disabled(variationExport == nil)
             Divider()
+            #endif
             Button("White Balance Picker") { togglePicker?(.whiteBalance) }
                 .keyboardShortcut("w", modifiers: [])
                 .disabled(togglePicker == nil)

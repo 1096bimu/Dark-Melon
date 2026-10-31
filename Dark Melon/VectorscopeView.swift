@@ -184,20 +184,18 @@ struct VectorscopeView: View {
                             Button("Reset WB", action: resetRAWBalance)
                         }
                     }
-                    if !mapping.color.monochrome {
-                        gainValues
-                        if let convertWhiteBalance {
-                            HStack {
-                                Spacer()
-                                Button("D") { setRAWBalance(temperature: 5500) }
-                                    .help("5500 K · Tint 0")
-                                    .filmLock(.rawWhiteBalance)
-                                Button("T") { setRAWBalance(temperature: 3200) }
-                                    .help("3200 K · Tint 0")
-                                    .filmLock(.rawWhiteBalance)
-                                Button("Convert to WB", action: convertWhiteBalance)
-                                    .disabled(balance == WhiteBalance() || lockedItems.contains(.rgbWhiteBalance) || lockedItems.contains(.rawWhiteBalance))
-                            }
+                    if !mapping.color.monochrome { gainValues }
+                    HStack {
+                        Spacer()
+                        Button("D") { setRAWBalance(temperature: 5500) }
+                            .help("5500 K · Tint 0")
+                            .filmLock(.rawWhiteBalance)
+                        Button("T") { setRAWBalance(temperature: 3200) }
+                            .help("3200 K · Tint 0")
+                            .filmLock(.rawWhiteBalance)
+                        if !mapping.color.monochrome, let convertWhiteBalance {
+                            Button("Convert to WB", action: convertWhiteBalance)
+                                .disabled(balance == WhiteBalance() || lockedItems.contains(.rgbWhiteBalance) || lockedItems.contains(.rawWhiteBalance))
                         }
                     }
                     HStack {

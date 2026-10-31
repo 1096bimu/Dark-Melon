@@ -116,6 +116,14 @@ nonisolated final class RAWImageCache: @unchecked Sendable {
         if ranges.count > 32 { ranges.removeFirst(ranges.count - 32) }
     }
 
+    /// Leave room for export reservations and memory pressure during comparison.
+    func comparisonParallelism(pixels: Double) -> Int {
+        lock.lock(); defer { lock.unlock() }
+        let available = budget - min(budget, reserved)
+        let cost = BatchExportBudget.bytes(pixels: pixels, scale: 0.25)
+        return pressured ? 1 : max(1, min(2, Int(available / max(1, cost))))
+    }
+
     /// Exports have priority over retained browsing images within the same budget.
     func reserve(_ bytes: UInt64) -> Reservation {
         lock.lock()

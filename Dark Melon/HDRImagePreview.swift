@@ -7,6 +7,7 @@ enum PreviewSampleTool { case whiteBalance }
 
 /// Owned by the editor so loading placeholders cannot discard the viewport.
 final class PreviewViewport {
+    let referenceLink = ReferenceViewportLink()
     var zoom: CGFloat = 1
     var offset = CGPoint.zero
 }
@@ -37,6 +38,8 @@ struct HDRImagePreview: NSViewRepresentable {
     func makeNSView(context: Context) -> ImageDisplay { ImageDisplay(viewport: viewport) }
 
     func updateNSView(_ view: ImageDisplay, context: Context) {
+        viewport.referenceLink.main = view
+        view.viewportChanged = { [weak view, link = viewport.referenceLink] in if let view { link.changed(view) } }
         view.mouseControls = mouseControls
         view.reverseMouseScroll = reverseMouseScroll
         view.cropChanged = cropChanged
@@ -52,6 +55,21 @@ struct HDRImagePreview: NSViewRepresentable {
     }
 
     final class ImageDisplay: NSView {
+        var allowsWhiteBalance = true
+        var comparisonClip: CGRect? { didSet { if oldValue != comparisonClip { positionImage() } } }
+        var viewportChanged: (() -> Void)?
+        var normalizedViewport: (CGFloat, CGPoint) {
+            let fit = min(bounds.width / max(1,imageSize.width), bounds.height / max(1,imageSize.height))
+            return (zoom, CGPoint(x: offset.x / max(1,imageSize.width * fit * zoom),
+                                  y: offset.y / max(1,imageSize.height * fit * zoom)))
+        }
+        func setNormalizedViewport(_ state: (CGFloat, CGPoint)) {
+            let fit = min(bounds.width / max(1,imageSize.width), bounds.height / max(1,imageSize.height))
+            zoom = state.0
+            offset = CGPoint(x: state.1.x * imageSize.width * fit * zoom, y: state.1.y * imageSize.height * fit * zoom)
+            positionImage()
+            viewport.zoom = zoom; viewport.offset = offset
+        }
         private let imageLayer = CAMetalLayer()
         private let sdrLayer = CAMetalLayer()
         private var detailLayer = CAMetalLayer()
@@ -382,7 +400,7 @@ struct HDRImagePreview: NSViewRepresentable {
             if crop == nil {
                 let frame = CGRect(x: imageLayer.position.x - size.width / 2,
                                    y: imageLayer.position.y - size.height / 2, width: size.width, height: size.height)
-                let visible = frame.intersection(bounds)
+                let visible = frame.intersection(comparisonClip ?? bounds)
                 reportRegion(visible.isEmpty ? nil : PreviewRegion(
                     rect: CGRect(x: (visible.minX - frame.minX) / size.width, y: (visible.minY - frame.minY) / size.height,
                                  width: visible.width / size.width, height: visible.height / size.height),
@@ -423,6 +441,7 @@ struct HDRImagePreview: NSViewRepresentable {
         private func rememberViewport() {
             viewport.zoom = zoom
             viewport.offset = offset
+            viewportChanged?()
         }
 
         private func changeZoom(_ factor: CGFloat, event: NSEvent) {
@@ -548,7 +567,7 @@ struct HDRImagePreview: NSViewRepresentable {
             menu.addItem(.separator())
             let balance = NSMenuItem(title: String(localized: "White Balance"), action: #selector(sampleContextWhiteBalance), keyEquivalent: "")
             balance.target = self
-            balance.isEnabled = cropRatio == nil && imageLayer.frame.contains(contextPoint)
+            balance.isEnabled = allowsWhiteBalance && cropRatio == nil && imageLayer.frame.contains(contextPoint)
             menu.addItem(balance)
             return menu
         }

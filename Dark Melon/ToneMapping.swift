@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 
 nonisolated struct ToneMapping: Codable, Equatable, Sendable {
     var lutID: UUID? = nil
@@ -136,7 +137,36 @@ nonisolated struct ToneMapping: Codable, Equatable, Sendable {
         return ToneCurve(values: values, black: 0, white: 1)
     }
 
+    // Small shared cache also serves histogram/target calculations. Compute outside
+    // the lock: an HDR curve recursively requests its SDR curve.
+    private struct CurveKey: Hashable {
+        var white: Double
+        var tone: Double
+        var contrast: Double
+        var distribution: [Double]
+        var hdr: Bool
+        var target: Double
+        var gain: Double
+        var rolloff: Double
+    }
+    private static let curveCache = Mutex<[CurveKey: ToneCurve]>([:])
+
     func curve(hdr: Bool) -> ToneCurve {
+        let isHDR = hdr && hdrEnabled
+        let key = CurveKey(white: white, tone: peakPosition, contrast: concentration,
+            distribution: contrastDistribution, hdr: isHDR,
+            target: isHDR ? hdrTarget : 0, gain: isHDR ? hdrGain : 0,
+            rolloff: isHDR ? hdrRolloff : 0)
+        if let cached = Self.curveCache.withLock({ $0[key] }) { return cached }
+        let result = uncachedCurve(hdr: isHDR)
+        Self.curveCache.withLock {
+            if $0.count >= 16 { $0.removeAll(keepingCapacity: true) }
+            $0[key] = result
+        }
+        return result
+    }
+
+    private func uncachedCurve(hdr: Bool) -> ToneCurve {
         if hdr && hdrEnabled { return hdrCurve() }
         let upperInput = white
         let outputMax = 1.0
@@ -252,7 +282,7 @@ nonisolated struct FourPointCubic {
     }
 }
 
-nonisolated struct ToneCurve {
+nonisolated struct ToneCurve: Equatable, Sendable {
     let values: [Double]
     let black: Double
     let white: Double

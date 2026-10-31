@@ -202,6 +202,7 @@ struct EditLibraryView: View {
                 Menu {
                     Button("Add Folder", systemImage: "folder.badge.plus") { name = ""; namingFolder = true }
                     Button("Add Current Edit", systemImage: "slider.horizontal.3") {
+                        guard let current else { return }
                         snapshot = current; selection = nil; choosingParts = true
                     }.disabled(current == nil)
                     Button("Add LUT…", systemImage: "cube") { choosingLUT = true }
@@ -287,7 +288,7 @@ struct EditLibraryView: View {
             TextField("Name", text: $name)
             Button("Cancel", role: .cancel) {}
             Button("Save") {
-                if let snapshot, let selection {
+                if current != nil, let snapshot, let selection {
                     library.addEdit(name.trimmingCharacters(in: .whitespacesAndNewlines), parent: folder, recipe: snapshot, selection: selection)
                 }
             }.disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)

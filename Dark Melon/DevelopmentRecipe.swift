@@ -149,7 +149,7 @@ nonisolated struct DevelopmentRecipe: Codable, Equatable, Sendable {
             guard within(Double(wb.temperature), 2000...50000), within(Double(wb.tint), -150...150) else { throw RecipeError.invalid }
         }
         guard m.vertexWarp.count == OKLabVertexWarp.count,
-              m.vertexWarp.allSatisfy({ within($0.darkerHue, -Double.pi...Double.pi) && within($0.lighterHue, -Double.pi...Double.pi) && within($0.chroma, AdjustmentLimits.chroma) && within($0.lightness, AdjustmentLimits.density) && within($0.rotation, -1...1) && ($0.hueOffset.map { within($0, -Double.pi...Double.pi) } ?? true) }),
+              m.vertexWarp.allSatisfy({ within($0.monochromeResponse, -1...1) && within($0.darkerHue, -Double.pi...Double.pi) && within($0.lighterHue, -Double.pi...Double.pi) && within($0.chroma, AdjustmentLimits.chroma) && within($0.lightness, AdjustmentLimits.density) && within($0.rotation, -1...1) && ($0.hueOffset.map { within($0, -Double.pi...Double.pi) } ?? true) }),
               m.hls.count == 6,
               within(m.white, 0...1), m.white >= ToneMapping.minimumRange * 0.999,
               within(m.shadowFloor, 0...Double(Float.greatestFiniteMagnitude)), within(m.tonePosition, 0...1), within(m.concentration, -1...1),

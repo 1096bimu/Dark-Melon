@@ -361,6 +361,7 @@ float chromaMultiplier(float x, float4 points, float hdrEnd) {
             adjustment.z += mix(sliceBend(q.x,c,b0,l0),sliceBend(q.x,c,b1,l1),w);
             float r0=clamp(c/v0.w,0.0,1.0),r1=clamp(c/v1.w,0.0,1.0);
             adjustment.y=mix(v0.y*r0*r0*(3.0-2.0*r0),v1.y*r1*r1*(3.0-2.0*r1),w);
+            if (hasWarp > 1.5) adjustment.y = mix(v0.y, v1.y, w) * c;
         }
 
 
@@ -371,6 +372,7 @@ float chromaMultiplier(float x, float4 points, float hdrEnd) {
             adjustment.z += mix(sliceBend(q.x,c,b1,l1),sliceBend(q.x,c,b2,l2),w);
             float r0=clamp(c/v1.w,0.0,1.0),r1=clamp(c/v2.w,0.0,1.0);
             adjustment.y=mix(v1.y*r0*r0*(3.0-2.0*r0),v2.y*r1*r1*(3.0-2.0*r1),w);
+            if (hasWarp > 1.5) adjustment.y = mix(v1.y, v2.y, w) * c;
         }
 
 
@@ -381,6 +383,7 @@ float chromaMultiplier(float x, float4 points, float hdrEnd) {
             adjustment.z += mix(sliceBend(q.x,c,b2,l2),sliceBend(q.x,c,b3,l3),w);
             float r0=clamp(c/v2.w,0.0,1.0),r1=clamp(c/v3.w,0.0,1.0);
             adjustment.y=mix(v2.y*r0*r0*(3.0-2.0*r0),v3.y*r1*r1*(3.0-2.0*r1),w);
+            if (hasWarp > 1.5) adjustment.y = mix(v2.y, v3.y, w) * c;
         }
 
 
@@ -391,6 +394,7 @@ float chromaMultiplier(float x, float4 points, float hdrEnd) {
             adjustment.z += mix(sliceBend(q.x,c,b3,l3),sliceBend(q.x,c,b4,l4),w);
             float r0=clamp(c/v3.w,0.0,1.0),r1=clamp(c/v4.w,0.0,1.0);
             adjustment.y=mix(v3.y*r0*r0*(3.0-2.0*r0),v4.y*r1*r1*(3.0-2.0*r1),w);
+            if (hasWarp > 1.5) adjustment.y = mix(v3.y, v4.y, w) * c;
         }
 
 
@@ -401,6 +405,7 @@ float chromaMultiplier(float x, float4 points, float hdrEnd) {
             adjustment.z += mix(sliceBend(q.x,c,b4,l4),sliceBend(q.x,c,b5,l5),w);
             float r0=clamp(c/v4.w,0.0,1.0),r1=clamp(c/v5.w,0.0,1.0);
             adjustment.y=mix(v4.y*r0*r0*(3.0-2.0*r0),v5.y*r1*r1*(3.0-2.0*r1),w);
+            if (hasWarp > 1.5) adjustment.y = mix(v4.y, v5.y, w) * c;
         }
 
 
@@ -411,6 +416,7 @@ float chromaMultiplier(float x, float4 points, float hdrEnd) {
             adjustment.z += mix(sliceBend(q.x,c,b5,l5),sliceBend(q.x,c,b6,l6),w);
             float r0=clamp(c/v5.w,0.0,1.0),r1=clamp(c/v6.w,0.0,1.0);
             adjustment.y=mix(v5.y*r0*r0*(3.0-2.0*r0),v6.y*r1*r1*(3.0-2.0*r1),w);
+            if (hasWarp > 1.5) adjustment.y = mix(v5.y, v6.y, w) * c;
         }
 
 
@@ -421,6 +427,7 @@ float chromaMultiplier(float x, float4 points, float hdrEnd) {
             adjustment.z += mix(sliceBend(q.x,c,b6,l6),sliceBend(q.x,c,b0,l0),w);
             float r0=clamp(c/v6.w,0.0,1.0),r1=clamp(c/v0.w,0.0,1.0);
             adjustment.y=mix(v6.y*r0*r0*(3.0-2.0*r0),v0.y*r1*r1*(3.0-2.0*r1),w);
+            if (hasWarp > 1.5) adjustment.y = mix(v6.y, v0.y, w) * c;
         }
 
                 warped=float3(q.x+adjustment.y,c*adjustment.x*cos(h+adjustment.z),c*adjustment.x*sin(h+adjustment.z));

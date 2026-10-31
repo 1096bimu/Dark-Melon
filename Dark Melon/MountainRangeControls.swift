@@ -12,12 +12,13 @@ struct MountainRangeHandles: View {
     var boundary: [Double] = []
     var movementEnabled = true
     var densityMode = false
+    @Namespace private var dragSpace
     @State private var drag: DragStart?
     private struct DragStart {
         let index: Int
         let upper: Bool
         let hue: Double
-        let chroma: Double
+        let height: Double
         let lightness: Double
     }
     static let colors: [Color] = [.red,.orange,.yellow,.green,.cyan,.blue,.purple]
@@ -40,7 +41,7 @@ struct MountainRangeHandles: View {
         let angle=movementEnabled ? hue(i,upper:upper) : slices[i].hue
         let wrapped=angle-floor(angle/(2 * .pi))*2 * .pi
         let y: Double
-        if densityMode { y=0.5-controls[i].lightness*2 }
+        if densityMode { y=0.5-controls[i].monochromeResponse*0.5 }
         else if lightnessMode { y=1-(upper ? slices[i].upper:slices[i].lower) }
         else { y=1-ceiling(angle)*(movementEnabled ? controls[i].chroma : 0)/2*scale/maximumChroma }
         return CGPoint(x:wrapped/(2 * .pi)*size.width,y:min(1,max(0,y))*size.height)
@@ -59,7 +60,7 @@ struct MountainRangeHandles: View {
                                     .controlReset {
                                         selected = i
                                         let saved = defaults.vertexWarp[i]
-                                        if densityMode { controls[i].lightness = saved.lightness }
+                                        if densityMode { controls[i].monochromeResponse = saved.monochromeResponse }
                                         else if lightnessMode {
                                             if upper { controls[i].lighterHue = saved.lighterHue }
                                             else { controls[i].darkerHue = saved.darkerHue }
@@ -71,17 +72,17 @@ struct MountainRangeHandles: View {
                                     }
                                     .position(x:x,y:p.y)
                                     .accessibilityLabel(Text(LocalizedStringKey(Self.names[i])))
-                                    .gesture(DragGesture(minimumDistance:0)
+                                    .gesture(DragGesture(minimumDistance:0, coordinateSpace: .named(dragSpace))
                                         .onChanged { value in
                                             selected=i
                                             guard movementEnabled || densityMode else { return }
                                             if drag == nil {
-                                                drag=DragStart(index:i,upper:upper,hue:hue(i,upper:upper),chroma:controls[i].chroma,lightness:controls[i].lightness)
+                                                drag=DragStart(index:i,upper:upper,hue:hue(i,upper:upper),height:point(i,upper:upper,size:size).y/max(1,size.height),lightness:densityMode ? controls[i].monochromeResponse : controls[i].lightness)
                                             }
                                             guard let start=drag,start.index==i,start.upper==upper else { return }
                                             if densityMode {
-                                                let offset=start.lightness-value.translation.height/max(1,size.height)*0.5
-                                                controls[i].lightness=offset.clamped(to: -0.25...0.25)
+                                                let offset=start.lightness-value.translation.height/max(1,size.height)*2
+                                                controls[i].monochromeResponse=offset.clamped(to: -1...1)
                                                 return
                                             }
                                             let target=start.hue+value.translation.width/max(1,size.width)*2 * .pi
@@ -89,10 +90,14 @@ struct MountainRangeHandles: View {
                                                 let offset=(target-slices[i].hue-base(i)).clamped(to: -Double.pi...Double.pi)
                                                 if upper { controls[i].lighterHue=offset } else { controls[i].darkerHue=offset }
                                             } else {
-                                                let c=ceiling(target)
-                                                let amount=(start.chroma-value.translation.height/max(1,size.height)*maximumChroma*2/(max(c,0.00001)*scale)).clamped(to:0...2)
                                                 let offset=(target-slices[i].hue).clamped(to: -Double.pi...Double.pi)
-                                                let wrapped=(slices[i].hue+offset)/(2 * .pi)
+                                                let angle=slices[i].hue+offset
+                                                let c=ceiling(angle)
+                                                // Preserve the pointer's destination height as hue changes;
+                                                // the gamut envelope only clamps the final destination.
+                                                let targetHeight=start.height+value.translation.height/max(1,size.height)
+                                                let amount=((1-targetHeight)*maximumChroma*2/(max(c,0.00001)*scale)).clamped(to:0...2)
+                                                let wrapped=angle/(2 * .pi)
                                                 let newX=(wrapped-floor(wrapped))*size.width
                                                 let newY=(1-c*amount/2*scale/maximumChroma)*size.height
                                                 // Periodic collision spacing; no fixed hue sectors.
@@ -112,6 +117,7 @@ struct MountainRangeHandles: View {
                     }
                 }
             }
+            .coordinateSpace(name: dragSpace)
         }
     }
 }

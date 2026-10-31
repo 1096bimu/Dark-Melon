@@ -282,6 +282,8 @@ struct ImageFileBrowser: View {
     let open: (URL) -> Void
     var model: ImageBrowserModel
     var selection: Binding<Set<URL>>? = nil
+    var comparisonSelection: (([URL]) -> Void)? = nil
+    var comparisonURLs: [URL] = []
     var expandedGrid = false
     var changeDirectory: ((URL, Bool) -> Void)? = nil
     var fileAction: ((BrowserFileAction, URL) -> Void)? = nil
@@ -299,7 +301,7 @@ struct ImageFileBrowser: View {
         #if os(macOS)
         let flags = NSEvent.modifierFlags
         let command = flags.contains(.command), shift = flags.contains(.shift)
-        if selection == nil, selectionAnchor == nil, let selectedURL, ordered.contains(selectedURL) {
+        if selection == nil, selected.isEmpty, let selectedURL, ordered.contains(selectedURL) {
             selected.insert(selectedURL)
         }
         if shift, let anchor = selectionAnchor ?? selectedURL,
@@ -320,6 +322,22 @@ struct ImageFileBrowser: View {
             selection.wrappedValue = selected
         } else { selectedFiles = [url]; open(url) }
         #endif
+    }
+
+    private func comparisonSet(ordered: [URL]) -> Set<URL> {
+        if !activeSelection.isEmpty { return activeSelection }
+        if let selectedURL, ordered.contains(selectedURL) { return [selectedURL] }
+        return []
+    }
+    private func toggleComparison(_ url: URL, ordered: [URL]) {
+        var selected = comparisonSet(ordered: ordered)
+        if selected.contains(url) { selected.remove(url) }
+        else {
+            guard selected.count < 4 else { return }
+            selected.insert(url)
+        }
+        selectedFiles = selected
+        selectionAnchor = url
     }
 
     private func contextFiles(_ url: URL, ordered: [URL]) -> [URL] {
@@ -399,6 +417,11 @@ struct ImageFileBrowser: View {
                                             .contentShape(Rectangle())
                                         }
                                         .buttonStyle(.plain)
+                                        .contextMenu {
+                                            #if os(macOS)
+                                            Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([entry.url]) }
+                                            #endif
+                                        }
                                         .id(entry.url)
                                         .accessibilityValue(rank.map { "Recently visited folder, \($0 + 1) of \(recent.count)" } ?? "")
                                     }
@@ -411,7 +434,7 @@ struct ImageFileBrowser: View {
                                         } label: {
                                             FileThumbnail(url: entry.url, imageWidth: max(1, cellWidth - 8))
                                                 .padding(4)
-                                                .background((activeSelection.contains(entry.url) || (selectionAnchor == nil && activeSelection.isEmpty && selectedURL == entry.url)) ? Color.accentColor.opacity(0.25) : .clear,
+                                                .background((activeSelection.contains(entry.url) || (selection == nil && activeSelection.isEmpty && selectedURL == entry.url)) ? Color.accentColor.opacity(0.25) : .clear,
                                                             in: RoundedRectangle(cornerRadius: 6))
                                                 .overlay {
                                                     if entry.hasSavedSettings {
@@ -427,6 +450,12 @@ struct ImageFileBrowser: View {
                                         .help(entry.url.lastPathComponent + (entry.hasSavedSettings ? " · " + String(localized: "Saved development settings") : ""))
                                         .accessibilityValue(entry.hasSavedSettings ? "Saved development settings" : "")
                                         .contextMenu {
+                                            if comparisonSelection != nil, selection == nil {
+                                                let ordered = files.map(\.url)
+                                                let selected = comparisonSet(ordered: ordered)
+                                                Button("Compare") { toggleComparison(entry.url, ordered: ordered) }
+                                                    .disabled(!selected.contains(entry.url) && selected.count >= 4)
+                                            }
                                             if let fileAction {
                                                 let targets = contextFiles(entry.url, ordered: files.map(\.url))
                                                 Button(targets.count > 1 ? "Delete Edits (\(targets.count))" : "Delete Edit", role: .destructive) {
@@ -436,9 +465,10 @@ struct ImageFileBrowser: View {
                                                 .disabled(!files.contains { targets.contains($0.url) && ($0.hasSavedSettings || pendingURLs.contains($0.url)) })
                                                 #if os(macOS)
                                                 Button("Show in Finder") { fileAction(.showInFinder, entry.url) }
+                                                Button("Open as Reference") { fileAction(.reference, entry.url) }
                                                 #endif
                                                 Divider()
-                                                Button("Copy Edit") { fileAction(.copyEdit, entry.url) }
+                                                Button("Copy Edit") { fileAction(.copyEdit, entry.url) }.disabled(activeSelection.count > 1 && comparisonSelection != nil)
                                                 Button(targets.count > 1 ? "Paste Edit to \(targets.count) Files…" : "Paste Edit…") {
                                                     if let multipleFileAction { multipleFileAction(.pasteEdit, targets) }
                                                     else { fileAction(.pasteEdit, entry.url) }
@@ -532,6 +562,14 @@ struct ImageFileBrowser: View {
             selectionAnchor = urls.first
         }.frame(width: 0, height: 0))
         #endif
+        .onAppear { if comparisonSelection != nil { selectedFiles = Set(comparisonURLs) } }
+        .onChange(of: comparisonURLs) { _, urls in
+            if comparisonSelection != nil, selectedFiles != Set(urls) { selectedFiles = Set(urls) }
+        }
+        .onChange(of: selectedFiles) { _, selected in
+            comparisonSelection?(files.map(\.url).filter { selected.contains($0) })
+        }
+        .onChange(of: model.directory) { _, _ in comparisonSelection?([]) }
         .onChange(of: pendingURLs, initial: true) { _, urls in
             model.pendingURLs = urls
         }

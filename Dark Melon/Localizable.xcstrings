@@ -10,13 +10,25 @@
     "…" : {
       "shouldTranslate" : false
     },
-    "%" : {},
+    "%" : {
+
+    },
     "%.0f° · %.0f%%" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$.0f° · %2$.0f%%"
+          }
+        }
+      }
+    },
+    "%.2f× / %.2f×" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$.2f× / %2$.2f×"
           }
         }
       }
@@ -213,11 +225,15 @@
     "×" : {
       "shouldTranslate" : false
     },
-    "0" : {},
+    "0" : {
+
+    },
     "0×–2×" : {
       "shouldTranslate" : false
     },
-    "1" : {},
+    "1" : {
+
+    },
     "1.0 · SDR white" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -284,6 +300,16 @@
         }
       }
     },
+    "33 × 33 × 33 · sRGB input and output. Includes per-pixel tone and color adjustments and the selected LUT. Excludes RAW decoding, grain, blur, halation, vignette, Clarity, BadHDR, and transforms." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "33 × 33 × 33 · sRGB 输入和输出。包含逐像素色调、颜色调整和所选 LUT。不包含 RAW 解码、颗粒、模糊、光晕、暗角、清晰度、BadHDR 和几何变换。"
+          }
+        }
+      }
+    },
     "100% Zoom" : {
       "localizations" : {
         "zh-Hans" : {
@@ -304,9 +330,15 @@
         }
       }
     },
-    "3200 K · Tint 0" : {},
-    "5500 K · Tint 0" : {},
-    "a" : {},
+    "3200 K · Tint 0" : {
+
+    },
+    "5500 K · Tint 0" : {
+
+    },
+    "a" : {
+
+    },
     "About %@" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -329,7 +361,9 @@
         }
       }
     },
-    "Add" : {},
+    "Add" : {
+
+    },
     "Add Current Edit" : {
       "localizations" : {
         "zh-Hans" : {
@@ -659,7 +693,9 @@
         }
       }
     },
-    "b" : {},
+    "b" : {
+
+    },
     "B" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -671,8 +707,12 @@
         }
       }
     },
-    "Back" : {},
-    "BadHDR" : {},
+    "Back" : {
+
+    },
+    "BadHDR" : {
+
+    },
     "BadHDR radius" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1086,6 +1126,16 @@
         }
       }
     },
+    "Clips each linear RGB channel below this level to the same floor before tone mapping. Zero disables the floor." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在色调映射前，将每个低于此值的线性 RGB 通道裁切至相同下限。零表示关闭。"
+          }
+        }
+      }
+    },
     "Close" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1126,6 +1176,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "色彩"
+          }
+        }
+      }
+    },
+    "Color Chrome" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "色彩浓郁效果"
           }
         }
       }
@@ -1184,6 +1244,16 @@
         }
       }
     },
+    "Combine" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "拼合"
+          }
+        }
+      }
+    },
     "Commonly used in video production, this graph lets you modify the saturation of pixels based on their luminance. For example the midpoint tends to control the saturation of skin tones." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1224,6 +1294,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "对比 SDR 与 HDR"
+          }
+        }
+      }
+    },
+    "Comparison" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "比较"
           }
         }
       }
@@ -1435,7 +1515,9 @@
         }
       }
     },
-    "Could not open Getting Started" : {},
+    "Could not open Getting Started" : {
+
+    },
     "Could not restore saved edits: %@" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1458,7 +1540,9 @@
         }
       }
     },
-    "Create" : {},
+    "Create" : {
+
+    },
     "Create Snapshot" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1533,7 +1617,9 @@
         }
       }
     },
-    "Cut" : {},
+    "Cut" : {
+
+    },
     "Cyan" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1545,7 +1631,9 @@
         }
       }
     },
-    "D" : {},
+    "D" : {
+
+    },
     "Dark Melon" : {
       "shouldTranslate" : false
     },
@@ -1580,7 +1668,9 @@
         }
       }
     },
-    "Delete" : {},
+    "Delete" : {
+
+    },
     "Delete Edit" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1805,6 +1895,16 @@
         }
       }
     },
+    "Dye Purity" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "染料纯度"
+          }
+        }
+      }
+    },
     "Dye Response" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1954,7 +2054,9 @@
         }
       }
     },
-    "Export" : {},
+    "Export" : {
+
+    },
     "Export height in pixels" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1984,6 +2086,27 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "仅导出"
+          }
+        }
+      }
+    },
+    "Export SDR LUT" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导出 SDR LUT"
+          }
+        }
+      }
+    },
+    "Export SDR LUT…" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导出 SDR LUT…"
           }
         }
       }
@@ -2217,6 +2340,16 @@
         }
       }
     },
+    "Four chroma multipliers joined by straight lines: zero, SDR midpoint, SDR gamut maximum, and HDR gamut maximum. The HDR endpoint follows the current HDR output ceiling. 1× is unchanged." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "四个色度倍数以直线连接，分别位于零、SDR 中点、SDR 色域最大值和 HDR 色域最大值。HDR 端点随当前 HDR 输出上限变化。1× 表示不变。"
+          }
+        }
+      }
+    },
     "Freyja" : {
       "localizations" : {
         "en" : {
@@ -2249,7 +2382,9 @@
         }
       }
     },
-    "G" : {},
+    "G" : {
+
+    },
     "Gain map" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2261,7 +2396,9 @@
         }
       }
     },
-    "Getting Started…" : {},
+    "Getting Started…" : {
+
+    },
     "GNU General Public License v3.0 (GPL-3.0-only)" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2280,6 +2417,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "GNU GPL v3 — 完整许可证"
+          }
+        }
+      }
+    },
+    "GPU" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GPU"
+          }
+        }
+      }
+    },
+    "GPU measures pre-tone and final preview command execution. Total includes CPU setup and waiting. Both include SDR and available HDR renders, but exclude RAW decoding, scopes, and export encoding. Percentage is preview pixels divided by full-image pixels." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GPU 表示色调映射前及最终预览的 GPU 执行时间。总计包含 CPU 准备和等待。两者均包含 SDR 和可用的 HDR 渲染，不包含 RAW 解码、示波器或导出编码。百分比为预览像素数占完整图像像素数的比例。"
           }
         }
       }
@@ -2534,6 +2693,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "HDR 输出 +%.2f 档"
+          }
+        }
+      }
+    },
+    "HDR output exceeds display headroom" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "HDR 输出超出显示器当前亮度余量"
           }
         }
       }
@@ -2984,6 +3153,17 @@
         }
       }
     },
+    "Last completed overview render, including SDR and available HDR renditions. Percentage is preview pixels divided by full-image pixels. Excludes RAW decoding, scopes, and export encoding." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最近完成的全图预览渲染，包括 SDR 和可用的 HDR 版本。百分比为预览像素数占完整图像像素数的比例。不包含 RAW 解码、示波器和导出编码。"
+          }
+        }
+      }
+    },
     "Left Panel" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3189,6 +3369,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "低饱和度"
+          }
+        }
+      }
+    },
+    "Lower purity introduces absorption in other color bands. Neutral compensation preserves the existing gray response. 100% leaves the dye unchanged." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "降低纯度会增加对其他色带的吸收。中性补偿保留现有灰阶响应。100% 表示不改变染料。"
           }
         }
       }
@@ -3613,6 +3803,16 @@
         }
       }
     },
+    "No Sync" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不同步"
+          }
+        }
+      }
+    },
     "None" : {
       "localizations" : {
         "zh-Hans" : {
@@ -3748,6 +3948,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "打开图像"
+          }
+        }
+      }
+    },
+    "Open as Reference" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在参考窗口中打开"
           }
         }
       }
@@ -4009,7 +4219,9 @@
         }
       }
     },
-    "Preview" : {},
+    "Preview" : {
+
+    },
     "Preview: HDR" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -4075,7 +4287,9 @@
         }
       }
     },
-    "R" : {},
+    "R" : {
+
+    },
     "Radius" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -4261,7 +4475,9 @@
         }
       }
     },
-    "Remove" : {},
+    "Remove" : {
+
+    },
     "Remove saved settings and discard pending edits for %lld file(s)? Original images are kept. If Trash is unavailable, settings sidecars are permanently deleted." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -4289,6 +4505,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "重命名…"
+          }
+        }
+      }
+    },
+    "Render" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "渲染"
           }
         }
       }
@@ -4459,6 +4686,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "对没有已保存或待保存编辑的 RAW 文件自动执行“最大范围”。"
+          }
+        }
+      }
+    },
+    "Same Area" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "相同区域"
           }
         }
       }
@@ -4880,6 +5117,16 @@
         }
       }
     },
+    "Shadow Floor" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "阴影下限"
+          }
+        }
+      }
+    },
     "Shadow hue" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -5018,6 +5265,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "显示偏移、降噪、锐度、细节、局部边缘对比度和摩尔纹抑制。"
+          }
+        }
+      }
+    },
+    "Showing 4 of %lld" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示 %lld 张中的 4 张"
           }
         }
       }
@@ -5182,7 +5439,9 @@
         }
       }
     },
-    "T" : {},
+    "T" : {
+
+    },
     "Temperature" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -5194,7 +5453,9 @@
         }
       }
     },
-    "The bundled guide could not be opened. Check that an application is available to open HTML files." : {},
+    "The bundled guide could not be opened. Check that an application is available to open HTML files." : {
+
+    },
     "The development sidecar is not a valid Dark Melon XMP document." : {
       "localizations" : {
         "zh-Hans" : {
@@ -5298,6 +5559,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "此图可为不同输入饱和度设置饱和度倍数。传统的“自然饱和度”滑块相当于移动图中间的控制点，而传统的“饱和度”滑块相当于移动最右端的控制点。"
+          }
+        }
+      }
+    },
+    "This switch makes color transformations look more natural instead of mathematically correct, it will not have any effect when no transform is applied." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此开关让色彩变换看起来更自然，而非追求数学上的正确性。未应用变换时不会产生任何效果。"
           }
         }
       }
@@ -5462,6 +5733,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "工具"
+          }
+        }
+      }
+    },
+    "Total" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "总计"
           }
         }
       }
@@ -5709,6 +5991,7 @@
       }
     },
     "Variation Export…" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -5934,106 +6217,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "零为线性。负值会降低影调位置附近的对比度。"
-          }
-        }
-      }
-    },
-    "Four chroma multipliers joined by straight lines: zero, SDR midpoint, SDR gamut maximum, and HDR gamut maximum. The HDR endpoint follows the current HDR output ceiling. 1× is unchanged." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "四个色度倍数以直线连接，分别位于零、SDR 中点、SDR 色域最大值和 HDR 色域最大值。HDR 端点随当前 HDR 输出上限变化。1× 表示不变。"
-          }
-        }
-      }
-    },
-    "Dye Purity" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "染料纯度"
-          }
-        }
-      }
-    },
-    "Shadow Floor" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "阴影下限"
-          }
-        }
-      }
-    },
-    "Clips each linear RGB channel below this level to the same floor before tone mapping. Zero disables the floor." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在色调映射前，将每个低于此值的线性 RGB 通道裁切至相同下限。零表示关闭。"
-          }
-        }
-      }
-    },
-    "Lower purity introduces absorption in other color bands. Neutral compensation preserves the existing gray response. 100% leaves the dye unchanged." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "降低纯度会增加对其他色带的吸收。中性补偿保留现有灰阶响应。100% 表示不改变染料。"
-          }
-        }
-      }
-    },
-    "Export SDR LUT…" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "导出 SDR LUT…"
-          }
-        }
-      }
-    },
-    "Export SDR LUT" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "导出 SDR LUT"
-          }
-        }
-      }
-    },
-    "33 × 33 × 33 · sRGB input and output. Includes per-pixel tone and color adjustments and the selected LUT. Excludes RAW decoding, grain, blur, halation, vignette, Clarity, BadHDR, and transforms." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "33 × 33 × 33 · sRGB 输入和输出。包含逐像素色调、颜色调整和所选 LUT。不包含 RAW 解码、颗粒、模糊、光晕、暗角、清晰度、BadHDR 和几何变换。"
-          }
-        }
-      }
-    },
-    "Color Chrome" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "色彩浓郁效果"
-          }
-        }
-      }
-    },
-    "This switch makes color transformations look more natural instead of mathematically correct, it will not have any effect when no transform is applied." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "此开关让色彩变换看起来更自然，而非追求数学上的正确性。未应用变换时不会产生任何效果。"
           }
         }
       }

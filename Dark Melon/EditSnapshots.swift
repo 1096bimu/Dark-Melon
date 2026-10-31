@@ -54,6 +54,56 @@ struct EditSnapshotsView: View {
     let update: (String) -> Void
     let delete: (UUID) -> Void
     let discardDraft: () -> Void
+    var comparisonSelection: (([String]) -> Void)? = nil
+    var comparisonKeys: [String] = []
+    var openReference: ((String) -> Void)? = nil
+    var mutationsDisabled = false
+    @State private var selectedRows: Set<String> = []
+    @State private var anchor: String?
+    private var orderedKeys: [String] {
+        (saved ? ["saved"] : []) + (draft ? ["unsaved"] : []) + snapshots.map { $0.id.uuidString }
+    }
+    private func choose(_ key: String) {
+        #if os(macOS)
+        let flags = NSEvent.modifierFlags
+        var next = selectedRows.isEmpty ? Set([selected]) : selectedRows
+        if flags.contains(.shift), let a = orderedKeys.firstIndex(of: anchor ?? selected), let b = orderedKeys.firstIndex(of: key) {
+            let range = Set(orderedKeys[min(a,b)...max(a,b)])
+            next = flags.contains(.command) ? next.union(range) : range
+        } else if flags.contains(.command) {
+            if !next.insert(key).inserted { next.remove(key) }
+            anchor = key
+        } else {
+            next = [key]; anchor = key
+        }
+        selectedRows = next
+        comparisonSelection?(orderedKeys.filter(next.contains))
+        if !flags.contains(.command) && !flags.contains(.shift) { select(key) }
+        #else
+        select(key)
+        #endif
+    }
+    private var comparisonSet: Set<String> { selectedRows.isEmpty ? [selected] : selectedRows }
+    private func toggleComparison(_ key: String) {
+        var next = comparisonSet
+        if next.contains(key) { next.remove(key) }
+        else {
+            guard next.count < 4 else { return }
+            next.insert(key)
+        }
+        selectedRows = next
+        anchor = key
+        comparisonSelection?(orderedKeys.filter(next.contains))
+    }
+    @ViewBuilder private func compareButton(_ key: String) -> some View {
+        #if os(macOS)
+        if let openReference { Button("Open as Reference") { openReference(key) } }
+        #endif
+        if comparisonSelection != nil {
+            Button("Compare") { toggleComparison(key) }
+                .disabled(!comparisonSet.contains(key) && comparisonSet.count >= 4)
+        }
+    }
     @State private var naming = false
     @State private var name = ""
     var body: some View {
@@ -61,58 +111,68 @@ struct EditSnapshotsView: View {
             HStack {
                 Text("Snapshots").font(.headline)
                 Spacer()
-                Button { name = ""; naming = true } label: {
+                Button { guard !mutationsDisabled else { return }; name = ""; naming = true } label: {
                     Label("Add", systemImage: "plus")
                 }
                 .buttonStyle(.borderless).fixedSize()
                 .help("Create Snapshot")
+                .disabled(mutationsDisabled)
             }.padding(12)
             List {
                 if saved {
                     row("Saved Edit", key: "saved", date: savedAt)
-                        .contextMenu { Button("Update with Current") { update("saved") } }
+                        .contextMenu {
+                            compareButton("saved")
+                            Button("Update with Current") { update("saved") }.disabled(mutationsDisabled)
+                        }
                 }
                 if draft {
                     row("Unsaved Edit", key: "unsaved", date: draftAt)
                         .contextMenu {
-                            Button("Update with Current") { update("unsaved") }
-                            Button("Discard Unsaved Edit", role: .destructive, action: discardDraft)
+                            compareButton("unsaved")
+                            Button("Update with Current") { update("unsaved") }.disabled(mutationsDisabled)
+                            Button("Discard Unsaved Edit", role: .destructive, action: discardDraft).disabled(mutationsDisabled)
                         }
                 }
                 ForEach(snapshots) { snapshot in
-                    Button { select(snapshot.id.uuidString) } label: {
+                    Button { choose(snapshot.id.uuidString) } label: {
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(snapshot.name)
                                 if let date = snapshot.createdAt { SnapshotTimestamp(date: date) }
                             }
                             Spacer()
-                            if selected == snapshot.id.uuidString { Image(systemName: "checkmark") }
+                            if selectedRows.contains(snapshot.id.uuidString) || (selectedRows.isEmpty && selected == snapshot.id.uuidString) { Image(systemName: "checkmark") }
                         }.contentShape(Rectangle())
                     }.buttonStyle(.plain)
                     .contextMenu {
-                        Button("Update with Current") { update(snapshot.id.uuidString) }
-                        Button("Delete Snapshot", role: .destructive) { delete(snapshot.id) }
+                        compareButton(snapshot.id.uuidString)
+                        Button("Update with Current") { update(snapshot.id.uuidString) }.disabled(mutationsDisabled)
+                        Button("Delete Snapshot", role: .destructive) { delete(snapshot.id) }.disabled(mutationsDisabled)
                     }
                 }
             }.listStyle(.plain)
         }
+        .onAppear { selectedRows = Set(comparisonKeys) }
+        .onChange(of: comparisonKeys) { _, keys in selectedRows = Set(keys) }
+        .onChange(of: selected) { _, key in if selectedRows.count <= 1 { selectedRows = [key]; anchor = key } }
+        .onChange(of: mutationsDisabled) { _, disabled in if disabled { naming = false } }
         .alert("Create Snapshot", isPresented: $naming) {
             TextField("Name", text: $name)
             Button("Cancel", role: .cancel) {}
-            Button("Create") { create(name.trimmingCharacters(in: .whitespacesAndNewlines)) }
-                .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            Button("Create") { if !mutationsDisabled { create(name.trimmingCharacters(in: .whitespacesAndNewlines)) } }
+                .disabled(mutationsDisabled || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
     }
     private func row(_ title: LocalizedStringKey, key: String, date: Date?) -> some View {
-        Button { select(key) } label: {
+        Button { choose(key) } label: {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
                     if let date { SnapshotTimestamp(date: date) }
                 }
                 Spacer()
-                if selected == key { Image(systemName: "checkmark") }
+                if selectedRows.contains(key) || (selectedRows.isEmpty && selected == key) { Image(systemName: "checkmark") }
             }.contentShape(Rectangle())
         }.buttonStyle(.plain)
     }

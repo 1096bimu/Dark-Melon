@@ -5,6 +5,36 @@ import UniformTypeIdentifiers
 
 struct ContentView: View {
     @Environment(\.displayScale) private var displayScale
+    @State private var comparison = ImageComparisonSession()
+    @State private var comparisonFiles: [URL] = []
+    @State private var comparisonSnapshots: [String] = []
+    @State private var comparisonReload = 0
+    private var comparingMultiple: Bool { comparisonFiles.count > 1 || comparisonSnapshots.count > 1 }
+    private var comparingSnapshots: Bool { comparisonSnapshots.count > 1 }
+    private var comparisonInputs: [ComparisonInput] {
+        if comparingSnapshots, let url = recipeSourceURL {
+            return comparisonSnapshots.compactMap { key in
+                let recipe: DevelopmentRecipe?
+                let title: String
+                if key == "saved" { recipe = savedRecipe ?? baselineRecipe; title = String(localized: "Saved Edit") }
+                else if key == "unsaved" { recipe = snapshotSession.draft?.recipe; title = String(localized: "Unsaved Edit") }
+                else { let snapshot = namedSnapshots.first { $0.id.uuidString == key }; recipe = snapshot?.edit.recipe; title = snapshot?.name ?? key }
+                guard let recipe else { return nil }
+                return ComparisonInput(id: key, url: url, title: title, recipe: recipe)
+            }
+        }
+        let overrides = batchRecipeOverrides
+        return comparisonFiles.map { url in
+            ComparisonInput(id: url.absoluteString, url: url, title: url.lastPathComponent,
+                recipe: overrides[url.standardizedFileURL])
+        }
+    }
+    private struct ComparisonRequest: Equatable {
+        var inputs: [ComparisonInput]
+        var revision: Int
+        var listing: UUID
+        var canvas: CGSize
+    }
     @State private var previewCanvas = CGSize(width: 2560, height: 2560)
     @State private var renderedCanvas = CGSize.zero
     @State private var renderedMapping: ToneMapping?
@@ -34,6 +64,7 @@ struct ContentView: View {
     @State private var presetShowingBefore = false
     @State private var presetPreviewError: String?
     private func copyCurrentDevelopmentSettings() {
+        guard !comparingMultiple else { return }
         do {
             if let sourceURL {
                 try SettingsClipboard.copy(currentRecipe, reference: development?.whitePoint, source: sourceURL)
@@ -42,6 +73,7 @@ struct ContentView: View {
     }
 
     private func pasteDevelopmentSettings() {
+        guard !comparingMultiple else { return }
         do {
             pastedSettings = try SettingsClipboard.read()
             browserPaste = nil
@@ -139,6 +171,7 @@ struct ContentView: View {
             if $0 && canPreviewHDR { prefersHDR = false }
         })
     }
+    @State private var measuredPreviewSourceID: UUID?
     @State private var renderedPreviewImages: PreviewImages?
     private var previewImages: PreviewImages? {
         if let activePresetPreview { return presetShowingBefore ? activePresetPreview.before : activePresetPreview.after }
@@ -158,11 +191,11 @@ struct ContentView: View {
 
     private var undoActions: EditorUndoActions {
         let _ = editHistory.revision
-        return EditorUndoActions(canUndo: !loading && editHistory.canUndo,
-            canRedo: !loading && editHistory.canRedo,
+        return EditorUndoActions(canUndo: !comparingMultiple && !loading && editHistory.canUndo,
+            canRedo: !comparingMultiple && !loading && editHistory.canRedo,
             undoTitle: editHistory.undoTitle, redoTitle: editHistory.redoTitle,
-            undo: { commitHistory(); editHistory.undo() },
-            redo: { editHistory.redo() })
+            undo: { if !comparingMultiple { commitHistory(); editHistory.undo() } },
+            redo: { if !comparingMultiple { editHistory.redo() } })
     }
 
     private func commitHistory() {
@@ -219,7 +252,7 @@ struct ContentView: View {
             : ([.color, .effects].contains(panel) ? comparisonMapping(panel) : originalMapping)
         return DetailPreviewRequest(sourceID: previewDevelopment?.id, mapping: previewMapping,
             counterpart: counterpart, comparing: comparing || confirmingPreset != nil, hdr: hdrPreview,
-            region: previewRegion, enabled: previewDevelopment?.fullResolutionReady == true && !loading && !cropping && !adjustingTone && !adjustingWhitePoint
+            region: previewRegion, enabled: !comparingMultiple && previewDevelopment?.fullResolutionReady == true && !loading && !cropping && !adjustingTone && !adjustingWhitePoint
                 && (!editHistory.interacting || comparing))
     }
 
@@ -315,10 +348,10 @@ struct ContentView: View {
     private var libraryPanel: some View {
         GeometryReader { geometry in
             VStack(spacing: 0) {
-                EditLibraryView(current: development == nil || loading ? nil : currentRecipe, selectedLUT: $mapping.lutID, filename: filename) { name, recipe, selection in
+                EditLibraryView(current: comparingMultiple || development == nil || loading ? nil : currentRecipe, selectedLUT: $mapping.lutID, filename: filename) { name, recipe, selection in
                     commitHistory()
                     confirmingPreset = PresetApplication(name: name, recipe: recipe, selection: selection)
-                }.frame(height: max(0, geometry.size.height / 2))
+                }.disabled(comparingMultiple).frame(height: max(0, geometry.size.height / 2))
                 .popover(item: $confirmingPreset, arrowEdge: .leading) { preset in
                     PresetConfirmation(preset: preset, isRAW: development?.isRAW == true,
                         comparing: $presetShowingBefore, ready: activePresetPreview != nil,
@@ -336,7 +369,8 @@ struct ContentView: View {
                 Divider()
                 EditSnapshotsView(saved: savedRecipe != nil, savedAt: savedSnapshotDate, draftAt: snapshotSession.draftModifiedAt, draft: snapshotSession.draft != nil,
                     snapshots: namedSnapshots, selected: snapshotSession.selected,
-                    select: selectSnapshot, create: createSnapshot, update: updateSnapshot, delete: deleteSnapshot, discardDraft: discardSnapshotDraft)
+                    select: selectSnapshot, create: { if !comparingMultiple { createSnapshot($0) } }, update: { if !comparingMultiple { updateSnapshot($0) } }, delete: { if !comparingMultiple { deleteSnapshot($0) } }, discardDraft: { if !comparingMultiple { discardSnapshotDraft() } },
+                    comparisonSelection: { keys in comparisonFiles = []; comparisonSnapshots = keys }, comparisonKeys: comparisonSnapshots, openReference: openSnapshotReference, mutationsDisabled: comparingMultiple)
                     .disabled(development == nil || loading)
                     .frame(maxHeight: .infinity)
             }
@@ -367,7 +401,7 @@ struct ContentView: View {
                 if showingLibrary {
                     libraryPanel
                 } else {
-            ImageFileBrowser(selectedURL: sourceURL, open: { load($0, resetEdits: true) }, model: browserModel, changeDirectory: changeDirectory,
+            ImageFileBrowser(selectedURL: sourceURL, open: { load($0, resetEdits: true) }, model: browserModel, comparisonSelection: { urls in comparisonSnapshots = []; comparisonFiles = urls }, comparisonURLs: comparisonFiles, changeDirectory: changeDirectory,
                              fileAction: performFileAction, multipleFileAction: performMultipleFileAction, pendingURLs: browserPendingURLs)
                 .disabled(loading || fileActionBusy)
                 .overlay { if fileActionBusy { ProgressView("Preparing…").padding().background(.regularMaterial) } }
@@ -384,7 +418,9 @@ struct ContentView: View {
     VStack(spacing: 0) {
         ZStack {
             Color.black
-            if let previewImages {
+            if comparingMultiple {
+                ImageComparisonView(session: comparison, hdr: prefersHDR)
+            } else if let previewImages {
                 #if os(macOS)
                 HDRImagePreview(sdrImage: cropping ? previewImages.fullSDR : previewImages.sdr,
                                 image: ((adjustingTone || adjustingWhitePoint) ? toneLocatorImage : nil) ?? (cropping ? (hdrPreview ? previewImages.fullHDR : previewImages.fullSDR) : (hdrPreview ? previewImages.hdr : previewImages.sdr)),
@@ -418,6 +454,7 @@ struct ContentView: View {
                         } catch { errorMessage = error.localizedDescription }
                     }
                 }
+                    .modifier(HDRHeadroomNotice(enabled: hdrPreview && previewImages.hasHDROutput, peak: previewMapping.hdrMax))
                     .modifier(HDRScreenSaver())
                     .padding(cropping ? 0 : 16)
                 #else
@@ -441,7 +478,7 @@ struct ContentView: View {
                     Button("Open Image…") { importing = true }
                 }
             }
-            if loading || (development != nil && previewImages == nil) {
+            if !comparingMultiple && (loading || (development != nil && previewImages == nil)) {
                 ProgressView("Loading image…")
                     .padding(20)
                     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
@@ -454,7 +491,7 @@ struct ContentView: View {
                    height: max(64, ceil((proxy.size.height - 32) * displayScale / 64) * 64))
         } action: { previewCanvas = $0 }
         .overlay(alignment: .bottomLeading) {
-            if !cropping && !pendingEdits.entries.isEmpty {
+            if !comparingMultiple && !cropping && !pendingEdits.entries.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Unsaved edits (\(pendingEdits.entries.count))").font(.caption.bold())
                         .lineLimit(1).frame(width: pendingControlsWidth, alignment: .leading)
@@ -480,15 +517,14 @@ struct ContentView: View {
                         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { pendingControlsWidth = $0 }
                 }
                 .fixedSize(horizontal: true, vertical: false)
-                .padding(10)
-                .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 8))
+                .modifier(PreviewOverlayStyle())
                 .modifier(PreviewOverlayVisibility())
                 .padding(.leading, 12).padding(.bottom, 64)
                 .disabled(loading)
             }
         }
         .overlay(alignment: .bottomTrailing) {
-            if !cropping { HStack(spacing: 8) {
+            if !comparingMultiple && !cropping { HStack(spacing: 8) {
                 Button("Copy", systemImage: "doc.on.doc") { copyCurrentDevelopmentSettings() }
                 .focusedSceneValue(\.copyDevelopmentSettings,
                                    development == nil || loading ? nil : { copyCurrentDevelopmentSettings() })
@@ -501,29 +537,58 @@ struct ContentView: View {
             .buttonStyle(.bordered)
             .labelStyle(.titleOnly)
             .fixedSize()
-            .padding(10)
-            .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 8))
+            .modifier(PreviewOverlayStyle())
             .modifier(PreviewOverlayVisibility())
             .padding(12)
             .disabled(development == nil || loading)
             }
         }
+        #if DEBUG
+        .overlay(alignment: .topLeading) {
+            if !comparingMultiple, !loading, !cropping, confirmingPreset == nil,
+               let development, measuredPreviewSourceID == development.id,
+               let images = renderedPreviewImages {
+                let fraction = Double(images.source.width) * Double(images.source.height)
+                    / max(1, Double(development.width) * Double(development.height))
+                HStack(spacing: 6) {
+                    Text("GPU")
+                    if let milliseconds = images.gpuMilliseconds {
+                        Text(milliseconds, format: .number.precision(.fractionLength(1)))
+                    } else {
+                        Text("—")
+                    }
+                    Text("ms ·")
+                    Text("Total")
+                    Text(images.renderMilliseconds, format: .number.precision(.fractionLength(1)))
+                    Text("ms ·")
+                    Text(fraction, format: .percent.precision(.fractionLength(1)))
+                }
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .padding(6)
+                .background(.black.opacity(0.55))
+                .modifier(PreviewOverlayVisibility())
+                .padding(12)
+                .help("GPU measures pre-tone and final preview command execution. Total includes CPU setup and waiting. Both include SDR and available HDR renders, but exclude RAW decoding, scopes, and export encoding. Percentage is preview pixels divided by full-image pixels.")
+            }
+        }
+        #endif
         .overlay(alignment: .topTrailing) {
-            if showingMetadata, let development {
+            if !comparingMultiple, showingMetadata, let development {
                 CameraMetadataOverlay(metadata: development.metadata, whitePoint: development.whitePoint)
             }
         }
     }
     .safeAreaInset(edge: .bottom, spacing: 0) {
-        if cropping { CropRatioControls(position: $cropRatioPosition) }
-        if tutorial.active {
+        if cropping && !comparingMultiple { CropRatioControls(position: $cropRatioPosition) }
+        if tutorial.active && !comparingMultiple {
             EditingTutorialGuide(tutorial: tutorial, imageReady: development != nil && !loading,
                                  hdrEnabled: mapping.hdrEnabled, advance: advanceTutorial,
                                  close: { tutorial.active = false })
         }
     }
     .frame(minWidth: 320)
-        ScrollView {
+        if !comparingMultiple { ScrollView {
             VStack(spacing: 0) {
                 if panel == .tone || panel == .raw {
                     histogramView
@@ -580,6 +645,7 @@ struct ContentView: View {
             .disabled(loading || development == nil)
         }
         .frame(minWidth: 320, idealWidth: 320, maxWidth: 480)
+        }
     }
     }
 
@@ -591,8 +657,10 @@ struct ContentView: View {
             .focusedSceneValue(\.startTutorial, { startTutorial() })
             .focusedSceneValue(\.toggleEditorPicker, pickerShortcutAction)
             #if os(macOS)
-            .focusedSceneValue(\.exportSDRLUT, development == nil || loading || exportingLUT ? nil : { exportSDRLUT() })
-            .focusedSceneValue(\.variationExport, development == nil || loading ? nil : { beginExportOptions(variation: true) })
+            #if DEBUG
+            .focusedSceneValue(\.exportSDRLUT, comparingMultiple || development == nil || loading || exportingLUT ? nil : { exportSDRLUT() })
+            .focusedSceneValue(\.variationExport, comparingMultiple || development == nil || loading ? nil : { beginExportOptions(variation: true) })
+            #endif
             .focusedSceneValue(\.batchExport, browserModel.directory == nil ? nil : { showingBatchExport = true })
             #endif
     }
@@ -613,6 +681,16 @@ struct ContentView: View {
                     startTutorial()
                 }
             }
+            .task(id: ComparisonRequest(inputs: comparingMultiple ? comparisonInputs : [], revision: comparisonReload, listing: browserModel.listingRevision, canvas: previewCanvas)) {
+                guard comparingMultiple else { comparison.stop(); return }
+                let rows = comparisonInputs.count > 2 ? 2.0 : 1.0
+                comparison.start(comparisonInputs, film: comparingSnapshots ? nil : lockedFilm,
+                    canvas: CGSize(width: previewCanvas.width / 2, height: previewCanvas.height / rows))
+            }
+            .onChange(of: comparingMultiple) { _, active in
+                if active { commitHistory(); pickingWhiteBalance = false; confirmingPreset = nil; previewHover.position = nil; previewDetails.removeAll() }
+            }
+            .onChange(of: browserModel.directory) { _, _ in comparisonFiles = []; comparisonSnapshots = [] }
             .onChange(of: currentRecipe) { old, new in
                 guard !loading, development != nil, !cropping else { return }
                 if snapshotAppliedRecipe == new {
@@ -630,6 +708,7 @@ struct ContentView: View {
                 rememberCurrentEdits()
             }
             .onChange(of: recipeSourceURL) { _, _ in
+                comparisonFiles = []; comparisonSnapshots = []
                 if tutorial.active { tutorial.resetForImage() }
             }
             .onChange(of: exportSettings) { _, settings in settings.remember() }
@@ -685,8 +764,8 @@ struct ContentView: View {
                 lutRevision += 1
             }
             .task(id: PreviewRequest(mapping: previewMapping,
-                                     sourceID: development?.id, loading: loading, canvas: previewCanvas, lutRevision: lutRevision)) {
-                guard let development, !loading, confirmingPreset == nil else { return }
+                                     sourceID: development?.id, loading: loading || comparingMultiple, canvas: previewCanvas, lutRevision: lutRevision)) {
+                guard let development, !loading, !comparingMultiple, confirmingPreset == nil else { return }
                 do {
                     let renderedMapping = previewMapping
                     let canvas = previewCanvas
@@ -695,6 +774,7 @@ struct ContentView: View {
                     let images = try await developer.previews(source, mapping: renderedMapping)
                     try Task.checkCancellation()
                     renderedPreviewImages = images
+                    measuredPreviewSourceID = development.id
                     self.renderedMapping = renderedMapping
                     renderedCanvas = canvas
                     previewRevision = UUID()
@@ -703,8 +783,8 @@ struct ContentView: View {
                     // A newer drag position supersedes this render.
                 } catch { errorMessage = error.localizedDescription }
             }
-            .task(id: FullSourceRequest(source: development?.id, previewReady: renderedPreviewImages != nil, loading: loading)) {
-                guard !loading, renderedPreviewImages != nil, let current = development,
+            .task(id: FullSourceRequest(source: development?.id, previewReady: renderedPreviewImages != nil, loading: loading || comparingMultiple)) {
+                guard !comparingMultiple, !loading, renderedPreviewImages != nil, let current = development,
                       !current.fullResolutionReady else { return }
                 // A separate actor keeps decoding from blocking overview edits and hover work.
                 let worker = fullSourceWorker
@@ -746,9 +826,9 @@ struct ContentView: View {
                     // Detail is an optional refinement; retain the usable overview on failure.
                 }
             }
-            .task(id: HistogramRequest(sourceID: development?.id, loading: loading, previewReady: previewImages != nil, bins: histogramBins)) {
+            .task(id: HistogramRequest(sourceID: development?.id, loading: loading || comparingMultiple, previewReady: previewImages != nil, bins: histogramBins)) {
                 histogramError = nil
-                guard let development, !loading, previewImages != nil else {
+                guard let development, !loading, !comparingMultiple, previewImages != nil else {
                     histogram = nil
                     return
                 }
@@ -763,16 +843,18 @@ struct ContentView: View {
             }
             .environment(previewHover)
             .background(EditGestureBoundary(began: {
+                guard !comparingMultiple else { return }
                 finishDeferredEdit()
                 editHistory.flush()
                 if !loading, development != nil, !cropping { deferredEditBefore = currentRecipe }
                 editHistory.interacting = true
             }, ended: {
+                guard !comparingMultiple else { return }
                 editHistory.interacting = false
                 if !cropping { commitHistory() }
             }))
             .background(OriginalCompareShortcut(active: $comparingOriginalKey,
-                enabled: development != nil && !loading && !cropping))
+                enabled: !comparingMultiple && development != nil && !loading && !cropping))
             .background(leftPanelShortcuts.opacity(0).frame(width: 0, height: 0).accessibilityHidden(true))
             #if os(macOS)
             .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in
@@ -808,30 +890,30 @@ struct ContentView: View {
                     .labelStyle(.iconOnly)
                     .help("Export…")
                     .keyboardShortcut("e", modifiers: [.command, .shift])
-                    .disabled(development == nil || loading || exporting)
+                    .disabled(comparingMultiple || development == nil || loading || exporting)
                     Button(savingRecipe ? "Saving Edits…" : savedRecipe == currentRecipe && !tutorialNeedsSave ? "Edits Saved" : "Save Edits", systemImage: "square.and.arrow.down") {
                         saveRecipe()
                     }
                     .labelStyle(.iconOnly)
                     .keyboardShortcut("s", modifiers: .command)
-                    .disabled(development == nil || loading || savingRecipe || (savedRecipe == currentRecipe && !tutorialNeedsSave))
+                    .disabled(comparingMultiple || development == nil || loading || savingRecipe || (savedRecipe == currentRecipe && !tutorialNeedsSave))
                     .help("Save development settings beside the original image in an XMP sidecar")
                     Toggle("Film Lock", systemImage: lockedFilm == nil ? "lock.open" : "lock.fill", isOn: Binding(
                         get: { lockedFilm != nil },
                         set: {
                             confirmingPreset = nil
-                            if $0 { requestFilmLock() } else { lockedFilm = nil }
+                            if $0 { if !comparingMultiple { requestFilmLock() } } else { lockedFilm = nil; comparisonReload += 1 }
                         }))
                         .toggleStyle(.button)
-                        .disabled(loading || (development == nil && lockedFilm == nil))
+                        .disabled(comparingSnapshots || (comparingMultiple && lockedFilm == nil) || loading || (development == nil && lockedFilm == nil))
                         .help("Capture film settings and apply them as unsaved edits when opening another photo. Unlock to stop applying them.")
                     Toggle("HDR", isOn: Binding(get: { prefersHDR }, set: { enabled in
-                        hdrPreview = enabled
+                        if comparingMultiple { prefersHDR = enabled } else { hdrPreview = enabled }
                         tutorial.previewToggled(hdr: enabled)
                     }))
                         .toggleStyle(.button)
                         .keyboardShortcut("h", modifiers: [])
-                        .disabled(!canPreviewHDR)
+                        .disabled(comparingMultiple ? !comparison.panes.contains(where: { $0.images?.hasHDROutput == true }) : !canPreviewHDR)
                         .help("Toggle HDR or SDR display of the developed image")
                         .accessibilityValue(prefersHDR ? "HDR" : "SDR")
                 }
@@ -854,6 +936,7 @@ struct ContentView: View {
                     .pickerStyle(.segmented)
                     .labelsHidden()
                     .fixedSize()
+                    .disabled(comparingMultiple)
                 }
             }
             .sheet(isPresented: $showingFilmLock) {
@@ -1150,7 +1233,21 @@ struct ContentView: View {
         editHistory.flush()
     }
 
+    private func openSnapshotReference(_ key: String) {
+        #if os(macOS)
+        guard let url = recipeSourceURL else { return }
+        let recipe: DevelopmentRecipe?
+        let title: String
+        if key == "saved" { recipe = savedRecipe ?? baselineRecipe; title = String(localized: "Saved Edit") }
+        else if key == "unsaved" { recipe = snapshotSession.draft?.recipe; title = String(localized: "Unsaved Edit") }
+        else { let item = namedSnapshots.first { $0.id.uuidString == key }; recipe = item?.edit.recipe; title = item?.name ?? key }
+        guard let recipe else { return }
+        ReferenceWindow.open(url: url, recipe: recipe, film: lockedFilm, title: title, link: previewViewport.referenceLink)
+        #endif
+    }
+
     private func createSnapshot(_ name: String) {
+        guard !comparingMultiple else { return }
         commitHistory()
         let item = NamedSnapshot(name: name, edit: SnapshotEdit(currentRecipe))
         namedSnapshots.append(item)
@@ -1494,12 +1591,12 @@ struct ContentView: View {
     }
 
     private var pickerShortcutAction: ((EditorPickerTool) -> Void)? {
-        guard development != nil, !loading, !mapping.blackAndWhite.isEnabled, !mapping.color.monochrome else { return nil }
+        guard !comparingMultiple, development != nil, !loading, !mapping.blackAndWhite.isEnabled, !mapping.color.monochrome else { return nil }
         return { togglePicker($0) }
     }
 
     private func togglePicker(_ tool: EditorPickerTool) {
-        guard development != nil, !loading, !mapping.blackAndWhite.isEnabled, !mapping.color.monochrome else { return }
+        guard !comparingMultiple, development != nil, !loading, !mapping.blackAndWhite.isEnabled, !mapping.color.monochrome else { return }
         if panel != .tone {
             pendingPicker = tool
             panel = .tone
@@ -1522,6 +1619,7 @@ struct ContentView: View {
     }
 
     private func navigateFile(_ direction: Int) -> Bool {
+        guard !comparingMultiple else { return false }
         guard !loading, !fileActionBusy, !cropping else { return false }
         browserModel.pendingURLs = Set(pendingEdits.entries.map(\.url))
         guard let url = browserModel.adjacentFile(to: sourceURL, direction: direction) else { return false }
@@ -1566,7 +1664,15 @@ struct ContentView: View {
     }
 
     private func performFileAction(_ action: BrowserFileAction, _ url: URL) {
+        guard !comparingMultiple || action != .copyEdit else { return }
         guard !fileActionBusy else { return }
+        if action == .reference {
+            #if os(macOS)
+            ReferenceWindow.open(url: url, recipe: batchRecipeOverrides[url.standardizedFileURL], film: lockedFilm,
+                title: url.lastPathComponent, link: previewViewport.referenceLink)
+            #endif
+            return
+        }
         if action == .deleteEdit { deleteEditURLs = [url]; return }
         if action == .showInFinder {
             #if os(macOS)
@@ -1603,7 +1709,7 @@ struct ContentView: View {
                 case .pasteEdit: break
                 case .export:
                     beginExportOptions(target)
-                case .deleteEdit, .showInFinder: break
+                case .deleteEdit, .showInFinder, .reference: break
                 }
             } catch { errorMessage = error.localizedDescription }
         }

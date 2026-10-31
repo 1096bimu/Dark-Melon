@@ -12,6 +12,7 @@ nonisolated final class OKLabColorPipeline {
         let effectiveVertices = color.monochrome ? vertices.map { vertex in
             var result = vertex
             result.chroma = 0
+            result.lightness = vertex.monochromeResponse
             result.rotation = 0
             result.hueOffset = 0
             result.darkerHue = 0
@@ -33,7 +34,7 @@ nonisolated final class OKLabColorPipeline {
             ceiling,cbrt(domainCeiling),OKLCHGamut.maxima[space]!,
             CIVector(x:color.saturationStart,y:color.saturationMid,z:color.saturationEnd,w:color.saturationHDR),
             CIVector(x:color.luminanceSaturationStart,y:color.luminanceSaturationMid,z:color.luminanceSaturationEnd,w:color.luminanceSaturationHDR),
-            color.splitTone.isIdentity ? 0.0:1.0,hasWarp ? 1.0:0.0,color.colorChrome && !color.monochrome ? 1.0:0.0]
+            color.splitTone.isIdentity ? 0.0:1.0,hasWarp ? (color.monochrome ? 2.0 : 1.0):0.0,color.colorChrome && !color.monochrome ? 1.0:0.0]
         for m in [to,from] { for i in 0..<3 { args.append(vector(SIMD3(m[0][i],m[1][i],m[2][i]))) } }
         for i in 0..<OKLabVertexWarp.count {
             let v=field.adjustments[i], p=field.centers[i]

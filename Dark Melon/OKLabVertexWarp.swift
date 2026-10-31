@@ -5,6 +5,7 @@ import simd
 nonisolated struct OKLabVertexAdjustment: Codable, Equatable, Sendable {
     var chroma = 1.0
     var lightness = 0.0
+    var monochromeResponse: Double = 0
     var rotation = 0.0
     var hueOffset: Double? = nil
     var darkerHue = 0.0
@@ -12,9 +13,10 @@ nonisolated struct OKLabVertexAdjustment: Codable, Equatable, Sendable {
     init(chroma: Double = 1, lightness: Double = 0, rotation: Double = 0) {
         self.chroma=chroma; self.lightness=lightness; self.rotation=rotation
     }
-    private enum CodingKeys: String, CodingKey { case chroma, lightness, rotation, hueOffset, darkerHue, lighterHue }
+    private enum CodingKeys: String, CodingKey { case monochromeResponse, chroma, lightness, rotation, hueOffset, darkerHue, lighterHue }
     init(from decoder: Decoder) throws {
         let values=try decoder.container(keyedBy:CodingKeys.self)
+        monochromeResponse=try values.decodeIfPresent(Double.self,forKey:.monochromeResponse) ?? 0
         chroma=try values.decodeIfPresent(Double.self,forKey:.chroma) ?? 1
         lightness=try values.decodeIfPresent(Double.self,forKey:.lightness) ?? 0
         rotation=try values.decodeIfPresent(Double.self,forKey:.rotation) ?? 0
