@@ -19,6 +19,8 @@ nonisolated struct RAWDevelopment: @unchecked Sendable {
     let rawDefaults: RAWSettings?
     let sourceHeadroom: Double
     var fullResolutionReady = true
+    var dustGeometry = DustGeometry()
+    var dustSpots: [DustSpot] = []
 }
 
 nonisolated struct HistogramData: Sendable {
@@ -69,6 +71,7 @@ actor RAWDeveloper {
     private let colorSpace: ProcessingColorSpace
     private var linearSpace: CGColorSpace { colorSpace.linear }
 
+    private var doubleExposure: DoubleExposure?
     private var rawSettings: RAWSettings?
     private var rawWhiteBalance: RAWWhiteBalance?
     private let interactive: Bool
@@ -76,14 +79,16 @@ actor RAWDeveloper {
     private var cacheStamp: RAWImageCache.FileStamp?
     private var decoderSession: (url: URL, raw9: Bool, filter: CIRAWFilter, defaults: RAWSettings, temperature: Float, tint: Float)?
 
-    func updateRAWSettings(_ settings: RAWSettings?, whiteBalance: RAWWhiteBalance?) {
+    func updateRAWSettings(_ settings: RAWSettings?, whiteBalance: RAWWhiteBalance?, doubleExposure: DoubleExposure? = nil) {
+        self.doubleExposure = doubleExposure
         rawSettings = settings
         rawWhiteBalance = whiteBalance
         overviewCache = nil
     }
 
 
-    init(colorSpace: ProcessingColorSpace = .sRGB, rawSettings: RAWSettings? = nil, rawWhiteBalance: RAWWhiteBalance? = nil, lutStore: LUTStore = .shared, lutConfiguration: LUTConfiguration? = nil, interactive: Bool = false, exporting: Bool = false, memoryLimitMB: Int? = nil) {
+    init(colorSpace: ProcessingColorSpace = .sRGB, rawSettings: RAWSettings? = nil, rawWhiteBalance: RAWWhiteBalance? = nil, doubleExposure: DoubleExposure? = nil, lutStore: LUTStore = .shared, lutConfiguration: LUTConfiguration? = nil, interactive: Bool = false, exporting: Bool = false, memoryLimitMB: Int? = nil) {
+        self.doubleExposure = doubleExposure
         self.exporting = exporting
         self.exportReservation = exporting ? RAWImageCache.shared.reserve(
             UInt64(memoryLimitMB ?? BatchExportBudget.singleFileMegabytes) * 1_048_576) : nil
@@ -129,6 +134,17 @@ actor RAWDeveloper {
     private var filmGrain: FilmGrain?
     private lazy var halation = Halation()
     private lazy var vignette = Vignette()
+    private let dustCorrection = DustCorrection()
+    private var dustGeometry = DustGeometry()
+    private struct DustSampleKey: Equatable {
+        let source: UUID
+        let size: CGSize
+        let center: CGPoint
+        let angle: Double
+        let length: Double
+        let otherSpots: [DustSpot]
+    }
+    private var dustSampleCache: (DustSampleKey, DustProfile)?
 
     private lazy var badHDR = BadHDR()
     private lazy var hdfKernel = MetalImageKernels.color("hdfAdd")
@@ -150,6 +166,7 @@ actor RAWDeveloper {
     private var overviewCache: (UUID, CGSize, CGImage)?
 
     func overview(_ development: RAWDevelopment, canvas: CGSize) throws -> CGImage {
+        dustGeometry = development.dustGeometry
         try Task.checkCancellation()
         let source = development.linearSource
         let scale = PreviewResolution.overviewScale(source: source.extent.size, canvas: canvas)
@@ -170,6 +187,7 @@ actor RAWDeveloper {
     /// extent preserves effect scale, perspective geometry, and blur neighborhoods.
     func detail(_ development: RAWDevelopment, mapping: ToneMapping, hdr: Bool,
                 region: PreviewRegion) throws -> PreviewDetail {
+        dustGeometry = development.dustGeometry
         try Task.checkCancellation()
         let access = development.url.startAccessingSecurityScopedResource()
         defer { if access { development.url.stopAccessingSecurityScopedResource() } }
@@ -261,6 +279,7 @@ actor RAWDeveloper {
     /// Reference windows retain final pixels, so source deletion or later edits
     /// cannot change them. This worker uses eager, non-interactive CGImage output.
     func referenceImages(_ development: RAWDevelopment, mapping: ToneMapping) throws -> PreviewImages {
+        dustGeometry = development.dustGeometry
         try Task.checkCancellation()
         let access = development.url.startAccessingSecurityScopedResource()
         defer { if access { development.url.stopAccessingSecurityScopedResource() } }
@@ -381,6 +400,7 @@ actor RAWDeveloper {
         guard (2...65).contains(dimension) else { throw LUTError.invalid }
         var settings = mapping
         settings.transform = nil
+        settings.dustSpots = nil
         settings.hdf = 0
         settings.vignette.amount = 0
         settings.halation.inputCurve = 0
@@ -443,6 +463,57 @@ actor RAWDeveloper {
     }
 
     private lazy var shadowFloorKernel = MetalImageKernels.color("shadowFloor")
+
+    /// Render only a narrow, rotated strip; never read a full-resolution bitmap to fit a spot.
+    func dustProfile(_ development: RAWDevelopment, spot: DustSpot, spots: [DustSpot]) throws -> DustProfile {
+        try Task.checkCancellation()
+        let access = development.url.startAccessingSecurityScopedResource()
+        defer { if access { development.url.stopAccessingSecurityScopedResource() } }
+        let geometry = development.dustGeometry
+        let others = spots.filter { $0.id != spot.id }
+        let key = DustSampleKey(source: development.id, size: development.linearSource.extent.size,
+            center: spot.center, angle: spot.angle, length: spot.length, otherSpots: others)
+        if let cached = dustSampleCache, cached.0 == key { return cached.1 }
+        let uncorrected: CIImage
+        if development.dustSpots.isEmpty && development.fullResolutionReady { uncorrected = development.linearSource }
+        else { uncorrected = try sourceImage(development.url).image }
+        let image = try dustCorrection.apply(uncorrected, spots: others, geometry: geometry)
+        let size = geometry.nativeSize(image.extent.size)
+        let short = min(size.width,size.height)
+        let strip = min(spot.length*0.02, max(1/short,spot.length*0.005))
+        let n = min(512,max(32,Int(spot.length*short)))
+        func point(_ t: Double, _ across: Double) -> CGPoint {
+            let p = CGPoint(x: spot.center.x+(cos(spot.angle)*t-sin(spot.angle)*across)*short/size.width,
+                            y: spot.center.y+(sin(spot.angle)*t+cos(spot.angle)*across)*short/size.height)
+            return geometry.display(p)
+        }
+        let start=point(-spot.length/2,0), end=point(spot.length/2,0)
+        guard [start,end].allSatisfy({ (0...1).contains($0.x) && (0...1).contains($0.y) }) else { throw DustFailure.source }
+        func pixel(_ p: CGPoint) -> CGPoint {
+            CGPoint(x:image.extent.minX+p.x*image.extent.width,y:image.extent.minY+(1-p.y)*image.extent.height)
+        }
+        let a=pixel(start), b=pixel(end), c=pixel(point(-spot.length/2,strip))
+        let dx=(b.x-a.x)/Double(n-1), dy=(b.y-a.y)/Double(n-1)
+        let vx=(c.x-a.x)/4, vy=(c.y-a.y)/4
+        let transform=CGAffineTransform(a:dx,b:dy,c:vx,d:vy,tx:a.x-dx*0.5-vx*2.5,ty:a.y-dy*0.5-vy*2.5)
+        let sampled=image.transformed(by:transform.inverted())
+        var pixels=[Float](repeating:0,count:n*5*4)
+        context.render(sampled,toBitmap:&pixels,rowBytes:n*16,bounds:CGRect(x:0,y:0,width:n,height:5),format:.RGBAf,colorSpace:linearSpace)
+        let weights=colorSpace.luminance
+        var values=[Double]()
+        for x in 0..<n {
+            var sum=0.0
+            for row in 0..<5 {
+                let i=(row*n+x)*4
+                sum += Double(pixels[i])*Double(weights.x)+Double(pixels[i+1])*Double(weights.y)+Double(pixels[i+2])*Double(weights.z)
+            }
+            values.append(sum/5)
+        }
+        try Task.checkCancellation()
+        let profile = DustProfile(values:values,stripWidth:strip)
+        dustSampleCache = (key, profile)
+        return profile
+    }
 
     private func adjustedInput(_ source: CIImage, mapping: ToneMapping) throws -> CIImage {
         try Task.checkCancellation()
@@ -669,7 +740,7 @@ actor RAWDeveloper {
     /// Range fitting is the only preparation step that needs sampled RAW pixels.
     func resolveExportRecipe(_ url: URL, recipe: DevelopmentRecipe, isRAW: Bool,
                              maximizeRange: Bool) throws -> DevelopmentRecipe {
-        guard isRAW else { return recipe }
+        guard isRAW, !DoubleExposure.isDocument(url) else { return recipe }
         let accessed = url.startAccessingSecurityScopedResource()
         defer { if accessed { url.stopAccessingSecurityScopedResource() } }
         let configured = try configuredRAW(url)
@@ -747,6 +818,45 @@ actor RAWDeveloper {
     }
 
     private func sourceImage(_ url: URL, whiteBalance: RAWWhiteBalance? = nil, previewLimit: CGFloat? = nil) throws -> (image: CIImage, headroom: Double, whitePoint: RAWWhitePoint?, isRAW: Bool, rawDefaults: RAWSettings?) {
+        dustGeometry = DustGeometry(exif: DoubleExposure.orientation(doubleExposure?.urls(relativeTo: url).first ?? url), orientation: rawSettings?.orientation ?? SourceOrientation())
+        if DoubleExposure.isDocument(url), let pair = doubleExposure {
+            let compositeGeometry = dustGeometry
+            defer { dustGeometry = compositeGeometry }
+            let urls = pair.urls(relativeTo: url)
+            let original = rawSettings, balance = rawWhiteBalance
+            defer { rawSettings = original; rawWhiteBalance = balance }
+            let firstAccess = urls[0].startAccessingSecurityScopedResource()
+            defer { if firstAccess { urls[0].stopAccessingSecurityScopedResource() } }
+            let firstConfiguration = try configuredRAW(urls[0], whiteBalance: whiteBalance ?? balance)
+            let point = RAWWhitePoint(chromaticity: firstConfiguration.filter.neutralChromaticity,
+                temperature: Double(firstConfiguration.filter.neutralTemperature), tint: Double(firstConfiguration.filter.neutralTint))
+            var images: [CIImage] = []
+            for index in 0..<2 {
+                try Task.checkCancellation()
+                var settings = index == 0 ? original : pair.secondRAW
+                settings?.decoderMode = original?.decoderMode ?? .off
+                settings?.orientation = SourceOrientation()
+                rawSettings = settings
+                rawWhiteBalance = index == 0 ? (whiteBalance ?? balance) : pair.secondBalance
+                let access = urls[index].startAccessingSecurityScopedResource()
+                defer { if access { urls[index].stopAccessingSecurityScopedResource() } }
+                // Reuse an independently inspected file, but composition never adds
+                // component planes to the cache or retains them behind its root image.
+                if !exporting, let stamp = RAWImageCache.FileStamp(urls[index]),
+                   let cached = RAWImageCache.shared.lookup(stamp, space: colorSpace, settings: settings, balance: rawWhiteBalance) {
+                    images.append(cached.linearSource)
+                    continue
+                }
+                let source = try sourceImage(urls[index], previewLimit: previewLimit)
+                guard source.isRAW else { throw DoubleExposure.Failure.invalid }
+                let scale = previewLimit.map { min(1, $0 / max(source.image.extent.width, source.image.extent.height)) } ?? 1
+                let image = try materialized(source.image.transformed(by: CGAffineTransform(scaleX: scale, y: scale)))
+                    .transformed(by: CGAffineTransform(scaleX: 1 / scale, y: 1 / scale)).cropped(to: source.image.extent)
+                images.append(image)
+            }
+            let sum = try DoubleExposure.combine(images[0], images[1], firstOrientation: DoubleExposure.orientation(urls[0]), secondOrientation: DoubleExposure.orientation(urls[1]), firstGeometry: original?.orientation ?? SourceOrientation(), secondGeometry: pair.secondRAW.orientation)
+            return (sum, 2, point, true, firstConfiguration.defaults)
+        }
         let image: CIImage
         var rawDefaults: RAWSettings?
         var headroom = 1.0
@@ -794,14 +904,15 @@ actor RAWDeveloper {
             ])
         }
         guard !image.extent.isEmpty, !image.extent.isInfinite else { throw DevelopmentError.decode }
-        return (image, headroom, whitePoint, isRAW, rawDefaults)
+        return (rawSettings?.orientation.apply(to: image) ?? image, headroom, whitePoint, isRAW, rawDefaults)
     }
 
     func exportHEIF(_ url: URL, mapping: ToneMapping, settings: HEIFSettings) throws -> Data {
         let accessed = url.startAccessingSecurityScopedResource()
         defer { if accessed { url.stopAccessingSecurityScopedResource() } }
+        discardDustInputs(url, spots: mapping.dustSpots ?? [])
         let source = try sourceImage(url, whiteBalance: mapping.rawWhiteBalance).image
-        return try exportImage(source.settingProperties(ExportMetadata.read(url)), mapping: mapping, settings: settings)
+        return try exportImage(source.settingProperties(ExportMetadata.read(doubleExposure?.urls(relativeTo: url).first ?? url)), mapping: mapping, settings: settings)
     }
 
     #if os(macOS)
@@ -864,10 +975,12 @@ actor RAWDeveloper {
             exportRender = nil
             let accessed = url.startAccessingSecurityScopedResource()
             defer { if accessed { url.stopAccessingSecurityScopedResource() } }
-            let source = try sourceImage(url, whiteBalance: mapping.rawWhiteBalance).image
+            let spots = mapping.dustSpots ?? []
+            discardDustInputs(url, spots: spots)
+            let source = try bakeDust(sourceImage(url, whiteBalance: mapping.rawWhiteBalance).image, spots: spots)
             let input = try materialized(adjustedInput(source, mapping: mapping))
             exportRender = ExportRender(url: url, mapping: mapping,
-                                        sourceSize: source.extent.integral.size, properties: ExportMetadata.read(url), lutConfiguration: configuration, input: input)
+                                        sourceSize: source.extent.integral.size, properties: ExportMetadata.read(doubleExposure?.urls(relativeTo: url).first ?? url), lutConfiguration: configuration, input: input)
         }
         if let encoded = exportRender?.encoded, encoded.settings == settings { return encoded.data }
         // Keep just the latest encoded file; do not accumulate large quality-slider results.
@@ -931,8 +1044,10 @@ actor RAWDeveloper {
         try Task.checkCancellation()
         let access = url.startAccessingSecurityScopedResource()
         defer { if access { url.stopAccessingSecurityScopedResource() } }
+        let spots = mapping.dustSpots ?? []
+        discardDustInputs(url, spots: spots)
         let decoded = try sourceImage(url, whiteBalance: mapping.rawWhiteBalance).image
-        let source = try materialized(decoded)
+        let source = try materialized(bakeDust(decoded, spots: spots))
         let size = mapping.transform?.resolution(width: Int(source.extent.width), height: Int(source.extent.height), estimate: .maximum) ?? source.extent.size
         let width = max(1, Int((size.width * settings.scale).rounded()))
         let height = max(1, Int((size.height * settings.scale).rounded()))
@@ -962,14 +1077,16 @@ actor RAWDeveloper {
         }
         try Task.checkCancellation()
         guard let bitmap = canvas.makeImage() else { throw HEIFExportError.encoding }
-        let properties = ExportMetadata.properties(ExportMetadata.read(url), width: width, height: height,
+        let properties = ExportMetadata.properties(ExportMetadata.read(doubleExposure?.urls(relativeTo: url).first ?? url), width: width, height: height,
             mapping: mapping, rawExposure: Double(rawSettings?.values[.exposure] ?? 0), effectiveISO: settings.effectiveISO)
         let gallery = CIImage(cgImage: bitmap).settingProperties(properties).settingContentHeadroom(1)
         return settings.format == .heif ? try encodeSDR(gallery, settings: settings) : try encodeStandardImage(gallery, settings: settings)
     }
 
     func exportImage(_ source: CIImage, mapping: ToneMapping, settings: HEIFSettings) throws -> Data {
-        try encodeExport(sourceSize: source.extent.integral.size, mapping: mapping, settings: settings, sourceProperties: source.properties) { hdr in
+        let properties = source.properties
+        let source = try bakeDust(source, spots: mapping.dustSpots ?? []).settingProperties(properties)
+        return try encodeExport(sourceSize: source.extent.integral.size, mapping: mapping, settings: settings, sourceProperties: source.properties) { hdr in
             try self.mappedImage(source, mapping: mapping, hdr: hdr)
         }
     }
@@ -1150,11 +1267,39 @@ actor RAWDeveloper {
         return result
     }
 
-    func develop(_ url: URL, previewCanvas: CGSize = CGSize(width: 2560, height: 2560), progressive: Bool = false) throws -> RAWDevelopment {
+    private func bakeDust(_ source: CIImage, spots: [DustSpot]) throws -> CIImage {
+        guard doubleExposure != nil || spots.contains(where: { $0.attenuation > 0 }) else { return source }
+        let corrected = try dustCorrection.apply(source, spots: spots, geometry: dustGeometry)
+        guard let bitmap = context.createCGImage(corrected, from: corrected.extent,
+            format: .RGBAh, colorSpace: linearSpace, deferred: false) else { throw DevelopmentError.decode }
+        try Task.checkCancellation()
+        return CIImage(cgImage: bitmap).transformed(by: CGAffineTransform(
+            translationX: source.extent.minX, y: source.extent.minY))
+    }
+
+    private func discardDustInputs(_ url: URL, spots: [DustSpot]) {
+        guard !spots.isEmpty else { return }
+        RAWImageCache.shared.discardPixels(for: url)
+    }
+
+    func discardSourcePixels() {
+        overviewCache = nil
+        dustSampleCache = nil
+    }
+
+    /// Replaces the retained source. The previous corrected frame stays visible until this returns.
+    func replacingDust(_ development: RAWDevelopment, spots: [DustSpot], canvas: CGSize) throws -> RAWDevelopment {
+        RAWImageCache.shared.discardPixels(for: development.url)
+        discardSourcePixels()
+        return try develop(development.url, previewCanvas: canvas, dustSpots: spots)
+    }
+
+    func develop(_ url: URL, previewCanvas: CGSize = CGSize(width: 2560, height: 2560), progressive: Bool = false, dustSpots: [DustSpot] = []) throws -> RAWDevelopment {
         let accessed = url.startAccessingSecurityScopedResource()
         defer { if accessed { url.stopAccessingSecurityScopedResource() } }
-        let stamp = interactive && !exporting ? RAWImageCache.FileStamp(url) : nil
-        if let stamp, let cached = RAWImageCache.shared.lookup(stamp, space: colorSpace, settings: rawSettings, balance: rawWhiteBalance) {
+        let stamp = interactive && !exporting && doubleExposure == nil ? RAWImageCache.FileStamp(url) : nil
+        if let stamp, let cached = RAWImageCache.shared.lookup(stamp, space: colorSpace, settings: rawSettings, balance: rawWhiteBalance, dustSpots: dustSpots) {
+            dustGeometry = cached.dustGeometry
             cacheStamp = stamp
             let size = cached.linearSource.extent.size
             let scale = PreviewResolution.overviewScale(source: size, canvas: previewCanvas)
@@ -1166,8 +1311,16 @@ actor RAWDeveloper {
             return cached
         }
         cacheStamp = stamp
+        discardDustInputs(url, spots: dustSpots)
         let source = try sourceImage(url, previewLimit: progressive ? 2560 : nil)
-        let image = source.image
+        let rawImage = source.image
+        let image: CIImage
+        if progressive, doubleExposure != nil || !dustSpots.isEmpty {
+            let proxyScale = min(1, 2560 / max(rawImage.extent.width, rawImage.extent.height))
+            image = try bakeDust(rawImage.transformed(by: CGAffineTransform(scaleX: proxyScale, y: proxyScale)), spots: dustSpots)
+                .transformed(by: CGAffineTransform(scaleX: 1/proxyScale, y: 1/proxyScale))
+                .cropped(to: rawImage.extent)
+        } else { image = try bakeDust(rawImage, spots: dustSpots) }
         let bounds = image.extent.integral
         let scale = PreviewResolution.overviewScale(source: bounds.size, canvas: previewCanvas)
         let previewImage = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
@@ -1175,18 +1328,41 @@ actor RAWDeveloper {
                                                   format: .RGBAh, colorSpace: linearSpace) else {
             throw DevelopmentError.decode
         }
-        let container = CGImageSourceCreateWithURL(url as CFURL, nil)
+        let metadataURL = doubleExposure?.urls(relativeTo: url).first ?? url
+        let container = CGImageSourceCreateWithURL(metadataURL as CFURL, nil)
         let properties = container.flatMap { CGImageSourceCopyPropertiesAtIndex($0, 0, nil) } as? [CFString: Any] ?? [:]
         let type = container.flatMap { CGImageSourceGetType($0) }.flatMap { UTType($0 as String) }
-        let metadata = CameraMetadata(properties: properties, url: url, isRAW: source.isRAW, type: type)
+        let metadata = CameraMetadata(properties: properties, url: metadataURL, isRAW: source.isRAW, type: type)
         var development = RAWDevelopment(preview: preview, linearSource: image, url: url, width: Int(bounds.width), height: Int(bounds.height), whitePoint: source.whitePoint, metadata: metadata, isRAW: source.isRAW, rawDefaults: source.rawDefaults, sourceHeadroom: source.headroom)
+        development.dustGeometry = dustGeometry
+        development.dustSpots = dustSpots
         let isHEIF = type?.conforms(to: .heif) == true || type?.conforms(to: .heic) == true
         // HDR HEIF's lazy decoder can return incomplete tiles for cropped ROI requests.
         // Show the overview first, then use one fully decoded bitmap for all detail patches.
-        let needsFullDecode = source.isRAW || (isHEIF && source.headroom > 1)
+        let needsFullDecode = !dustSpots.isEmpty || source.isRAW || (isHEIF && source.headroom > 1)
         development.fullResolutionReady = !progressive || !needsFullDecode
         overviewCache = (development.id, CGSize(width: floor(image.extent.width * scale), height: floor(image.extent.height * scale)), preview)
+        if !progressive, !dustSpots.isEmpty, let stamp {
+            RAWImageCache.shared.insert(development, stamp: stamp, space: colorSpace, settings: rawSettings, balance: rawWhiteBalance)
+        }
         return development
+    }
+
+    /// Match Source 2's isolated preview to the composite canvas without decoding again.
+    func alignSecondPreview(_ source: RAWDevelopment, firstURL: URL, firstGeometry: SourceOrientation, secondGeometry: SourceOrientation) throws -> RAWDevelopment {
+        func aligned(_ image: CIImage) -> CIImage {
+            let sensor = DoubleExposure.sensorImage(image, orientation: DoubleExposure.orientation(source.url))
+            let canvas = firstGeometry.apply(to: sensor.oriented(forExifOrientation: DoubleExposure.orientation(firstURL)), includeMirror: false)
+            return secondGeometry.halfTurnsOnly.apply(to: canvas)
+        }
+        let image = aligned(source.linearSource)
+        let preview = aligned(CIImage(cgImage: source.preview))
+        guard let bitmap = context.createCGImage(preview, from: preview.extent, format: .RGBAh, colorSpace: linearSpace) else { throw DevelopmentError.decode }
+        var result = RAWDevelopment(preview: bitmap, linearSource: image, url: source.url,
+            width: Int(image.extent.width), height: Int(image.extent.height), whitePoint: source.whitePoint,
+            metadata: source.metadata, isRAW: source.isRAW, rawDefaults: source.rawDefaults, sourceHeadroom: source.sourceHeadroom)
+        result.fullResolutionReady = source.fullResolutionReady
+        return result
     }
 
     /// Materialize only the current photo. Detail requests reuse decoded RAW/HDR HEIF pixels.
@@ -1194,13 +1370,15 @@ actor RAWDeveloper {
         try Task.checkCancellation()
         let access = development.url.startAccessingSecurityScopedResource()
         defer { if access { development.url.stopAccessingSecurityScopedResource() } }
-        let stamp = interactive && !exporting ? RAWImageCache.FileStamp(development.url) : nil
-        if let stamp, var cached = RAWImageCache.shared.lookup(stamp, space: colorSpace, settings: rawSettings, balance: rawWhiteBalance) {
+        let stamp = interactive && !exporting && doubleExposure == nil ? RAWImageCache.FileStamp(development.url) : nil
+        if let stamp, var cached = RAWImageCache.shared.lookup(stamp, space: colorSpace, settings: rawSettings, balance: rawWhiteBalance, dustSpots: development.dustSpots) {
             cached.id = development.id
             return cached
         }
         cacheStamp = stamp
-        let source = try sourceImage(development.url).image
+        discardDustInputs(development.url, spots: development.dustSpots)
+        let decoded = try sourceImage(development.url).image
+        let source = try dustCorrection.apply(decoded, spots: development.dustSpots, geometry: dustGeometry)
         guard let bitmap = context.createCGImage(source, from: source.extent,
             format: .RGBAh, colorSpace: linearSpace, deferred: false) else { throw DevelopmentError.decode }
         try Task.checkCancellation()
@@ -1209,6 +1387,8 @@ actor RAWDeveloper {
             whitePoint: development.whitePoint, metadata: development.metadata, isRAW: development.isRAW,
             rawDefaults: development.rawDefaults, sourceHeadroom: development.sourceHeadroom)
         result.id = development.id
+        result.dustGeometry = development.dustGeometry
+        result.dustSpots = development.dustSpots
         if interactive, !exporting, let stamp = cacheStamp, stamp == RAWImageCache.FileStamp(development.url) {
             RAWImageCache.shared.insert(result, stamp: stamp, space: colorSpace, settings: rawSettings, balance: rawWhiteBalance)
         }
@@ -1216,12 +1396,12 @@ actor RAWDeveloper {
     }
 
     private var gpuHistogram: GPUHistogram?
-    /// Analyze the cached, unmodified linear preview. Never decode a second
+    /// Analyze the cached linear source preview, including baked sensor-dust correction. Never decode a second
     /// full-resolution source or allocate a source-sized histogram texture.
     func buildHistogram(_ development: RAWDevelopment, bins: Int) async throws -> HistogramData {
         if gpuHistogram == nil { gpuHistogram = try GPUHistogram(colorSpace: colorSpace) }
         return try await gpuHistogram!.calculate(image: CIImage(cgImage: development.preview),
-                                                  sourceID: development.id, bins: bins)
+                                                  sourceID: development.id, bins: bins, upperInput: DoubleExposure.isDocument(development.url) ? 2 : 1)
     }
 
 }

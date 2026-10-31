@@ -11,10 +11,13 @@ nonisolated struct PreparedExportItem: Sendable {
         self.source = source
         self.recipe = recipe
         self.lutConfiguration = recipe.mapping.lutID.map { LUTStore.shared.configuration(for: $0) }
-        self.pixels = pixels ?? Self.pixelCount(of: source)
+        self.pixels = (pixels ?? Self.pixelCount(of: source)) * (recipe.mapping.doubleExposure == nil ? 1 : 3)
     }
 
     static func pixelCount(of source: URL) -> Double {
+        if let pair = DoubleExposure.read(source) {
+            return pixelCount(of: pair.urls(relativeTo: source)[0])
+        }
         let container = CGImageSourceCreateWithURL(source as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary)
         let properties = container.flatMap { CGImageSourceCopyPropertiesAtIndex($0, 0, nil) as? [CFString: Any] }
         let width = (properties?[kCGImagePropertyPixelWidth] as? NSNumber)?.doubleValue ?? 0
@@ -46,7 +49,7 @@ nonisolated struct ExportPlan: Sendable {
             try Task.checkCancellation()
             return PreparedExportItem.pixelCount(of: $0)
         }
-        let costs = pixels.map { BatchExportBudget.bytes(pixels: $0, scale: 0) }
+        let costs = pixels.enumerated().map { index, count in BatchExportBudget.bytes(pixels: count * (DoubleExposure.isDocument(files[index]) ? 3 : 1), scale: 0) }
         let budget = BatchExportBudget.limit(memory: ProcessInfo.processInfo.physicalMemory)
         let allocation = BatchExportBudget.allocation(costs: costs,
             cpuCount: ProcessInfo.processInfo.activeProcessorCount, budget: budget)
@@ -80,7 +83,7 @@ nonisolated struct ExportPlan: Sendable {
                             }
                             let target = try await BrowserRecipeTarget.load(url)
                             let worker = RAWDeveloper(colorSpace: target.recipe.colorSpace, rawSettings: target.recipe.rawSettings,
-                                                      rawWhiteBalance: target.recipe.mapping.rawWhiteBalance, exporting: true, memoryLimitMB: allocation.megabytesPerFile)
+                                                      rawWhiteBalance: target.recipe.mapping.rawWhiteBalance, doubleExposure: target.recipe.mapping.doubleExposure, exporting: true, memoryLimitMB: allocation.megabytesPerFile)
                             let resolved = try await worker.resolveExportRecipe(url, recipe: target.recipe, isRAW: target.isRAW,
                                 maximizeRange: target.savedRecipe == nil && maximizeRAWRange)
                             try Task.checkCancellation()

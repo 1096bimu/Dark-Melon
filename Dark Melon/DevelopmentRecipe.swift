@@ -100,6 +100,9 @@ nonisolated struct DevelopmentRecipe: Codable, Equatable, Sendable {
            result.mapping.vertexWarp.allSatisfy({ $0.chroma == 0 }) {
             result.mapping.color.monochrome = true
         }
+        if result.mapping.doubleExposure != nil {
+            result.mapping.doubleExposure!.secondRAW.orientation = result.mapping.doubleExposure!.secondRAW.orientation.halfTurnsOnly
+        }
         try result.validate()
         result.snapshots = try snapshots.map { item in
             guard let idString = item["id"] as? String, let id = UUID(uuidString: idString),
@@ -131,6 +134,18 @@ nonisolated struct DevelopmentRecipe: Codable, Equatable, Sendable {
     }
 
     private func validate() throws {
+        if let spots = mapping.dustSpots {
+            guard spots.count <= 128, spots.allSatisfy(\.isValid), Set(spots.map(\.id)).count == spots.count else { throw RecipeError.invalid }
+        }
+        if let pair = mapping.doubleExposure {
+            guard !pair.first.isEmpty, !pair.second.isEmpty,
+                  !pair.first.hasPrefix("/"), !pair.second.hasPrefix("/"),
+                  !DoubleExposure.isDocument(URL(fileURLWithPath: pair.first)), !DoubleExposure.isDocument(URL(fileURLWithPath: pair.second)) else { throw RecipeError.invalid }
+            for (control, value) in pair.secondRAW.values {
+                guard value.isFinite, (control.minimum...control.maximum).contains(value) else { throw RecipeError.invalid }
+            }
+            if let wb = pair.secondBalance { guard wb.temperature.isFinite, wb.tint.isFinite else { throw RecipeError.invalid } }
+        }
         if let rawSettings {
             for (control, value) in rawSettings.values {
                 guard value.isFinite, (control.minimum...control.maximum).contains(value) else { throw RecipeError.invalid }
@@ -151,8 +166,8 @@ nonisolated struct DevelopmentRecipe: Codable, Equatable, Sendable {
         guard m.vertexWarp.count == OKLabVertexWarp.count,
               m.vertexWarp.allSatisfy({ within($0.monochromeResponse, -1...1) && within($0.darkerHue, -Double.pi...Double.pi) && within($0.lighterHue, -Double.pi...Double.pi) && within($0.chroma, AdjustmentLimits.chroma) && within($0.lightness, AdjustmentLimits.density) && within($0.rotation, -1...1) && ($0.hueOffset.map { within($0, -Double.pi...Double.pi) } ?? true) }),
               m.hls.count == 6,
-              within(m.white, 0...1), m.white >= ToneMapping.minimumRange * 0.999,
-              within(m.shadowFloor, 0...Double(Float.greatestFiniteMagnitude)), within(m.tonePosition, 0...1), within(m.concentration, -1...1),
+              within(m.white, 0...2), m.white >= ToneMapping.minimumRange * 0.999,
+              within(m.shadowFloor, 0...Double(Float.greatestFiniteMagnitude)), within(m.tonePosition, 0...2), within(m.concentration, -1...1),
               m.contrastDistribution.count == 4, m.contrastDistribution.allSatisfy({ within($0, AdjustmentLimits.distributionLog) }),
               m.dyeMixers.isValid,
               m.dyePurity.count == 3, m.dyePurity.allSatisfy({ within($0, 0...1) }),

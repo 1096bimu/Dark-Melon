@@ -15,6 +15,7 @@ struct PresetApplication: Identifiable {
                 result.mapping.rawWhiteBalance = balance
             }
         }
+        result.applySecondRAW(from: recipe.mapping, raw: recipe.rawSettings, selection: selection)
         return result
     }
 
@@ -45,7 +46,7 @@ struct PresetPreview {
                         cachedBefore: PreviewImages?) async throws -> Self {
         let recipe = preset.applying(to: original, isRAW: development.isRAW)
         let worker = RAWDeveloper(colorSpace: recipe.colorSpace, rawSettings: recipe.rawSettings,
-                                  rawWhiteBalance: recipe.mapping.rawWhiteBalance, interactive: true)
+                                  rawWhiteBalance: recipe.mapping.rawWhiteBalance, doubleExposure: recipe.mapping.doubleExposure, interactive: true)
         let before: PreviewImages
         if let cachedBefore { before = cachedBefore }
         else {
@@ -54,10 +55,10 @@ struct PresetPreview {
             before = try await renderer.previews(source, mapping: original.mapping)
         }
         try Task.checkCancellation()
-        let needsDecode = recipe.rawSettings != original.rawSettings
+        let needsDecode = recipe.mapping.dustSpots != original.mapping.dustSpots || recipe.mapping.doubleExposure != original.mapping.doubleExposure || recipe.rawSettings != original.rawSettings
             || recipe.mapping.rawWhiteBalance != original.mapping.rawWhiteBalance
         let afterDevelopment = needsDecode
-            ? try await worker.develop(development.url, previewCanvas: canvas) : development
+            ? try await worker.develop(development.url, previewCanvas: canvas, dustSpots: recipe.mapping.dustSpots ?? []) : development
         let source = try await worker.overview(afterDevelopment, canvas: canvas)
         let after = try await worker.previews(source, mapping: recipe.mapping)
         try Task.checkCancellation()

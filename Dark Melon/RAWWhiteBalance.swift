@@ -5,6 +5,8 @@ nonisolated struct RAWWhiteBalance: Codable, Equatable, Sendable {
     var temperature: Float
     var tint: Float
 
+    init(temperature: Float, tint: Float) { self.temperature = temperature; self.tint = tint }
+
     init(_ reference: RAWWhitePoint) {
         temperature = Float(reference.temperature)
         tint = Float(reference.tint)

@@ -58,6 +58,11 @@ nonisolated enum RAW9Mode: String, Codable, CaseIterable, Sendable {
 
 nonisolated struct RAWSettings: Codable, Equatable, Sendable {
     static let maximizeRangePreferenceKey = "alwaysMaximizeRAWRange"
+    private var storedOrientation: SourceOrientation?
+    var orientation: SourceOrientation {
+        get { storedOrientation ?? SourceOrientation() }
+        set { storedOrientation = newValue == SourceOrientation() ? nil : newValue }
+    }
     var useRAW9: Bool? = nil // Missing in older recipes means the legacy/default decoder.
     var raw9Mode: RAW9Mode? = nil
     var decoderMode: RAW9Mode {
@@ -74,16 +79,17 @@ nonisolated struct RAWSettings: Codable, Equatable, Sendable {
     var highlightRecovery = true
     var supportsHighlightRecovery = false
 
-    private enum CodingKeys: String, CodingKey { case values, lensCorrection, highlightRecovery, selectedSwitches, useRAW9, raw9Mode }
+    private enum CodingKeys: String, CodingKey { case storedOrientation, values, lensCorrection, highlightRecovery, selectedSwitches, useRAW9, raw9Mode }
 
     static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.decoderMode == rhs.decoderMode && lhs.values == rhs.values && lhs.lensCorrection == rhs.lensCorrection && lhs.highlightRecovery == rhs.highlightRecovery && lhs.selectedSwitches == rhs.selectedSwitches
+        lhs.orientation == rhs.orientation && lhs.decoderMode == rhs.decoderMode && lhs.values == rhs.values && lhs.lensCorrection == rhs.lensCorrection && lhs.highlightRecovery == rhs.highlightRecovery && lhs.selectedSwitches == rhs.selectedSwitches
     }
 
     /// Capabilities always belong to the destination decoder, not the saved recipe.
     func resolved(using defaults: Self) -> Self {
         var result = defaults
         if selectedSwitches == nil || selectedSwitches!.contains("decoder") { result.decoderMode = decoderMode }
+        if selectedSwitches == nil || selectedSwitches!.contains("orientation") { result.orientation = orientation }
         result.values.merge(values) { _, saved in saved }
         if selectedSwitches == nil || selectedSwitches!.contains("lens") { result.lensCorrection = lensCorrection }
         if selectedSwitches == nil || selectedSwitches!.contains("highlight") { result.highlightRecovery = highlightRecovery }
@@ -124,6 +130,7 @@ struct RAWControls: View {
     @Environment(\.lockedFilmItems) private var lockedItems
     @Binding var colorSpace: ProcessingColorSpace
     var colorSpaceDisabled = false
+    var halfTurnsOnly = false
     @Binding var settings: RAWSettings
     let isRAW: Bool
     let commit: () -> Void
@@ -148,6 +155,16 @@ struct RAWControls: View {
             .pickerStyle(.segmented)
             .disabled(colorSpaceDisabled)
             if isRAW {
+                Picker("Orientation", selection: Binding(get: { settings.orientation.turns }, set: {
+                    settings.orientation.quarterTurns = $0; commit()
+                })) {
+                    ForEach(halfTurnsOnly ? [0, 2] : [0, 1, 2, 3], id: \.self) { turn in
+                        Text("\(turn * 90)°").tag(turn)
+                    }
+                }.pickerStyle(.segmented).filmLock(.sourceOrientation)
+                Toggle("Mirror", isOn: Binding(get: { settings.orientation.mirrored }, set: {
+                    settings.orientation.mirrored = $0; commit()
+                })).filmLock(.sourceOrientation).help("Flip this exposure horizontally.")
                 Picker("RAW 9", selection: Binding(get: { settings.decoderMode }, set: {
                     settings.decoderMode = $0; commit()
                 })) {

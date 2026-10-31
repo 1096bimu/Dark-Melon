@@ -218,10 +218,10 @@ final class ImageBrowserModel {
                         try Task.checkCancellation()
                         let values = try item.resourceValues(forKeys: keys)
                         let folder = values.isDirectory == true && values.isPackage != true
-                        guard folder || values.contentType?.conforms(to: .image) == true else { return nil }
+                        guard folder || DoubleExposure.isDocument(item) || values.contentType?.conforms(to: .image) == true else { return nil }
                         return BrowserEntry(url: item.standardizedFileURL, isFolder: folder,
                             hasSavedSettings: !folder && names.contains(RecipeStore.sidecarURL(for: item).lastPathComponent),
-                            isRAW: values.contentType?.conforms(to: .rawImage) == true)
+                            isRAW: DoubleExposure.isDocument(item) || values.contentType?.conforms(to: .rawImage) == true)
                     }.sorted {
                         if $0.isFolder != $1.isFolder { return $0.isFolder }
                         return $0.url.lastPathComponent.localizedStandardCompare($1.url.lastPathComponent) == .orderedAscending
@@ -256,7 +256,9 @@ final class ImageBrowserModel {
     }
     func refreshSavedSettingsFlag(for url: URL) {
         guard let index = entries.firstIndex(where: { $0.url.standardizedFileURL == url.standardizedFileURL }) else { return }
-        entries[index].hasSavedSettings = FileManager.default.fileExists(atPath: RecipeStore.sidecarURL(for: url).path)
+        let exists = FileManager.default.fileExists(atPath: RecipeStore.sidecarURL(for: url).path)
+        if DoubleExposure.isDocument(url), !exists { entries.remove(at: index) }
+        else { entries[index].hasSavedSettings = exists }
     }
     nonisolated private static func imageCount(in folder: URL) -> Int {
         do {
@@ -458,6 +460,9 @@ struct ImageFileBrowser: View {
                                             }
                                             if let fileAction {
                                                 let targets = contextFiles(entry.url, ordered: files.map(\.url))
+                                                if targets.count == 2, targets.allSatisfy({ url in files.contains { $0.url == url && $0.isRAW && !DoubleExposure.isDocument(url) } }) {
+                                                    Button("Create Double Exposure") { multipleFileAction?(.doubleExposure, targets) }
+                                                }
                                                 Button(targets.count > 1 ? "Delete Edits (\(targets.count))" : "Delete Edit", role: .destructive) {
                                                     if let multipleFileAction { multipleFileAction(.deleteEdit, targets) }
                                                     else { fileAction(.deleteEdit, entry.url) }
@@ -621,7 +626,7 @@ private struct FileThumbnail: View {
                         Image(decorative: image, scale: 1)
                             .resizable().scaledToFit()
                     } else {
-                        Image(systemName: "photo").foregroundStyle(.secondary)
+                        Image(systemName: DoubleExposure.isDocument(url) ? "rectangle.on.rectangle" : "photo").foregroundStyle(.secondary)
                     }
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 4))
@@ -631,6 +636,7 @@ private struct FileThumbnail: View {
         }
         .task(id: url) {
             image = nil
+            guard !DoubleExposure.isDocument(url) else { return }
             let result = await BrowserThumbnails.shared.thumbnail(for: url)
             guard !Task.isCancelled else { return }
             image = result

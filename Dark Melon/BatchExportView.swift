@@ -103,8 +103,8 @@ struct BatchExportView: View {
                 preparedItems = prepared.items; failures = prepared.failures
                 guard let first = preparedItems.first else { status = String(localized: "No files could be prepared."); return }
                 let recipe = first.recipe
-                let worker = RAWDeveloper(colorSpace: recipe.colorSpace, rawSettings: recipe.rawSettings, rawWhiteBalance: recipe.mapping.rawWhiteBalance)
-                let loaded = try await worker.develop(first.source)
+                let worker = RAWDeveloper(colorSpace: recipe.colorSpace, rawSettings: recipe.rawSettings, rawWhiteBalance: recipe.mapping.rawWhiteBalance, doubleExposure: recipe.mapping.doubleExposure)
+                let loaded = try await worker.develop(first.source, dustSpots: recipe.mapping.dustSpots ?? [])
                 try Task.checkCancellation()
                 sampleRecipe = recipe; sample = loaded
                 status = ""; showingOptions = true

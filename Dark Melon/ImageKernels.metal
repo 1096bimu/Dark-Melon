@@ -5,6 +5,30 @@
 using namespace metal;
 using namespace coreimage;
 namespace coreimage {
+extern "C" float4 doubleExposureAdd(sample_t a, sample_t b) {
+    return float4(unpremultiply(a).rgb + unpremultiply(b).rgb, 1.0);
+}
+
+
+extern "C" float4 dustCorrection(coreimage::sampler source, coreimage::sampler parameters,
+                                       float count, float4 extent, destination dest) {
+    float4 pixel = source.sample(source.transform(dest.coord()));
+    float2 uv = (dest.coord() - extent.xy) / extent.zw;
+    uv.y = 1.0 - uv.y;
+    float transmission = 1.0;
+    for (int i=0; i<int(count); ++i) {
+        float4 spot = parameters.sample(parameters.transform(float2(2*i+0.5,0.5)));
+        float2 delta = (uv-spot.xy)*extent.zw/min(extent.z,extent.w);
+        float outer = spot.z+spot.w;
+        if (abs(delta.x)>=outer || abs(delta.y)>=outer) continue;
+        float u = clamp((length(delta)-spot.z)/max(spot.w,1e-6),0.0,1.0);
+        float falloff = 1.0-u*u*u*(10.0+u*(-15.0+6.0*u));
+        float depth = parameters.sample(parameters.transform(float2(2*i+1.5,0.5))).x;
+        transmission *= 1.0-depth*falloff;
+    }
+    pixel.rgb /= max(transmission,1e-12);
+    return pixel;
+}
 
 // GLSL mod is floor-based, unlike fmod for negative inputs.
 static float glslMod(float x, float y) { return x - y * floor(x / y); }

@@ -46,6 +46,16 @@
         }
       }
     },
+    "%@ + %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ + %2$@"
+          }
+        }
+      }
+    },
     "%@ degrees" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -218,6 +228,9 @@
           }
         }
       }
+    },
+    "%lld°" : {
+
     },
     "%lldnm" : {
       "shouldTranslate" : false
@@ -400,6 +413,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "添加 LUT…"
+          }
+        }
+      }
+    },
+    "Add Spot" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "添加灰尘点"
           }
         }
       }
@@ -608,6 +631,9 @@
         }
       }
     },
+    "Angle" : {
+
+    },
     "Apply Preset" : {
       "localizations" : {
         "zh-Hans" : {
@@ -671,6 +697,16 @@
         }
       }
     },
+    "Attenuation" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "衰减"
+          }
+        }
+      }
+    },
     "Auto" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -709,6 +745,16 @@
     },
     "Back" : {
 
+    },
+    "Background" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "背景"
+          }
+        }
+      }
     },
     "BadHDR" : {
 
@@ -948,6 +994,16 @@
         }
       }
     },
+    "Center" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "中心"
+          }
+        }
+      }
+    },
     "Changes relative film-layer contrast around Tone in log exposure. Equal RGB values have no effect; the SDR and HDR tone curves remain unchanged." : {
       "localizations" : {
         "zh-Hans" : {
@@ -1089,6 +1145,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "清除 RAW 默认设置"
+          }
+        }
+      }
+    },
+    "Clear Spots" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "清除灰尘点"
           }
         }
       }
@@ -1515,6 +1581,26 @@
         }
       }
     },
+    "Corrected" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "校正后"
+          }
+        }
+      }
+    },
+    "Could not fit this spot. Extend both ends into clean background or reposition the line." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法拟合此灰尘点。请将两端延伸至干净的背景，或重新放置线段。"
+          }
+        }
+      }
+    },
     "Could not open Getting Started" : {
 
     },
@@ -1542,6 +1628,16 @@
     },
     "Create" : {
 
+    },
+    "Create Double Exposure" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "创建双重曝光"
+          }
+        }
+      }
     },
     "Create Snapshot" : {
       "localizations" : {
@@ -1841,6 +1937,16 @@
         }
       }
     },
+    "Distances and coordinates are percentages of the native image; distances use its shorter edge." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "距离和坐标以原生图像的百分比表示；距离以短边为基准。"
+          }
+        }
+      }
+    },
     "Distribution" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1863,6 +1969,16 @@
         }
       }
     },
+    "Double exposure requires matching sensor-oriented dimensions." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "双重曝光需要两张图像的传感器方向尺寸相同。"
+          }
+        }
+      }
+    },
     "Drag horizontally to bend darker and lighter hues. Positions use the unedited SDR gamut at chroma 0.1." : {
       "localizations" : {
         "zh-Hans" : {
@@ -1880,6 +1996,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "向某个色相拖动以增加图像中的该颜色。"
+          }
+        }
+      }
+    },
+    "Draw through the center of the dust, extending both ends into clean background." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "画线穿过灰尘中心，两端延伸至干净的背景。"
+          }
+        }
+      }
+    },
+    "Dust Correction" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "灰尘校正"
           }
         }
       }
@@ -2197,6 +2333,16 @@
         }
       }
     },
+    "Falloff" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "羽化宽度"
+          }
+        }
+      }
+    },
     "File filter" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2288,6 +2434,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "首张图像"
+          }
+        }
+      }
+    },
+    "Flip this exposure horizontally." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "水平翻转此曝光。"
           }
         }
       }
@@ -3261,6 +3417,16 @@
         }
       }
     },
+    "Line Length" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "线段长度"
+          }
+        }
+      }
+    },
     "Linear RGB" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -3610,6 +3776,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "中间调"
+          }
+        }
+      }
+    },
+    "Mirror" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "镜像"
           }
         }
       }
@@ -3991,6 +4167,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "橙色"
+          }
+        }
+      }
+    },
+    "Orientation" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "方向"
+          }
+        }
+      }
+    },
+    "Orientation and Mirror" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "方向和镜像"
           }
         }
       }
@@ -4460,6 +4656,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "重做"
+          }
+        }
+      }
+    },
+    "Refit" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重新拟合"
           }
         }
       }
@@ -5343,12 +5549,42 @@
         }
       }
     },
+    "Source" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "源图像"
+          }
+        }
+      }
+    },
     "Source · OKLCH" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "源图像 · OKLCH"
+          }
+        }
+      }
+    },
+    "Source 1" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "源图像 1"
+          }
+        }
+      }
+    },
+    "Source 2" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "源图像 2"
           }
         }
       }
@@ -5392,6 +5628,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "分离色调"
+          }
+        }
+      }
+    },
+    "Spot %lld" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "灰尘点 %lld"
           }
         }
       }
@@ -5462,6 +5708,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "显影附属文件不是有效的 Dark Melon XMP 文档。"
+          }
+        }
+      }
+    },
+    "The double exposure sources must be two RAW files." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "双重曝光的源图像必须是两个 RAW 文件。"
+          }
+        }
+      }
+    },
+    "The dust sampling line must stay inside the image." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "灰尘采样线必须位于图像内。"
           }
         }
       }
@@ -5852,6 +6118,16 @@
         }
       }
     },
+    "Unable to render dust correction." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法渲染灰尘校正。"
+          }
+        }
+      }
+    },
     "Unable to render the GPU vectorscope." : {
       "localizations" : {
         "zh-Hans" : {
@@ -6187,6 +6463,12 @@
           }
         }
       }
+    },
+    "X" : {
+
+    },
+    "Y" : {
+
     },
     "Yellow" : {
       "extractionState" : "manual",

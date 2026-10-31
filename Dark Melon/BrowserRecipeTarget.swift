@@ -21,6 +21,11 @@ nonisolated struct BrowserRecipeTarget: Sendable {
 
     @concurrent
     private static func metadata(_ url: URL, restored: DevelopmentRecipe?, saved: DevelopmentRecipe?) async throws -> Self {
+        if DoubleExposure.isDocument(url) {
+            let stored = try await RecipeStore.shared.load(for: url)
+            guard let recipe = restored ?? stored else { throw DoubleExposure.Failure.invalid }
+            return Self(url: url, recipe: recipe, savedRecipe: saved ?? recipe, isRAW: true)
+        }
         let accessed = url.startAccessingSecurityScopedResource()
         defer { if accessed { url.stopAccessingSecurityScopedResource() } }
         guard let container = CGImageSourceCreateWithURL(url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary),

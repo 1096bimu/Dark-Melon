@@ -43,6 +43,7 @@ nonisolated struct FilmSettings: Sendable {
         var result = recipe
         result.mapping = applying(to: recipe.mapping)
         if recipe.mapping.rawWhiteBalance != nil { result.rawSettings = applyingRAW(to: recipe.rawSettings) }
+        result.applySecondRAW(from: captured, raw: rawSettings, selection: selection)
         return result
     }
 }

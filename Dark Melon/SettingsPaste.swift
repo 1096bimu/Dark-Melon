@@ -11,10 +11,10 @@ nonisolated enum PasteItem: String, CaseIterable, Codable, Sendable, Identifiabl
     case shadowFloor, tone, contrast, whitePoint, hdrGain, hdrRolloff, rgbWhiteBalance, rawWhiteBalance
     case colorChrome, chromaCurve, lightnessChromaCurve, vertices, hueTwister, splitTone
     case dyeResponse, clarity, hdf, grain, halation, vignette, badHDR
-    case transform, lut
+    case transform, dustCorrection, lut
     // Decode-only retired selection; never shown or applied.
     case offset
-    case rawDecoder, exposure, shadowBias, luminanceNoise, colorNoise, sharpness, detail, edgeContrast, moire, lensCorrection, highlightRecovery
+    case sourceOrientation, rawDecoder, exposure, shadowBias, luminanceNoise, colorNoise, sharpness, detail, edgeContrast, moire, lensCorrection, highlightRecovery
     var id: Self { self }
     var title: String {
         switch self {
@@ -40,8 +40,10 @@ nonisolated enum PasteItem: String, CaseIterable, Codable, Sendable, Identifiabl
         case .halation: "Halation"
         case .vignette: "Vignette"
         case .badHDR: "BadHDR"
+        case .dustCorrection: "Dust Correction"
         case .transform: "Transform"
         case .lut: "LUT"
+        case .sourceOrientation: "Orientation and Mirror"
         case .rawDecoder: "RAW 9"
         case .exposure: "Exposure"
         case .shadowBias: "Shadow Bias"
@@ -73,7 +75,7 @@ nonisolated enum PasteItem: String, CaseIterable, Codable, Sendable, Identifiabl
     static let balanceItems: [Self] = [.rgbWhiteBalance,.rawWhiteBalance]
     static let colorItems: [Self] = [.colorChrome,.chromaCurve,.lightnessChromaCurve,.vertices,.hueTwister,.splitTone]
     static let effectItems: [Self] = [.dyeResponse,.clarity,.hdf,.grain,.halation,.vignette,.badHDR]
-    static let rawItems: [Self] = [.rawDecoder,.exposure,.shadowBias,.luminanceNoise,.colorNoise,.sharpness,.detail,.edgeContrast,.moire,.lensCorrection,.highlightRecovery]
+    static let rawItems: [Self] = [.sourceOrientation,.rawDecoder,.exposure,.shadowBias,.luminanceNoise,.colorNoise,.sharpness,.detail,.edgeContrast,.moire,.lensCorrection,.highlightRecovery]
 }
 
 /// Legacy group flags keep existing Library entries and internal reset callers compatible.
@@ -154,6 +156,7 @@ nonisolated struct SettingsPasteSelection: Codable, Sendable, Equatable {
         if contains(.halation) { result.halation = source.halation }
         if contains(.vignette) { result.vignette = source.vignette }
         if contains(.badHDR) { result.badHDR = source.badHDR }
+        if contains(.dustCorrection) { result.dustSpots = source.dustSpots }
         if contains(.transform) { result.transform = source.transform }
         if contains(.lut) { result.lutID = source.lutID; result.lutStrength = source.lutStrength }
         return result
@@ -167,6 +170,10 @@ nonisolated struct SettingsPasteSelection: Codable, Sendable, Equatable {
         if destination == nil { result.selectedSwitches = [] }
         for item in PasteItem.rawItems where contains(item) {
             if let control = item.rawAdjustment, let value = source.values[control] { result.values[control] = value }
+        }
+        if contains(.sourceOrientation) {
+            result.orientation = source.orientation
+            result.selectedSwitches?.insert("orientation")
         }
         if contains(.rawDecoder), source.selectedSwitches == nil || source.selectedSwitches!.contains("decoder") {
             result.decoderMode = source.decoderMode
@@ -212,7 +219,7 @@ nonisolated struct CopiedSettings {
     }
 
     static func encode(_ recipe: DevelopmentRecipe, reference: RAWWhitePoint?) throws -> Data {
-        try recipe.encoded()
+        try recipe.transferable.encoded()
     }
 
     static func decode(_ data: Data) throws -> Self {
@@ -303,7 +310,7 @@ struct SettingsPasteOptions: View {
                 tree("Tone", items: PasteItem.toneItems + PasteItem.balanceItems)
                 tree("Color", items: PasteItem.colorItems)
                 tree("Effects", items: PasteItem.effectItems)
-                tree("Transform", items: [.transform])
+                tree("Transform", items: [.transform, .dustCorrection])
                 tree("RAW", items: PasteItem.rawItems)
                 tree("LUT", items: [.lut])
                 if selectingLock {

@@ -66,12 +66,12 @@ nonisolated final class RAWImageCache: @unchecked Sendable {
         }
     }
 
-    func lookup(_ stamp: FileStamp, space: ProcessingColorSpace, settings: RAWSettings?, balance: RAWWhiteBalance?) -> RAWDevelopment? {
+    func lookup(_ stamp: FileStamp, space: ProcessingColorSpace, settings: RAWSettings?, balance: RAWWhiteBalance?, dustSpots: [DustSpot] = []) -> RAWDevelopment? {
         lock.lock(); defer { lock.unlock() }
         // A modified/replaced file invalidates every old decode of that path.
         entries.removeAll { $0.stamp.url == stamp.url && $0.stamp != stamp }
         guard let index = entries.firstIndex(where: {
-            $0.stamp == stamp && $0.space == space
+            $0.stamp == stamp && $0.space == space && $0.development.dustSpots == dustSpots
                 && $0.settings == (settings?.resolved(using: $0.development.rawDefaults ?? RAWSettings()) ?? $0.development.rawDefaults ?? RAWSettings())
                 && $0.balance == (balance ?? $0.development.whitePoint.map(RAWWhiteBalance.init))
         }) else { return nil }
@@ -90,9 +90,17 @@ nonisolated final class RAWImageCache: @unchecked Sendable {
                             + UInt64(development.preview.bytesPerRow) * UInt64(development.preview.height))
         lock.lock(); defer { lock.unlock() }
         guard entry.cost <= allowance else { return }
-        entries.removeAll { $0.development.id == development.id || ($0.stamp.url == stamp.url && $0.stamp != stamp) }
+        // Keep one correction version per decode; do not retain a second uncorrected RGB copy.
+        entries.removeAll { $0.development.id == development.id || ($0.stamp.url == stamp.url &&
+            ($0.stamp != stamp || ($0.space == entry.space && $0.settings == entry.settings && $0.balance == entry.balance))) }
         entries.append(entry)
         trim()
+    }
+
+    func discardPixels(for url: URL) {
+        let canonical = url.standardizedFileURL.resolvingSymlinksInPath()
+        lock.lock(); defer { lock.unlock() }
+        entries.removeAll { $0.stamp.url == canonical }
     }
 
     // Reopening an unedited photo must not repeat the optional Max Range probe.

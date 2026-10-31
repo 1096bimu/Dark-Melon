@@ -84,7 +84,34 @@ struct ContentView: View {
     private var activePresetPreview: PresetPreview? {
         presetPreview?.id == confirmingPreset?.id ? presetPreview : nil
     }
+    @State private var doubleSource = 0
+    @State private var isolatedRAWDevelopment: RAWDevelopment?
+    private var isolatingRAW: Bool { panel == .raw && mapping.doubleExposure != nil }
+    private var activeRAWURL: URL? {
+        guard let sourceURL else { return nil }
+        return mapping.doubleExposure?.urls(relativeTo: sourceURL)[doubleSource] ?? sourceURL
+    }
+    private var activeRAWSettings: Binding<RAWSettings> {
+        Binding(get: {
+            var value = doubleSource == 1 ? (mapping.doubleExposure?.secondRAW ?? rawSettings).resolved(using: isolatedRAWDevelopment?.rawDefaults ?? development?.rawDefaults ?? RAWSettings()) : rawSettings
+            value.decoderMode = rawSettings.decoderMode
+            return value
+        }, set: { value in
+            if doubleSource == 1, mapping.doubleExposure != nil {
+                var local = value; local.decoderMode = rawSettings.decoderMode
+                mapping.doubleExposure?.secondRAW = local
+                rawSettings.decoderMode = value.decoderMode
+            } else { rawSettings = value }
+        })
+    }
+    private var activeRAWBalance: Binding<RAWWhiteBalance?> {
+        Binding(get: { doubleSource == 1 ? mapping.doubleExposure?.secondBalance ?? mapping.rawWhiteBalance : mapping.rawWhiteBalance }, set: {
+            if doubleSource == 1, mapping.doubleExposure != nil { mapping.doubleExposure?.secondBalance = $0 }
+            else { mapping.rawWhiteBalance = $0 }
+        })
+    }
     private var previewDevelopment: RAWDevelopment? {
+        if isolatingRAW { return isolatedRAWDevelopment }
         if let activePresetPreview, !presetShowingBefore { return activePresetPreview.development }
         return development
     }
@@ -157,7 +184,7 @@ struct ContentView: View {
         development != nil && !loading && mapping.hdrEnabled && previewImages?.hasHDROutput == true
     }
     private var hdrPreview: Bool {
-        get { !comparingOriginal && prefersHDR && canPreviewHDR }
+        get { !isolatingRAW && !comparingOriginal && prefersHDR && canPreviewHDR }
         nonmutating set {
             guard canPreviewHDR else { return }
             prefersHDR = newValue
@@ -177,6 +204,9 @@ struct ContentView: View {
         if let activePresetPreview { return presetShowingBefore ? activePresetPreview.before : activePresetPreview.after }
         return renderedPreviewImages
     }
+    @State private var dustEditor = DustEditor()
+    @State private var dustTask: Task<Void, Never>?
+    @State private var dustGeneration = UUID()
     @State private var adjustingTone = false
     @State private var adjustingWhitePoint = false
     @State private var toneLocatorImage: CGImage?
@@ -211,7 +241,7 @@ struct ContentView: View {
         snapshotAppliedRecipe = applied
         namedSnapshots = recipe.snapshots
         let reload = colorSpace != recipe.colorSpace || rawSettings != (recipe.rawSettings ?? rawSettings)
-            || mapping.rawWhiteBalance != recipe.mapping.rawWhiteBalance
+            || mapping.rawWhiteBalance != recipe.mapping.rawWhiteBalance || mapping.doubleExposure != recipe.mapping.doubleExposure
         cropping = false
         adjustingTone = false; adjustingWhitePoint = false; pickingWhiteBalance = false
         comparingColor = false; comparingEffects = false
@@ -244,6 +274,7 @@ struct ContentView: View {
         // effects and LUTs that depend on HDR even when viewing their SDR result.
         result.rawWhiteBalance = mapping.rawWhiteBalance
         result.transform = mapping.transform
+        result.dustSpots = mapping.dustSpots
         return result
     }
 
@@ -252,7 +283,7 @@ struct ContentView: View {
             : ([.color, .effects].contains(panel) ? comparisonMapping(panel) : originalMapping)
         return DetailPreviewRequest(sourceID: previewDevelopment?.id, mapping: previewMapping,
             counterpart: counterpart, comparing: comparing || confirmingPreset != nil, hdr: hdrPreview,
-            region: previewRegion, enabled: !comparingMultiple && previewDevelopment?.fullResolutionReady == true && !loading && !cropping && !adjustingTone && !adjustingWhitePoint
+            region: previewRegion, enabled: !comparingMultiple && previewDevelopment?.dustSpots == (previewMapping.dustSpots ?? []) && previewDevelopment?.fullResolutionReady == true && !loading && !cropping && !adjustingTone && !adjustingWhitePoint
                 && (!editHistory.interacting || comparing))
     }
 
@@ -317,6 +348,75 @@ struct ContentView: View {
         #endif
     }
 
+    private func configureDustEditor() {
+        dustEditor.spots = mapping.dustSpots ?? []
+        dustEditor.geometry = development?.dustGeometry ?? DustGeometry()
+        dustEditor.sourceSize = CGSize(width: development?.width ?? 1, height: development?.height ?? 1)
+        dustEditor.transform = mapping.transform
+        dustEditor.change = { spots in mapping.dustSpots = spots.isEmpty ? nil : spots }
+        dustEditor.fit = { spot in sampleDust(spot, fit: true) }
+        dustEditor.resample = { spot in sampleDust(spot, fit: false) }
+        dustEditor.redraw()
+    }
+
+    private func sampleDust(_ spot: DustSpot, fit: Bool) {
+        guard let development else { return }
+        dustTask?.cancel()
+        let revision = UUID(); dustGeneration = revision
+        let worker = developer, originalSpots = mapping.dustSpots
+        let spots = originalSpots ?? []
+        dustEditor.busy = true; dustEditor.message = nil
+        dustTask = Task {
+            defer { if dustGeneration == revision { dustEditor.busy = false } }
+            do {
+                // Fit full-resolution data, even while the visible overview is lightweight.
+                let source = development
+                let profile = try await worker.dustProfile(source, spot: spot, spots: spots)
+                try Task.checkCancellation()
+                guard dustGeneration == revision, self.development?.id == development.id,
+                      mapping.dustSpots == originalSpots else { return }
+                if fit {
+                    let nativeSize = source.dustGeometry.nativeSize(source.linearSource.extent.size)
+                    let fitted = try await Task.detached(priority: .userInitiated) { try DustFitter.fit(profile, spot: spot, nativeSize: nativeSize) }.value
+                    try Task.checkCancellation()
+                    guard dustGeneration == revision, mapping.dustSpots == originalSpots else { return }
+                    // Re-sample after recentering so the graph and correction share coordinates.
+                    let centered = try await worker.dustProfile(source, spot: fitted.0, spots: spots)
+                    try Task.checkCancellation()
+                    guard dustGeneration == revision, mapping.dustSpots == originalSpots else { return }
+                    dustEditor.update(fitted.0)
+                    var graph = centered
+                    let background = fitted.1.background
+                    let edge = min(nativeSize.width, nativeSize.height)
+                    let shift = ((fitted.0.center.x-spot.center.x)*nativeSize.width*cos(spot.angle)
+                        + (fitted.0.center.y-spot.center.y)*nativeSize.height*sin(spot.angle))/edge
+                    if let first = background.first, let last = background.last {
+                        let delta = (last-first)*shift/spot.length
+                        graph.background = background.map { $0 + delta }
+                    }
+                    dustEditor.profile = graph
+                    commitHistory()
+                } else {
+                    var graph = profile
+                    let n = graph.values.count, count = max(1, n/5)
+                    let left = graph.values.prefix(count).reduce(0,+)/Double(count)
+                    let right = graph.values.suffix(count).reduce(0,+)/Double(count)
+                    graph.background = (0..<n).map { left + (right-left)*(Double($0)/Double(max(1,n-1))-0.1)/0.8 }
+                    dustEditor.profile = graph
+                }
+            } catch is CancellationError {} catch {
+                if dustGeneration == revision, mapping.dustSpots == originalSpots {
+                    dustEditor.message = error.localizedDescription
+                    // Keep a failed new fit as an editable, zero-strength spot.
+                    if !spots.contains(where: { $0.id == spot.id }) {
+                        mapping.dustSpots = dustEditor.spots
+                        commitHistory()
+                    }
+                }
+            }
+        }
+    }
+
     private func originalPreviewPoint(_ point: CGPoint) -> CGPoint {
         guard !cropping, let transform = previewMapping.transform else { return point }
         let source = transform.sourcePoint(CGPoint(x: point.x, y: 1 - point.y))
@@ -338,6 +438,7 @@ struct ContentView: View {
     }
 
     private var previewMapping: ToneMapping {
+        if isolatingRAW { return ToneMapping.fresh(isRAW: false, sourceHeadroom: 1) }
         if let activePresetPreview { return presetShowingBefore ? mapping : activePresetPreview.recipe.mapping }
         if comparingOriginal { return originalMapping }
         if comparingColor { return comparisonMapping(.color) }
@@ -436,6 +537,7 @@ struct ContentView: View {
                                 cropTransform: $cropTransform,
                                 savedTransform: previewMapping.transform,
                                 cropChanged: { cropPolygon = $0 },
+                                dustEditor: panel == .transform && dustEditor.enabled && !cropping && lockedFilm?.selection.contains(.dustCorrection) != true ? dustEditor : nil,
                                 sampleTool: pickingWhiteBalance ? .whiteBalance : nil,
                                 hover: { previewHover.position = $0 }) { center, radius in
                     let sampleCenter = originalPreviewPoint(center)
@@ -466,6 +568,11 @@ struct ContentView: View {
                     .allowedDynamicRange(hdrPreview ? .high : .standard)
                     .resizable()
                     .scaledToFit()
+                    .overlay {
+                        if panel == .transform, dustEditor.enabled, lockedFilm?.selection.contains(.dustCorrection) != true {
+                            DustMobileOverlay(editor: dustEditor, aspect: Double(previewImages.sdr.width) / Double(previewImages.sdr.height))
+                        }
+                    }
                     .padding(16)
                 }
                 #endif
@@ -575,7 +682,12 @@ struct ContentView: View {
         #endif
         .overlay(alignment: .topTrailing) {
             if !comparingMultiple, showingMetadata, let development {
-                CameraMetadataOverlay(metadata: development.metadata, whitePoint: development.whitePoint)
+                VStack(alignment: .trailing) {
+                    CameraMetadataOverlay(metadata: development.metadata, whitePoint: development.whitePoint)
+                    if let pair = mapping.doubleExposure {
+                        Text("\(pair.first) + \(pair.second)").font(.caption).modifier(PreviewOverlayStyle())
+                    }
+                }
             }
         }
     }
@@ -614,20 +726,32 @@ struct ContentView: View {
                         resetPerspective: { if !cropping { toggleTransform() }; cropTransform.horizontal = resetDefaults.mapping.transform?.horizontal ?? 0; cropTransform.vertical = resetDefaults.mapping.transform?.vertical ?? 0 },
                         resetRotation: { if !cropping { toggleTransform() }; cropTransform.rotation = resetDefaults.mapping.transform?.rotation ?? 0 },
                         resetAll: resetTransform).filmLock(.transform)
+                    DustControls(editor: dustEditor, spots: $mapping.dustSpots, activate: {
+                        if cropping { toggleTransform() }
+                        pickingWhiteBalance = false
+                        configureDustEditor()
+                    }).filmLock(.dustCorrection)
                     ActiveLUTControls(mapping: $mapping).filmLock(.lut)
                 } else if panel == .raw {
+                    if let pair = mapping.doubleExposure {
+                        Picker("Source", selection: $doubleSource) {
+                            Text("Source 1").tag(0)
+                            Text("Source 2").tag(1)
+                        }.pickerStyle(.segmented).padding(12)
+                        Text(doubleSource == 0 ? pair.first : pair.second).font(.caption).foregroundStyle(.secondary)
+                    }
                     RAWControls(colorSpace: Binding(get: { colorSpace }, set: { selected in
                         guard selected != colorSpace else { return }
                         colorSpace = selected
                         if let sourceURL { load(sourceURL, resetEdits: false) }
-                    }), colorSpaceDisabled: loading, settings: $rawSettings, isRAW: development?.isRAW == true, commit: {
+                    }), colorSpaceDisabled: loading, halfTurnsOnly: mapping.doubleExposure != nil && doubleSource == 1, settings: activeRAWSettings, isRAW: development?.isRAW == true, commit: {
                         if let sourceURL { load(sourceURL, resetEdits: false) }
-                    }, reset: {
-                        if let defaults = resetDefaults.rawSettings, let sourceURL {
-                            rawSettings = defaults
-                            load(sourceURL, resetEdits: false)
-                        }
-                    }, maximizingRange: maximizingRAWRange, maxRange: maximizeRAWRange)
+                    }, reset: resetActiveRAW, maximizingRange: maximizingRAWRange, maxRange: maximizeRAWRange)
+                    if mapping.doubleExposure != nil {
+                        VectorscopeView(decoderOnly: true, source: isolatedRAWDevelopment?.preview, hoverSource: previewImages?.sdr, hoverRevision: previewRevision, revision: isolatedRAWDevelopment?.id ?? previewRevision, colorSpace: colorSpace, mapping: Binding(get: { var value = mapping; value.rawWhiteBalance = activeRAWBalance.wrappedValue; return value },
+                            set: { mapping.whiteBalance = $0.whiteBalance; activeRAWBalance.wrappedValue = $0.rawWhiteBalance }), pickingWhiteBalance: $pickingWhiteBalance,
+                            resetRAWBalance: resetRAWWhiteBalanceAction, convertWhiteBalance: convertWhiteBalanceAction, commitRAWBalance: commitRAWWhiteBalance, rawBalancePreset: applyRAWBalancePreset)
+                    }
                 } else if panel == .color {
                     ColorControls(settings: $mapping.color, vertices: $mapping.vertexWarp, monochrome: mapping.blackAndWhite.isEnabled || mapping.color.monochrome, hdrMax: mapping.hdrMax, colorSpace: colorSpace)
                 } else if panel == .effects {
@@ -651,6 +775,20 @@ struct ContentView: View {
 
     private var editorScene: some View {
         editorColumns
+            .onChange(of: mapping.dustSpots) { _, _ in configureDustEditor() }
+            .onChange(of: mapping.transform) { _, _ in configureDustEditor() }
+            .onChange(of: development?.id) { _, _ in configureDustEditor() }
+            .onChange(of: development?.url) { _, _ in
+                dustTask?.cancel(); dustGeneration = UUID(); dustEditor.enabled = false
+                dustEditor.selected = nil; dustEditor.profile = nil; configureDustEditor()
+            }
+            .onChange(of: panel) { _, _ in dustEditor.enabled = false }
+            .onChange(of: cropping) { _, active in if active { dustEditor.enabled = false } }
+            .onChange(of: pickingWhiteBalance) { _, active in if active { dustEditor.enabled = false } }
+            .onChange(of: comparingMultiple) { _, active in
+                if active { dustEditor.enabled = false; dustTask?.cancel(); dustGeneration = UUID(); dustEditor.busy = false }
+            }
+
             .focusedSceneValue(\.editorUndo, undoActions)
             .focusedSceneValue(\.editorPanel, $panel)
             .focusedSceneValue(\.imageInfoVisible, $showingMetadata)
@@ -763,9 +901,54 @@ struct ContentView: View {
                 guard notification.object as? UUID == previewMapping.lutID else { return }
                 lutRevision += 1
             }
+            .task(id: "\(isolatingRAW)-\(doubleSource)-\(development?.id.uuidString ?? "")") {
+                guard isolatingRAW, let url = activeRAWURL else { isolatedRAWDevelopment = nil; return }
+                do {
+                    var settings = activeRAWSettings.wrappedValue
+                    settings.decoderMode = rawSettings.decoderMode
+                    let localGeometry = settings.orientation
+                    let firstGeometry = rawSettings.orientation
+                    let firstURL: URL? = sourceURL.flatMap { url in mapping.doubleExposure?.urls(relativeTo: url).first }
+                    let second = doubleSource == 1
+                    if second { settings.orientation = SourceOrientation() }
+                    let worker = RAWDeveloper(colorSpace: colorSpace, rawSettings: settings, rawWhiteBalance: activeRAWBalance.wrappedValue, interactive: true)
+                    let source = try await worker.develop(url, previewCanvas: previewCanvas, progressive: true)
+                    let overview = if second, let firstURL {
+                        try await worker.alignSecondPreview(source, firstURL: firstURL, firstGeometry: firstGeometry, secondGeometry: localGeometry)
+                    } else { source }
+                    try Task.checkCancellation()
+                    isolatedRAWDevelopment = overview
+                    if !source.fullResolutionReady {
+                        // Same progressive decode and bounded source cache as an ordinary file.
+                        let full = try await worker.prepareFullResolution(source)
+                        let displayed = if second, let firstURL {
+                            try await worker.alignSecondPreview(full, firstURL: firstURL, firstGeometry: firstGeometry, secondGeometry: localGeometry)
+                        } else { full }
+                        try Task.checkCancellation()
+                        isolatedRAWDevelopment = displayed
+                    }
+                } catch is CancellationError {} catch { errorMessage = error.localizedDescription }
+            }
+            .task(id: DustSourceRequest(source: development?.id, spots: mapping.dustSpots ?? [], loading: loading)) {
+                guard !loading, let current = development, current.dustSpots != (mapping.dustSpots ?? []) else { return }
+                let spots = mapping.dustSpots ?? []
+                do {
+                    try await Task.sleep(for: .milliseconds(150))
+                    await fullSourceWorker.discardSourcePixels()
+                    try Task.checkCancellation()
+                    let rebuilt = try await developer.replacingDust(current, spots: spots, canvas: previewCanvas)
+                    try Task.checkCancellation()
+                    guard development?.id == current.id, (mapping.dustSpots ?? []) == spots else { return }
+                    previewDetails.removeAll()
+                    development = rebuilt
+                    configureDustEditor()
+                    if dustEditor.enabled, let spot = dustEditor.selectedSpot { sampleDust(spot, fit: false) }
+                } catch is CancellationError {} catch { errorMessage = error.localizedDescription }
+            }
             .task(id: PreviewRequest(mapping: previewMapping,
-                                     sourceID: development?.id, loading: loading || comparingMultiple, canvas: previewCanvas, lutRevision: lutRevision)) {
-                guard let development, !loading, !comparingMultiple, confirmingPreset == nil else { return }
+                                     sourceID: previewDevelopment?.id, loading: loading || comparingMultiple, canvas: previewCanvas, lutRevision: lutRevision)) {
+                guard let development = previewDevelopment, !loading, !comparingMultiple, confirmingPreset == nil,
+                      development.dustSpots == (previewMapping.dustSpots ?? []) else { return }
                 do {
                     let renderedMapping = previewMapping
                     let canvas = previewCanvas
@@ -783,9 +966,10 @@ struct ContentView: View {
                     // A newer drag position supersedes this render.
                 } catch { errorMessage = error.localizedDescription }
             }
-            .task(id: FullSourceRequest(source: development?.id, previewReady: renderedPreviewImages != nil, loading: loading || comparingMultiple)) {
+            .task(id: FullSourceRequest(source: development?.id, previewReady: renderedPreviewImages != nil,
+                loading: loading || comparingMultiple || development?.dustSpots != (mapping.dustSpots ?? []))) {
                 guard !comparingMultiple, !loading, renderedPreviewImages != nil, let current = development,
-                      !current.fullResolutionReady else { return }
+                      !current.fullResolutionReady, current.dustSpots == (mapping.dustSpots ?? []) else { return }
                 // A separate actor keeps decoding from blocking overview edits and hover work.
                 let worker = fullSourceWorker
                 do {
@@ -826,9 +1010,9 @@ struct ContentView: View {
                     // Detail is an optional refinement; retain the usable overview on failure.
                 }
             }
-            .task(id: HistogramRequest(sourceID: development?.id, loading: loading || comparingMultiple, previewReady: previewImages != nil, bins: histogramBins)) {
+            .task(id: HistogramRequest(sourceID: previewDevelopment?.id, loading: loading || comparingMultiple, previewReady: previewImages != nil, bins: histogramBins)) {
                 histogramError = nil
-                guard let development, !loading, !comparingMultiple, previewImages != nil else {
+                guard let development = previewDevelopment, !loading, !comparingMultiple, previewImages != nil else {
                     histogram = nil
                     return
                 }
@@ -1039,7 +1223,7 @@ struct ContentView: View {
         if resetEdits { cropping = false; cropRatioPosition = 5; cropTransform = CropTransform(); cropPolygon = [CGPoint(x: 0, y: 0), CGPoint(x: 1, y: 0), CGPoint(x: 1, y: 1), CGPoint(x: 0, y: 1)] }
         sourceURL = url
         loading = true
-        if resetEdits { mapping = ToneMapping(); savedRecipe = nil; recipeSourceURL = nil; baselineRecipe = nil; namedSnapshots = []; savedSnapshotDate = nil }
+        if resetEdits { doubleSource = 0; isolatedRAWDevelopment = nil; mapping = ToneMapping(); savedRecipe = nil; recipeSourceURL = nil; baselineRecipe = nil; namedSnapshots = []; savedSnapshotDate = nil }
         // A same-file RAW rebuild keeps the existing display alive. The preview
         // task replaces it only after the new source has been decoded and rendered.
         if resetEdits {
@@ -1098,16 +1282,16 @@ struct ContentView: View {
                     mapping = recipe.mapping
                 }
                 if resetEdits || interactiveSpace != colorSpace {
-                    developer = RAWDeveloper(colorSpace: colorSpace, rawSettings: options, rawWhiteBalance: mapping.rawWhiteBalance, interactive: true)
-                    fullSourceWorker = RAWDeveloper(colorSpace: colorSpace, rawSettings: options, rawWhiteBalance: mapping.rawWhiteBalance, interactive: true)
+                    developer = RAWDeveloper(colorSpace: colorSpace, rawSettings: options, rawWhiteBalance: mapping.rawWhiteBalance, doubleExposure: mapping.doubleExposure, interactive: true)
+                    fullSourceWorker = RAWDeveloper(colorSpace: colorSpace, rawSettings: options, rawWhiteBalance: mapping.rawWhiteBalance, doubleExposure: mapping.doubleExposure, interactive: true)
                     detailWorker = RAWDeveloper(colorSpace: colorSpace, interactive: true)
                     interactiveSpace = colorSpace
                 } else {
-                    await developer.updateRAWSettings(options, whiteBalance: mapping.rawWhiteBalance)
-                    await fullSourceWorker.updateRAWSettings(options, whiteBalance: mapping.rawWhiteBalance)
+                    await developer.updateRAWSettings(options, whiteBalance: mapping.rawWhiteBalance, doubleExposure: mapping.doubleExposure)
+                    await fullSourceWorker.updateRAWSettings(options, whiteBalance: mapping.rawWhiteBalance, doubleExposure: mapping.doubleExposure)
                 }
                 histogramWorker = RAWDeveloper(colorSpace: colorSpace, rawSettings: options, rawWhiteBalance: mapping.rawWhiteBalance)
-                let loaded = try await developer.develop(url, previewCanvas: CGSize(width: 2560, height: 2560), progressive: true)
+                let loaded = try await developer.develop(url, previewCanvas: CGSize(width: 2560, height: 2560), progressive: true, dustSpots: mapping.dustSpots ?? [])
                 let defaults = loaded.rawDefaults ?? RAWSettings()
                 rawSettings = options?.resolved(using: defaults) ?? defaults
                 if resetEdits {
@@ -1137,7 +1321,7 @@ struct ContentView: View {
                         draftModifiedAt: storedDraft?.modifiedAt ?? draft?.modifiedAt)
                     baselineRecipe = draft?.baseline ?? currentRecipe
                 }
-                if resetEdits { asShotBalance = loaded.isRAW ? try? RAWWhiteBalance.asShot(url) : nil }
+                if resetEdits { asShotBalance = loaded.isRAW ? try? RAWWhiteBalance.asShot(mapping.doubleExposure?.urls(relativeTo: url).first ?? url) : nil }
                 previewDetails.removeAll()
                 development = loaded
 
@@ -1150,7 +1334,7 @@ struct ContentView: View {
         guard let lockedFilm else { return }
         let updated = lockedFilm.applying(to: currentRecipe)
         guard updated.mapping != mapping || updated.rawSettings != currentRecipe.rawSettings else { return }
-        let reload = updated.mapping.rawWhiteBalance != mapping.rawWhiteBalance || updated.rawSettings != currentRecipe.rawSettings
+        let reload = updated.mapping.rawWhiteBalance != mapping.rawWhiteBalance || updated.rawSettings != currentRecipe.rawSettings || updated.mapping.doubleExposure != mapping.doubleExposure
         mapping = updated.mapping
         if let raw = updated.rawSettings { rawSettings = raw }
         var session = snapshotSession
@@ -1181,7 +1365,7 @@ struct ContentView: View {
             do {
                 var resetRAW = originalRAW
                 if development.isRAW {
-                    if maximizeRange { resetRAW = try await worker.maximumRAWRange(development.url) }
+                    if maximizeRange { resetRAW = try await worker.maximumRAWRange(mapping.doubleExposure?.urls(relativeTo: development.url).first ?? development.url) }
                     else { resetRAW.values[.exposure] = 0 }
                     if let preset, preset.selection.contains(.exposure), let exposure = preset.recipe.rawSettings?.values[.exposure] {
                         resetRAW.values[.exposure] = exposure
@@ -1477,12 +1661,12 @@ struct ContentView: View {
     }
 
     private var histogramView: some View {
-        LinearHistogram(development: development, histogram: histogram,
+        LinearHistogram(sourceOnly: isolatingRAW, development: previewDevelopment, histogram: histogram,
                         histogramError: histogramError, binCount: $histogramBins,
-                        mapping: $mapping, sdrSource: previewImages?.sdr,
+                        mapping: isolatingRAW ? .constant(previewMapping) : $mapping, sdrSource: previewImages?.sdr,
                         revision: previewRevision, colorSpace: colorSpace, hdrPreview: hdrPreview,
                         comparingOriginal: $comparingOriginalMouse,
-                        showingSDR: sdrHistogramBinding,
+                        showingSDR: isolatingRAW ? .constant(false) : sdrHistogramBinding,
                         hoverTransform: !showingSDRHistogram && !cropping ? previewMapping.transform : nil,
                         onWhitePointEditingChanged: { editing in
                             adjustingWhitePoint = editing
@@ -1527,8 +1711,8 @@ struct ContentView: View {
                         hoverRevision: previewRevision,
                         revision: development?.id ?? previewRevision,
                         colorSpace: colorSpace, mapping: Binding(
-                    get: { previewMapping },
-                    set: { mapping.whiteBalance = $0.whiteBalance; mapping.rawWhiteBalance = $0.rawWhiteBalance }), pickingWhiteBalance: $pickingWhiteBalance,
+                    get: { var value = previewMapping; if mapping.doubleExposure != nil { value.rawWhiteBalance = nil }; return value },
+                    set: { mapping.whiteBalance = $0.whiteBalance; if mapping.doubleExposure == nil { mapping.rawWhiteBalance = $0.rawWhiteBalance } }), pickingWhiteBalance: $pickingWhiteBalance,
                         resetRAWBalance: resetRAWWhiteBalanceAction,
                         convertWhiteBalance: convertWhiteBalanceAction, commitRAWBalance: commitRAWWhiteBalance)
         }
@@ -1540,9 +1724,25 @@ struct ContentView: View {
         return {
             guard let sourceURL else { return }
             do {
-                mapping.rawWhiteBalance = try resetDefaults.mapping.rawWhiteBalance ?? RAWWhiteBalance.asShot(sourceURL)
+                activeRAWBalance.wrappedValue = try resetDefaults.mapping.rawWhiteBalance ?? RAWWhiteBalance.asShot(activeRAWURL ?? sourceURL)
                 mapping.whiteBalance = resetDefaults.mapping.whiteBalance
                 commitRAWWhiteBalance()
+            } catch { errorMessage = error.localizedDescription }
+        }
+    }
+
+    private func resetActiveRAW() {
+        guard let url = activeRAWURL, let document = sourceURL else { return }
+        let selected = doubleSource
+        Task {
+            do {
+                let worker = RAWDeveloper(colorSpace: colorSpace)
+                let fresh = DevelopmentRecipe(colorSpace: colorSpace, mapping: .fresh(isRAW: true, sourceHeadroom: 1))
+                let resolved = try await worker.resolveExportRecipe(url, recipe: fresh, isRAW: true, maximizeRange: false)
+                let defaults = EditLibrary.shared.rawDefaultPreset?.applying(to: resolved) ?? resolved
+                guard sourceURL == document, doubleSource == selected else { return }
+                if let settings = defaults.rawSettings { activeRAWSettings.wrappedValue = settings }
+                load(document, resetEdits: false)
             } catch { errorMessage = error.localizedDescription }
         }
     }
@@ -1550,21 +1750,27 @@ struct ContentView: View {
     private func maximizeRAWRange() {
         guard let development, development.isRAW, !loading, !maximizingRAWRange else { return }
         maximizingRAWRange = true
-        let originalSettings = rawSettings
-        let originalBalance = mapping.rawWhiteBalance
+        let originalSettings = activeRAWSettings.wrappedValue
+        let originalBalance = activeRAWBalance.wrappedValue
         let worker = RAWDeveloper(colorSpace: colorSpace, rawSettings: originalSettings, rawWhiteBalance: originalBalance)
         Task {
             defer { maximizingRAWRange = false }
             do {
-                let settings = try await worker.maximumRAWRange(development.url)
+                let settings = try await worker.maximumRAWRange(activeRAWURL ?? development.url)
                 guard self.development?.id == development.id, !loading,
-                      rawSettings == originalSettings, mapping.rawWhiteBalance == originalBalance else { return }
-                rawSettings = settings
+                      activeRAWSettings.wrappedValue == originalSettings, activeRAWBalance.wrappedValue == originalBalance else { return }
+                activeRAWSettings.wrappedValue = settings
                 load(development.url, resetEdits: false)
             } catch {
                 if self.development?.id == development.id { errorMessage = error.localizedDescription }
             }
         }
+    }
+
+    private func applyRAWBalancePreset(_ temperature: Float) {
+        guard !loading, let sourceURL else { return }
+        activeRAWBalance.wrappedValue = RAWWhiteBalance(temperature: temperature, tint: 0)
+        load(sourceURL, resetEdits: false)
     }
 
     private func commitRAWWhiteBalance() {
@@ -1580,12 +1786,15 @@ struct ContentView: View {
     private func bakeWhiteBalanceIntoRAW() {
         guard let development, development.isRAW, !loading else { return }
         do {
-            let baked = try RAWWhiteBalance.baked(currentRecipe, source: development.url)
+            var input = currentRecipe.transferable
+            input.mapping.rawWhiteBalance = activeRAWBalance.wrappedValue
+            let baked = try RAWWhiteBalance.baked(input, source: activeRAWURL ?? development.url)
             if baked.mapping.whiteBalance != WhiteBalance() {
                 errorMessage = String(localized: "White balance limits reached. The remaining adjustment has been retained in RGB gains.")
             }
             guard baked.mapping != mapping else { return }
-            mapping = baked.mapping
+            mapping.whiteBalance = baked.mapping.whiteBalance
+            activeRAWBalance.wrappedValue = baked.mapping.rawWhiteBalance
             load(development.url, resetEdits: false)
         } catch { errorMessage = error.localizedDescription }
     }
@@ -1709,7 +1918,7 @@ struct ContentView: View {
                 case .pasteEdit: break
                 case .export:
                     beginExportOptions(target)
-                case .deleteEdit, .showInFinder, .reference: break
+                case .deleteEdit, .showInFinder, .reference, .doubleExposure: break
                 }
             } catch { errorMessage = error.localizedDescription }
         }
@@ -1729,6 +1938,7 @@ struct ContentView: View {
             var updatedRecipe = DevelopmentRecipe(colorSpace: destination.colorSpace, mapping: updated,
                 rawSettings: target.isRAW ? selection.applyingRAW(pastedSettings.rawSettings, to: destination.rawSettings) : destination.rawSettings,
                 snapshots: destination.snapshots)
+            updatedRecipe.applySecondRAW(from: pastedSettings.mapping, raw: pastedSettings.rawSettings, selection: selection)
             let session = SnapshotSession(selected: "unsaved", draft: SnapshotEdit(updatedRecipe), draftModifiedAt: Date())
             updatedRecipe.draftSnapshot = session.persistedDraft
             editHistory.record(url, from: destination, to: updatedRecipe, name: String(localized: "Paste Edits"))
@@ -1746,14 +1956,55 @@ struct ContentView: View {
             }
             let previousRAWBalance = mapping.rawWhiteBalance
             mapping = pastedSettings.applying(selection, to: mapping, reference: development?.whitePoint, space: colorSpace)
+            var applied = currentRecipe
+            applied.applySecondRAW(from: pastedSettings.mapping, raw: pastedSettings.rawSettings, selection: selection)
+            mapping.doubleExposure = applied.mapping.doubleExposure
             editHistory.observe(currentRecipe, name: String(localized: "Paste Edits"))
             editHistory.flush()
-            if mapping.rawWhiteBalance != previousRAWBalance || rawSettings != previousRAWSettings { commitRAWWhiteBalance() }
+            if mapping.doubleExposure != nil || mapping.rawWhiteBalance != previousRAWBalance || rawSettings != previousRAWSettings { commitRAWWhiteBalance() }
+        }
+    }
+
+    private func createDoubleExposure(_ urls: [URL]) {
+        guard urls.count == 2 else { return }
+        fileActionBusy = true
+        Task {
+            defer { fileActionBusy = false }
+            do {
+                var recipes: [DevelopmentRecipe] = []
+                for url in urls {
+                    let target = try await BrowserRecipeTarget.fresh(url)
+                    guard target.isRAW, !DoubleExposure.isDocument(url) else { throw DoubleExposure.Failure.invalid }
+                    let worker = RAWDeveloper(colorSpace: .displayP3)
+                    let fresh = try await worker.resolveExportRecipe(url, recipe: target.recipe, isRAW: true,
+                        maximizeRange: UserDefaults.standard.bool(forKey: RAWSettings.maximizeRangePreferenceKey))
+                    recipes.append(EditLibrary.shared.rawDefaultPreset?.applying(to: fresh) ?? fresh)
+                }
+                var recipe = recipes[0]
+                let folder = urls[0].deletingLastPathComponent()
+                recipe.mapping.doubleExposure = DoubleExposure(first: urls[0].lastPathComponent, second: urls[1].lastPathComponent,
+                    secondRAW: recipes[1].rawSettings ?? RAWSettings(), secondBalance: recipes[1].mapping.rawWhiteBalance)
+                recipe.mapping.setAutomaticHDRTarget()
+                recipe = lockedFilm?.applying(to: recipe) ?? recipe
+                var suffix = 1
+                var destination = folder.appendingPathComponent("Double Exposure.double.darkmelon.xmp")
+                while FileManager.default.fileExists(atPath: destination.path) {
+                    suffix += 1; destination = folder.appendingPathComponent("Double Exposure \(suffix).double.darkmelon.xmp")
+                }
+                // Validate actual decoder extents before creating the document.
+                let worker = RAWDeveloper(colorSpace: recipe.colorSpace, rawSettings: recipe.rawSettings,
+                    rawWhiteBalance: recipe.mapping.rawWhiteBalance, doubleExposure: recipe.mapping.doubleExposure)
+                _ = try await worker.develop(destination, progressive: true)
+                try await RecipeStore.shared.save(recipe, for: destination)
+                browserModel.navigate(to: folder)
+                load(destination, resetEdits: true)
+            } catch { errorMessage = error.localizedDescription }
         }
     }
 
     private func performMultipleFileAction(_ action: BrowserFileAction, urls: [URL]) {
         guard !fileActionBusy, !urls.isEmpty else { return }
+        if action == .doubleExposure { createDoubleExposure(urls); return }
         if action == .deleteEdit { deleteEditURLs = urls; return }
         do {
             pastedSettings = try SettingsClipboard.read()
@@ -1798,8 +2049,16 @@ struct ContentView: View {
                 } catch { failures.append("\(url.lastPathComponent): \(error.localizedDescription)") }
             }
             if reloadCurrent, let url = recipeSourceURL {
-                baselineRecipe = currentRecipe
-                load(url, resetEdits: true)
+                if DoubleExposure.isDocument(url) {
+                    sourceURL = nil; recipeSourceURL = nil; baselineRecipe = nil; savedRecipe = nil
+                    namedSnapshots = []; savedSnapshotDate = nil; snapshotSession = SnapshotSession()
+                    development = nil; isolatedRAWDevelopment = nil; renderedPreviewImages = nil
+                    previewDetails.removeAll(); histogram = nil; mapping = ToneMapping()
+                    comparisonFiles = []; comparisonSnapshots = []; filename = "Dark Melon"
+                } else {
+                    baselineRecipe = currentRecipe
+                    load(url, resetEdits: true)
+                }
             }
             if !failures.isEmpty { errorMessage = failures.joined(separator: "\n") }
         }
@@ -1915,6 +2174,7 @@ struct ContentView: View {
 }
 
 private struct LinearHistogram: View {
+    var sourceOnly = false
     let development: RAWDevelopment?
     let histogram: HistogramData?
     let histogramError: String?
@@ -1938,18 +2198,18 @@ private struct LinearHistogram: View {
     @State private var zoomSpace: ProcessingColorSpace?
     @State private var completedZoomRequest: HistogramZoomRequest?
     private var inputMaximum: Double {
-        draggingInputMaximum ?? HistogramInputRange.maximum(white: mapping.white, hdr: hdrPreview, encoded: showingSDR)
+        draggingInputMaximum ?? HistogramInputRange.maximum(white: mapping.white, hdr: hdrPreview, encoded: showingSDR, sourceMaximum: mapping.sourceMaximum)
     }
     private var zoomRequest: HistogramZoomRequest {
         HistogramZoomRequest(sourceID: development?.id, bins: binCount, upper: inputMaximum, space: colorSpace)
     }
     private var usingZoomHistogram: Bool {
-        !showingSDR && inputMaximum < 1 && completedZoomRequest == zoomRequest
+        !showingSDR && inputMaximum < mapping.sourceMaximum && completedZoomRequest == zoomRequest
     }
     private var displayedHistogram: HistogramData? {
         showingSDR ? sdrHistogram : usingZoomHistogram ? zoomHistogram : histogram
     }
-    private var histogramMaximum: Double { usingZoomHistogram ? inputMaximum : 1 }
+    private var histogramMaximum: Double { usingZoomHistogram ? inputMaximum : (showingSDR ? 1 : mapping.sourceMaximum) }
 
     private let colors: [Color] = [.red, .green, .blue]
 
@@ -1957,11 +2217,12 @@ private struct LinearHistogram: View {
         VStack(spacing: 8) {
             HStack {
                 Button(showingSDR ? "SDR RGB" : "Linear RGB") { showingSDR.toggle() }
+                    .disabled(sourceOnly)
                     .fontWeight(.medium)
                     .help("Toggle the linear source histogram and the developed SDR preview histogram. Black and white points can only be adjusted in Linear RGB.")
                 Spacer()
                 HoldCompareButton(comparing: $comparingOriginal, title: "Original")
-                    .disabled(development == nil)
+                    .disabled(development == nil || sourceOnly)
                     .help("Hold to preview Original in SDR with default tone settings and the current transform. Hold C for the same preview.")
             }
             HStack {
@@ -2013,7 +2274,7 @@ private struct LinearHistogram: View {
             }
             .clipped()
             .overlay {
-                if !showingSDR { HistogramToneCurve(mapping: mapping, hdrPreview: hdrPreview, inputMaximum: inputMaximum).allowsHitTesting(false) }
+                if !sourceOnly && !showingSDR { HistogramToneCurve(mapping: mapping, hdrPreview: hdrPreview, inputMaximum: inputMaximum).allowsHitTesting(false) }
             }
             .overlay {
                 HoverPixelOverlay(source: showingSDR ? sdrSource : development?.preview,
@@ -2037,7 +2298,7 @@ private struct LinearHistogram: View {
                 .allowsHitTesting(false)
             }
             .overlay {
-                if !showingSDR { HistogramPoints(mapping: $mapping, inputMaximum: inputMaximum, onWhitePointEditingChanged: { editing in
+                if !sourceOnly && !showingSDR { HistogramPoints(mapping: $mapping, inputMaximum: inputMaximum, onWhitePointEditingChanged: { editing in
                     // Freeze the axis during a drag so zoom cannot feed back into picking.
                     if editing { draggingInputMaximum = inputMaximum }
                     else { draggingInputMaximum = nil }
@@ -2067,7 +2328,7 @@ private struct LinearHistogram: View {
         .background(.bar)
         .task(id: zoomRequest) {
             let request = zoomRequest
-            guard request.upper < 1, !showingSDR, let source = development?.preview, let id = request.sourceID else { return }
+            guard request.upper < mapping.sourceMaximum, !showingSDR, let source = development?.preview, let id = request.sourceID else { return }
             do {
                 if zoomWorker == nil || zoomSpace != colorSpace {
                     zoomWorker = try GPUHistogram(colorSpace: colorSpace)
@@ -2161,4 +2422,10 @@ private struct ImageExportSession: Identifiable {
     let id = UUID()
     let development: RAWDevelopment
     let recipe: DevelopmentRecipe
+}
+
+private struct DustSourceRequest: Equatable {
+    let source: UUID?
+    let spots: [DustSpot]
+    let loading: Bool
 }

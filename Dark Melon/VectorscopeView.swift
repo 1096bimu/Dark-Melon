@@ -3,6 +3,7 @@ import SwiftUI
 struct VectorscopeView: View {
     @Environment(\.resetMapping) private var defaults
     @Environment(\.lockedFilmItems) private var lockedItems
+    var decoderOnly = false
     let source: CGImage?
     let hoverSource: CGImage?
     let hoverRevision: UUID
@@ -13,7 +14,9 @@ struct VectorscopeView: View {
     var resetRAWBalance: (() -> Void)? = nil
     var convertWhiteBalance: (() -> Void)? = nil
     var commitRAWBalance: () -> Void = {}
+    var rawBalancePreset: ((Float) -> Void)? = nil
     private func setRAWBalance(temperature: Float) {
+        if let rawBalancePreset { rawBalancePreset(temperature); return }
         guard var whiteBalance = mapping.rawWhiteBalance else { return }
         whiteBalance.temperature = temperature
         whiteBalance.tint = 0
@@ -55,7 +58,7 @@ struct VectorscopeView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if !mapping.color.monochrome {
+            if !decoderOnly && !mapping.color.monochrome {
                 HStack {
                     Text("Vectorscope").fontWeight(.medium)
                     Spacer()
@@ -235,7 +238,7 @@ struct VectorscopeView: View {
         .font(.caption)
         .padding(12)
         .task(id: ScopeRequest(revision: source == nil ? nil : revision, mapping: mapping, zoom: magnification, space: colorSpace)) {
-            guard !mapping.color.monochrome, let source else { scope = nil; return }
+            guard !decoderOnly, !mapping.color.monochrome, let source else { scope = nil; return }
             do {
                 if worker == nil { worker = try GPUVectorscope() }
                 let result = try await worker!.render(source: source, mapping: mapping, space: colorSpace, zoom: magnification)

@@ -131,8 +131,8 @@ struct HEIFExportOptions: View {
     private var outputWidth: Int { max(1, Int((Double(baseSize.width) * settings.scale).rounded())) }
     private var outputHeight: Int { max(1, Int((Double(baseSize.height) * settings.scale).rounded())) }
 
-    @concurrent private static func makeWorker(space: ProcessingColorSpace, raw: RAWSettings) async -> RAWDeveloper {
-        RAWDeveloper(colorSpace: space, rawSettings: raw, exporting: true, memoryLimitMB: BatchExportBudget.singleFileMegabytes)
+    @concurrent private static func makeWorker(space: ProcessingColorSpace, raw: RAWSettings, mapping: ToneMapping) async -> RAWDeveloper {
+        RAWDeveloper(colorSpace: space, rawSettings: raw, rawWhiteBalance: mapping.rawWhiteBalance, doubleExposure: mapping.doubleExposure, exporting: true, memoryLimitMB: BatchExportBudget.singleFileMegabytes)
     }
 
     private func syncDimensions() {
@@ -212,7 +212,7 @@ struct HEIFExportOptions: View {
         .onChange(of: settings.scale) { _, _ in syncDimensions() }
         .onChange(of: editingDimension) { previous, _ in commitDimension(previous) }
         .task {
-            let created = await Self.makeWorker(space: colorSpace, raw: rawSettings)
+            let created = await Self.makeWorker(space: colorSpace, raw: rawSettings, mapping: mapping)
             guard !Task.isCancelled else { return }
             lutOutputsSDR = await created.exportOutputsSDR(mapping)
             guard !Task.isCancelled else { return }

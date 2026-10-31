@@ -14,7 +14,7 @@ actor RecipeStore {
     nonisolated private let maximumSize = 8 * 1024 * 1024
 
     nonisolated static func sidecarURL(for source: URL) -> URL {
-        source.appendingPathExtension("darkmelon.xmp")
+        DoubleExposure.isDocument(source) ? source : source.appendingPathExtension("darkmelon.xmp")
     }
 
     func load(for source: URL) throws -> DevelopmentRecipe? {
@@ -63,7 +63,7 @@ actor RecipeStore {
         return recipe
     }
 
-    func delete(for source: URL) throws {
+    func delete(for source: URL) async throws {
         Self.writeLock.lock()
         defer { Self.writeLock.unlock() }
         let accessed = source.startAccessingSecurityScopedResource()

@@ -90,7 +90,7 @@ import SwiftUI
                     guard let item = request.plan.items.first else { throw CocoaError(.fileReadUnknown) }
                     let recipe = item.recipe
                     let worker = request.cachedWorker ?? RAWDeveloper(colorSpace: recipe.colorSpace,
-                        rawSettings: recipe.rawSettings, rawWhiteBalance: recipe.mapping.rawWhiteBalance, lutConfiguration: item.lutConfiguration, exporting: true, memoryLimitMB: BatchExportBudget.singleFileMegabytes)
+                        rawSettings: recipe.rawSettings, rawWhiteBalance: recipe.mapping.rawWhiteBalance, doubleExposure: recipe.mapping.doubleExposure, lutConfiguration: item.lutConfiguration, exporting: true, memoryLimitMB: BatchExportBudget.singleFileMegabytes)
                     await worker.useLUTConfiguration(item.lutConfiguration)
                     job.active = 1
                     let bytes: Data

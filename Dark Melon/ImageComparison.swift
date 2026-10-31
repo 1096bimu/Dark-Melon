@@ -77,7 +77,7 @@ enum ComparisonMode: String, CaseIterable {
         jobs.append((key, operation)); drain()
     }
     private func drain() {
-        let pixels = panes.compactMap { $0.development.map { Double($0.width) * Double($0.height) } }.max() ?? 0
+        let pixels = panes.compactMap { $0.development.map { Double($0.width) * Double($0.height) * (DoubleExposure.isDocument($0.url) ? 3 : 1) } }.max() ?? 0
         while running.count < RAWImageCache.shared.comparisonParallelism(pixels: pixels), !jobs.isEmpty {
             let (_, operation) = jobs.removeFirst(), id = UUID()
             running[id] = Task { [weak self] in
@@ -149,7 +149,7 @@ enum ComparisonMode: String, CaseIterable {
         enqueue("detail:" + id) { [weak self] in
             guard let self, self.generation == token, self.detailRevisions[id] == revision else { return }
             do {
-                let full = development.fullResolutionReady ? development : try await sources.fullResolution(key: .init(url: development.url.standardizedFileURL, space: recipe.colorSpace, raw: recipe.rawSettings, balance: recipe.mapping.rawWhiteBalance), worker: worker, development: development)
+                let full = development.fullResolutionReady ? development : try await sources.fullResolution(key: .init(url: development.url.standardizedFileURL, space: recipe.colorSpace, raw: recipe.rawSettings, balance: recipe.mapping.rawWhiteBalance, doubleExposure: recipe.mapping.doubleExposure, dustSpots: recipe.mapping.dustSpots ?? []), worker: worker, development: development)
                 try Task.checkCancellation()
                 guard self.generation == token, self.detailRevisions[id] == revision else { return }
                 let detail = try await sources.detail(development: full, worker: worker, mapping: recipe.mapping, hdr: outputHDR, region: region)
@@ -354,6 +354,8 @@ actor ComparisonSources {
         var space: ProcessingColorSpace
         var raw: RAWSettings?
         var balance: RAWWhiteBalance?
+        var doubleExposure: DoubleExposure? = nil
+        var dustSpots: [DustSpot] = []
     }
     private struct RenderKey: Equatable {
         var source: UUID
@@ -389,7 +391,7 @@ actor ComparisonSources {
     func preview(key: Key, worker: RAWDeveloper, canvas: CGSize) async throws -> RAWDevelopment {
         try Task.checkCancellation()
         if let task = previews.first(where: { $0.0 == key })?.1 { return try await task.value }
-        let task = Task { try await worker.develop(key.url, previewCanvas: canvas, progressive: true) }
+        let task = Task { try await worker.develop(key.url, previewCanvas: canvas, progressive: true, dustSpots: key.dustSpots) }
         previews.append((key, task))
         return try await task.value
     }

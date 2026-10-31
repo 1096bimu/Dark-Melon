@@ -54,7 +54,7 @@ nonisolated enum BatchExportRunner {
                             try Task.checkCancellation()
                             let recipe = item.recipe
                             let worker = RAWDeveloper(colorSpace: recipe.colorSpace, rawSettings: recipe.rawSettings,
-                                                      rawWhiteBalance: recipe.mapping.rawWhiteBalance, lutConfiguration: item.lutConfiguration,
+                                                      rawWhiteBalance: recipe.mapping.rawWhiteBalance, doubleExposure: recipe.mapping.doubleExposure, lutConfiguration: item.lutConfiguration,
                                                       exporting: true, memoryLimitMB: allocation.megabytesPerFile)
                             try await worker.exportBatch(source, mapping: recipe.mapping, settings: settings, destination: destination)
                             return Result(source: source, cost: cost, error: nil, cancelled: false)

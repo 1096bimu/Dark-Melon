@@ -31,6 +31,7 @@ struct HDRImagePreview: NSViewRepresentable {
     @Binding var cropTransform: CropTransform
     let savedTransform: TransformSettings?
     let cropChanged: ([CGPoint]) -> Void
+    var dustEditor: DustEditor? = nil
     let sampleTool: PreviewSampleTool?
     let hover: (CGPoint?) -> Void
     let sample: (CGPoint, CGFloat) -> Void
@@ -50,11 +51,17 @@ struct HDRImagePreview: NSViewRepresentable {
         view.regionChanged = regionChanged
         view.display(image, sdrImage: sdrImage, surface: surface, sdrSurface: sdrSurface, sourceSize: sourceSize, detail: detail,
                      hdr: hdr, sourceID: sourceID, screenSaverActive: screenSaverActive)
+        if view.dustOverlay.superview == nil { view.addSubview(view.dustOverlay) }
+        view.dustOverlay.frame = view.bounds
+        view.dustOverlay.editor = dustEditor
+        dustEditor?.redraw = { [weak view] in view?.dustOverlay.refresh() }
+        view.dustOverlay.refresh()
         view.sample = sample
         view.sampleTool = sampleTool
     }
 
     final class ImageDisplay: NSView {
+        let dustOverlay = DustOverlay()
         var allowsWhiteBalance = true
         var comparisonClip: CGRect? { didSet { if oldValue != comparisonClip { positionImage() } } }
         var viewportChanged: (() -> Void)?
@@ -387,6 +394,9 @@ struct HDRImagePreview: NSViewRepresentable {
             imageLayer.position = crop == nil ? CGPoint(x: bounds.midX + offset.x, y: bounds.midY + offset.y)
                                              : CGPoint(x: bounds.midX, y: bounds.midY)
             imageLayer.transform = crop == nil ? CATransform3DIdentity : cropTransform.matrix(in: crop ?? bounds, pan: offset)
+            dustOverlay.frame = bounds
+            dustOverlay.imageFrame = CGRect(x: imageLayer.frame.minX, y: bounds.height-imageLayer.frame.maxY, width: imageLayer.frame.width, height: imageLayer.frame.height)
+            dustOverlay.refresh()
             sdrLayer.bounds = imageLayer.bounds
             sdrLayer.position = imageLayer.position
             sdrLayer.transform = imageLayer.transform

@@ -9,6 +9,7 @@ nonisolated struct RAWDefaultPreset: Sendable, Equatable {
         var result = fallback
         result.mapping = selection.applying(recipe.mapping, to: fallback.mapping)
         result.rawSettings = selection.applyingRAW(recipe.rawSettings, to: fallback.rawSettings)
+        result.applySecondRAW(from: recipe.mapping, raw: recipe.rawSettings, selection: selection)
         return result
     }
 }

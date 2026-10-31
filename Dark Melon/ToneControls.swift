@@ -43,7 +43,7 @@ struct HistogramPoints: View {
     }
 
     private func update(_ value: Double) {
-        mapping.white = min(1, max(ToneMapping.minimumRange, value))
+        mapping.white = min(mapping.sourceMaximum, max(ToneMapping.minimumRange, value))
         mapping.tonePosition = min(mapping.tonePosition, mapping.white)
         mapping.setAutomaticHDRTarget()
     }
@@ -52,14 +52,13 @@ struct HistogramPoints: View {
 /// A shifted logarithm keeps zero reachable while spreading out low luminances.
 nonisolated enum ToneSliderScale {
     private static let knee = 0.001
-    private static let span = log1p(1 / knee)
 
-    static func position(for tone: Double) -> Double {
-        1 - log1p(tone.clamped(to: 0...1) / knee) / span
+    static func position(for tone: Double, maximum: Double = 1) -> Double {
+        1 - log1p(tone.clamped(to: 0...maximum) / knee) / log1p(maximum / knee)
     }
 
-    static func tone(at position: Double) -> Double {
-        (knee * expm1((1 - position.clamped(to: 0...1)) * span)).clamped(to: 0...1)
+    static func tone(at position: Double, maximum: Double = 1) -> Double {
+        (knee * expm1((1 - position.clamped(to: 0...1)) * log1p(maximum / knee))).clamped(to: 0...maximum)
     }
 }
 
@@ -128,15 +127,15 @@ struct SlopeEditor: View {
                 HStack {
                     Image(systemName: "swirl.circle.righthalf.filled")
                         .frame(width: 22).accessibilityHidden(true)
-                EditorSlider(value: Binding(get: { ToneSliderScale.position(for: min(mapping.tonePosition, mapping.white)) },
+                EditorSlider(value: Binding(get: { ToneSliderScale.position(for: min(mapping.tonePosition, mapping.white), maximum: mapping.sourceMaximum) },
                                       set: {
-                                          let tone = min(ToneSliderScale.tone(at: $0), mapping.white)
+                                          let tone = min(ToneSliderScale.tone(at: $0, maximum: mapping.sourceMaximum), mapping.white)
                                           if mapping.tonePosition != tone { onToneChanged() }
                                           mapping.tonePosition = tone
                                           mapping.setAutomaticHDRTarget()
                                           showLowContrastTip = abs(mapping.concentration) <= 0.1
                                       }),
-                       in: ToneSliderScale.position(for: mapping.white)...1) {
+                       in: ToneSliderScale.position(for: mapping.white, maximum: mapping.sourceMaximum)...1) {
                     Text("Tone")
                 } onEditingChanged: { editing in
                     onToneEditingChanged(editing)

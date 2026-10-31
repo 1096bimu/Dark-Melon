@@ -2,6 +2,8 @@ import Foundation
 import Synchronization
 
 nonisolated struct ToneMapping: Codable, Equatable, Sendable {
+    var doubleExposure: DoubleExposure? = nil
+    var sourceMaximum: Double { doubleExposure == nil ? 1 : 2 }
     var lutID: UUID? = nil
     // Optional storage keeps old library presets and snapshots decodable.
     private var lutAmount: Double?
@@ -9,6 +11,7 @@ nonisolated struct ToneMapping: Codable, Equatable, Sendable {
         get { lutAmount ?? 1 }
         set { lutAmount = newValue == 1 ? nil : newValue }
     }
+    var dustSpots: [DustSpot]? = nil
     var transform: TransformSettings? = nil
     var whiteBalance = WhiteBalance()
     var rawWhiteBalance: RAWWhiteBalance?
@@ -90,7 +93,7 @@ nonisolated struct ToneMapping: Codable, Equatable, Sendable {
 
     static let minimumRange = 1.0 / 2048
 
-    var hdrHasContinuationRoom: Bool { peakPosition < 1 - 1e-12 }
+    var hdrHasContinuationRoom: Bool { peakPosition < sourceMaximum - 1e-12 }
 
     var hdrFallsBelowSDR: Bool {
         guard hdrEnabled else { return false }
@@ -102,7 +105,7 @@ nonisolated struct ToneMapping: Codable, Equatable, Sendable {
     mutating func setAutomaticHDRTarget() {
         let sdr = curve(hdr: false)
         let join = peakPosition
-        let gain = sdr.value(at: join) + sdrSlope(at: join, curve: sdr) * (1 - join)
+        let gain = sdr.value(at: join) + sdrSlope(at: join, curve: sdr) * (sourceMaximum - join)
         hdrTarget = min(20, max(1, gain))
         // Updating the target preserves the user’s HDR Gain, including an explicit Off.
     }
@@ -120,10 +123,10 @@ nonisolated struct ToneMapping: Codable, Equatable, Sendable {
         let sdr = curve(hdr: false)
         let join = peakPosition
         let start = sdr.value(at: join)
-        let width = 1 - join
+        let width = sourceMaximum - join
         let count = 2000
         let values = (0...count).map { index -> Double in
-            let input = Double(index) / Double(count)
+            let input = Double(index) / Double(count) * sourceMaximum
             let base: Double
             if input <= join || width <= 1e-12 {
                 base = sdr.value(at: input)
@@ -134,7 +137,7 @@ nonisolated struct ToneMapping: Codable, Equatable, Sendable {
             }
             return base * hdrGain
         }
-        return ToneCurve(values: values, black: 0, white: 1)
+        return ToneCurve(values: values, black: 0, white: sourceMaximum)
     }
 
     // Small shared cache also serves histogram/target calculations. Compute outside
@@ -148,6 +151,7 @@ nonisolated struct ToneMapping: Codable, Equatable, Sendable {
         var target: Double
         var gain: Double
         var rolloff: Double
+        var sourceMaximum: Double
     }
     private static let curveCache = Mutex<[CurveKey: ToneCurve]>([:])
 
@@ -156,7 +160,7 @@ nonisolated struct ToneMapping: Codable, Equatable, Sendable {
         let key = CurveKey(white: white, tone: peakPosition, contrast: concentration,
             distribution: contrastDistribution, hdr: isHDR,
             target: isHDR ? hdrTarget : 0, gain: isHDR ? hdrGain : 0,
-            rolloff: isHDR ? hdrRolloff : 0)
+            rolloff: isHDR ? hdrRolloff : 0, sourceMaximum: sourceMaximum)
         if let cached = Self.curveCache.withLock({ $0[key] }) { return cached }
         let result = uncachedCurve(hdr: isHDR)
         Self.curveCache.withLock {
