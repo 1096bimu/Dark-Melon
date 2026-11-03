@@ -44,6 +44,21 @@ import CoreImage
         withExtendedLifetime(reservation) {}
         reservation = nil
         put(a,sa); assert(get(sa) != nil)
+        cache.setTurbo(true)
+        put(a,sa); put(b,sb); put(c,sc)
+        assert(get(sa) != nil && get(sb) != nil && get(sc) != nil)
+        cache.setTurbo(false)
+        assert(get(sa) == nil)
+        var proxy = a
+        proxy.fullResolutionReady = false
+        put(proxy,sa)
+        assert(get(sa)?.fullResolutionReady == false)
+        assert(cache.lookup(sa,space:.sRGB,settings:nil,balance:nil,requireFull:true) == nil)
+        put(a,sa)
+        assert(cache.lookup(sa,space:.sRGB,settings:nil,balance:nil,requireFull:true) != nil)
+        let urls = [a.url,b.url,c.url]
+        assert(TurboMode.ordered(urls,around:b.url) == [c.url,a.url])
+        print("PASS: Turbo budget, proxy/full separation, promotion and neighbor ordering")
         try Data([1,2]).write(to:a.url)
         assert(get(RAWImageCache.FileStamp(a.url)!) == nil)
         print("PASS: LRU, decode-setting/gamut/WB invalidation, file changes, export eviction and recovery")
@@ -52,6 +67,8 @@ import CoreImage
             let url = URL(fileURLWithPath: CommandLine.arguments[1])
             let worker = RAWDeveloper(colorSpace:.displayP3,interactive:true)
             let small = try await worker.develop(url,progressive:true)
+            let prefetched = try await RAWDeveloper(colorSpace:.displayP3,interactive:true).develop(url,progressive:true)
+            assert(prefetched.id == small.id && !prefetched.fullResolutionReady)
             let full = try await worker.prepareFullResolution(small)
             let other = RAWDeveloper(colorSpace:.displayP3,interactive:true)
             let start = Date()

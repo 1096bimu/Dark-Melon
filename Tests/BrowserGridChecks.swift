@@ -8,11 +8,18 @@ struct BrowserGridProbe: View {
     let value: Double
     var body: some View {
         ImageFileBrowser(selectedURL: nil, open: {_ in}, model:model,
-                         hasPendingEdit:{_ in value > 0})
+                         pendingURLs: value > 0 ? Set(model.entries.prefix(1).map(\.url)) : [])
     }
 }
 @main struct BrowserGridChecks {
     @MainActor static func main() async throws {
+        let zoomKey = "browser.thumbnailColumnAdjustment"
+        let previousZoom = UserDefaults.standard.object(forKey: zoomKey)
+        UserDefaults.standard.set(0, forKey: zoomKey)
+        defer {
+            if let previousZoom { UserDefaults.standard.set(previousZoom, forKey: zoomKey) }
+            else { UserDefaults.standard.removeObject(forKey: zoomKey) }
+        }
         let app=NSApplication.shared
         app.setActivationPolicy(.accessory)
         let folder=FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -52,13 +59,17 @@ struct BrowserGridProbe: View {
             }
             return maximum
         }
-        precondition(BrowserGridLayout.columnCount(for:BrowserGridLayout.twoColumnWidth,current:2)==2)
-        for width:CGFloat in [270,271,272,273,274,275,271] {
-            precondition(BrowserGridLayout.columnCount(for:width,current:2)==2,"Breakpoint jitter changed columns")
+        for width: CGFloat in [160, 180, 271, 364, 800, 1200] {
+            for expanded in [false, true] {
+                for adjustment in -5...12 {
+                    let columns = BrowserGridLayout.columnCount(for: width, expanded: expanded, adjustment: adjustment)
+                    let cell = BrowserGridLayout.cellWidth(for: width, columns: columns)
+                    let occupied = CGFloat(columns) * cell + CGFloat(columns - 1) * BrowserGridLayout.spacing + 2 * BrowserGridLayout.padding
+                    precondition(abs(occupied - width) < 0.001, "Grid leaves unused width or overflows")
+                    precondition(cell >= 64, "Thumbnail shrunk below its usable minimum")
+                }
+            }
         }
-        precondition(BrowserGridLayout.columnCount(for:300,current:2)==3)
-        precondition(BrowserGridLayout.columnCount(for:295,current:3)==3)
-        precondition(BrowserGridLayout.columnCount(for:290,current:3)==2)
         try await Task.sleep(for:.milliseconds(400))
         for width:CGFloat in [160,175,179,180,181,183,184,185,188,200,240,271] {
             window.setContentSize(NSSize(width:width,height:600))
@@ -83,7 +94,14 @@ struct BrowserGridProbe: View {
             maximumDelta=max(maximumDelta,delta)
             precondition(delta <= 4,"Tiny viewport change caused a large thumbnail zoom")
         }
-        print("PASS: browser breakpoint hysteresis and stable loaded-thumbnail pixels through redraws at 160–271pt with long filenames; near-breakpoint resize delta=\(maximumDelta)px")
+        for (adjustment, larger) in [(-1, true), (1, false)] {
+            UserDefaults.standard.set(adjustment, forKey: zoomKey)
+            try await Task.sleep(for: .milliseconds(150))
+            let bitmap = capture()
+            let run = widestRun(mask(bitmap), width: bitmap.pixelsWide)
+            precondition(larger ? run > initialRun : run < initialRun, "Thumbnail size control did not resize loaded images")
+        }
+        print("PASS: grids fill available width; thumbnail zoom works; loaded images stay stable through editor redraws; resize delta=\(maximumDelta)px")
         window.close()
     }
 }

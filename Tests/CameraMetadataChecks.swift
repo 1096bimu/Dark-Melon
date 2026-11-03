@@ -18,6 +18,18 @@ import UniformTypeIdentifiers
         let rawFallback = CameraMetadata(properties: [kCGImagePropertyDepth:16], isRAW:true)
         assert(rawFallback.bitDepthIsDecoded && rawFallback.pixelFormat == "RAW")
 
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let raw = folder.appendingPathComponent("first.ARW")
+        let document = folder.appendingPathComponent("combined.double.darkmelon.xmp")
+        try Data(repeating: 0, count: 4096).write(to: raw)
+        try Data(repeating: 0, count: 128).write(to: document)
+        let capture: [CFString: Any] = [kCGImagePropertyExifDictionary: [kCGImagePropertyExifISOSpeedRatings: [400]]]
+        let composite = CameraMetadata(properties: capture, url: raw, isRAW: true, fileSizeURL: document)
+        assert(composite.fileSize == 128 && composite.iso == 400 && composite.pixelFormat == "RAW")
+        assert(CameraMetadata(properties: capture, url: raw).fileSize == 4096)
+
         func word(_ value: Int, _ width: Int) -> [UInt8] {
             (0..<width).reversed().map { UInt8(truncatingIfNeeded: value >> ($0 * 8)) }
         }

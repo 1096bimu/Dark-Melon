@@ -181,7 +181,7 @@ Development edits are stored in XMP sidecars; see [DevelopmentSettings.md](Devel
 
 ## Third-party code
 
-The film grain implementation is adapted from [cinegrain2](https://github.com/mr-berndt/cinegrain2). Its attribution is in `FilmGrain.swift`, and its GPL-3.0-or-later license is included in `Dark Melon/Cinegrain2-LICENSE.txt`.
+The film grain implementation is adapted from [cinegrain2](https://github.com/mr-berndt/cinegrain2). Its attribution is in `Dark Melon/Render/Effects/FilmGrain.swift`, and its GPL-3.0-or-later license is included in `Dark Melon/Resources/Cinegrain2-LICENSE.txt`.
 
 ## License
 

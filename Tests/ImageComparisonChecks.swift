@@ -27,6 +27,15 @@ import UniformTypeIdentifiers
             try await Task.sleep(for: .milliseconds(20))
         }
         precondition(session.count == 5 && session.panes.count == 4)
+        let selectedIDs = inputs.map(\.id)
+        for (index, pane) in session.panes.enumerated() {
+            precondition(ComparisonMarker.index(of: pane.id, in: selectedIDs) == index,
+                "Selected item marker does not match its displayed comparison pane")
+        }
+        precondition(ComparisonMarker.colors == [.red, .blue, .yellow, .green])
+        precondition(ComparisonMarker.index(of: inputs[4].id, in: selectedIDs) == nil,
+            "Undisplayed selections should not receive a comparison marker")
+        precondition(ComparisonMarker.index(of: inputs[0].id, in: [inputs[0].id]) == nil)
         precondition(session.panes.allSatisfy { $0.images != nil }, "Overview failed: \(session.panes.map(\.error))")
         precondition(Set(session.panes.compactMap { $0.development?.id }).count == 1, "Matching snapshots decoded separately")
         precondition(session.panes[0].images!.sdr === session.panes[1].images!.sdr, "Matching render was not shared")
