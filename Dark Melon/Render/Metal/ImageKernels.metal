@@ -359,6 +359,12 @@ float chromaMultiplier(float x, float4 points, float hdrEnd) {
         float3 to0,float3 to1,float3 to2,float3 from0,float3 from1,float3 from2,
         float4 v0,float2 h0,float4 b0,float l0,float4 v1,float2 h1,float4 b1,float l1,float4 v2,float2 h2,float4 b2,float l2,float4 v3,float2 h3,float4 b3,float l3,float4 v4,float2 h4,float4 b4,float l4,float4 v5,float2 h5,float4 b5,float l5,float4 v6,float2 h6,float4 b6,float l6) {
         float4 pixel=unpremultiply(image.sample(image.coord()));
+        // SDR white balance can push channels above white. The bypass path
+        // clips those channels at output; start SDR color edits from that same
+        // bounded rendition so merely enabling OKLab cannot turn clipping into
+        // a lightness-preserving gamut fit that brightens the other channels.
+        // HDR keeps its extended input and existing gamut handling.
+        if (ceiling <= 1.0) { pixel.rgb = clamp(pixel.rgb, 0.0, ceiling); }
         float3 lab=toOKLab(convertRGB(pixel.rgb,to0,to1,to2));
         float multiplier=chromaMultiplier(length(lab.yz)/maximumChroma,chroma,domain)
             * chromaMultiplier(lab.x,lightness,domain);
