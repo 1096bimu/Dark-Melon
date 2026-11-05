@@ -70,6 +70,7 @@ struct GlassEditorShell<Preview: View, Browser: View, Controls: View, Pending: V
                             pending
                             toolbar.padding(.horizontal, 16).modifier(ShellPill())
                                 #if os(macOS)
+                                .environment(\.hdrDisplaySupportsEDR, displaySupportsEDR)
                                 .background(HDRCapabilityProbe(value: $displaySupportsEDR))
                                 #endif
                             #if os(macOS)
@@ -120,6 +121,7 @@ struct GlassEditorShell<Preview: View, Browser: View, Controls: View, Pending: V
 extension EnvironmentValues {
     @Entry var shellPanelContent = false
     @Entry var previewPanelInsets = EdgeInsets()
+    @Entry var hdrDisplaySupportsEDR: Bool? = nil
 }
 
 struct ShellPill: ViewModifier {
@@ -134,12 +136,12 @@ struct ShellPill: ViewModifier {
                 .overlay(Capsule().strokeBorder(.white.opacity(0.1), lineWidth: 0.5))
                 .shadow(color: .black.opacity(0.2), radius: 12, y: 4)
         } else {
-            pill.background(.black, in: Capsule())
+            pill.background(.black.opacity(0.55), in: Capsule())
         }
     }
 }
 
-private struct ShellGlass: ViewModifier {
+struct ShellGlass: ViewModifier {
     @AppStorage("glassEffectsEnabled") private var glassEffects = true
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: EditorSectionLayout.panelCornerRadius)
@@ -151,7 +153,7 @@ private struct ShellGlass: ViewModifier {
                 .overlay(shape.strokeBorder(.white.opacity(0.1), lineWidth: 0.5))
                 .shadow(color: .black.opacity(0.25), radius: 16, y: 5)
         } else {
-            panel.background(.black, in: shape)
+            panel.background(.black.opacity(0.55), in: shape)
         }
     }
 }
@@ -161,7 +163,7 @@ struct ShellSection: ViewModifier {
     func body(content: Content) -> some View {
         content
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.black.opacity(glassEffects ? 0.15 : 1), in: RoundedRectangle(cornerRadius: EditorSectionLayout.sectionCornerRadius))
+            .background(.black.opacity(glassEffects ? 0.15 : 0.2), in: RoundedRectangle(cornerRadius: EditorSectionLayout.sectionCornerRadius))
             .overlay(RoundedRectangle(cornerRadius: EditorSectionLayout.sectionCornerRadius).strokeBorder(.white.opacity(0.06), lineWidth: 0.5))
     }
 }
@@ -264,5 +266,31 @@ struct PreviewPanelOverflow: ViewModifier {
     @Environment(\.previewPanelInsets) private var insets
     func body(content: Content) -> some View {
         content.padding(.leading, -insets.leading).padding(.trailing, -insets.trailing)
+    }
+}
+
+/// Use the same capability result as the adjacent warning, including its unknown state.
+struct HDRButtonGlow: ViewModifier {
+    let isOn: Bool
+    @Environment(\.hdrDisplaySupportsEDR) private var supportsEDR
+    @Environment(\.isEnabled) private var enabled
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var active: Bool { isOn && enabled && supportsEDR == true }
+
+    func body(content: Content) -> some View {
+        content
+            .background(alignment: .bottom) {
+                Capsule()
+                    .fill(.orange.opacity(active ? 0.55 : 0))
+                    .frame(height: 10)
+                    .padding(.horizontal, -3)
+                    .blur(radius: 7)
+                    .offset(y: 3)
+                    .blendMode(.plusLighter)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: active)
     }
 }

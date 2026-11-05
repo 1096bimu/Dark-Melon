@@ -39,6 +39,7 @@ final class TurboMode {
         var rawFiles: Set<URL>
         var busy: Bool
         var film: FilmSettings?
+        var canvas: CGSize
     }
 
     static func ordered(_ files: [URL], around current: URL?) -> [URL] {
@@ -80,7 +81,7 @@ final class TurboMode {
                         do {
                             try Task.checkCancellation()
                             _ = try await BrowserFileDevelopment.load(url, override: overrides[url], bins: 256,
-                                film: request.film, comparisonCanvas: CGSize(width: 2560, height: 2560))
+                                film: request.film, comparisonCanvas: request.canvas)
                         } catch { /* An unreadable neighbor must not interrupt editing. */ }
                         return url
                     }

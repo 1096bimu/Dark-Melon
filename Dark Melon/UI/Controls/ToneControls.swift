@@ -88,6 +88,7 @@ struct ToneSectionView: View {
 
 struct SlopeEditor: View {
     @Environment(\.resetMapping) private var defaults
+    @AppStorage("showISOSlider") private var showISOSlider = false
     @AppStorage("showContrastDistribution") private var showContrastDistribution = true
     @Binding var mapping: ToneMapping
     var sourceISO: Double? = nil
@@ -119,26 +120,28 @@ struct SlopeEditor: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    Text("ISO")
-                    ControlInfo(.iso)
-                    AdjustmentField(title: "ISO", value: isoValue,
-                        range: ToneISOProxy.displayRange(sourceISO: sourceISO, rawExposure: rawExposure),
-                        digits: sourceISO == nil ? 2 : 0, unit: sourceISO == nil ? "EV" : "",
-                        commit: { onISOEditingChanged(false) })
+            if showISOSlider {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text("ISO")
+                        ControlInfo(.iso)
+                        AdjustmentField(title: "ISO", value: isoValue,
+                            range: ToneISOProxy.displayRange(sourceISO: sourceISO, rawExposure: rawExposure),
+                            digits: sourceISO == nil ? 2 : 0, unit: sourceISO == nil ? "EV" : "",
+                            commit: { onISOEditingChanged(false) })
+                    }
+                    HStack {
+                        Image(systemName: "slider.horizontal.below.sun.min").frame(width: 22).accessibilityHidden(true)
+                        EditorSlider(value: isoExposure, in: ToneISOProxy.range, onEditingChanged: onISOEditingChanged, label: { Text("ISO") })
+                            .editorSliderTicks([0, 1, 2, 3, 4, 5])
+                            .controlReset { isoExposure.wrappedValue = ToneISOProxy.exposure(white: defaults.white) }
+                            .labelsHidden()
+                    }
                 }
-                HStack {
-                    Image(systemName: "slider.horizontal.below.sun.min").frame(width: 22).accessibilityHidden(true)
-                    EditorSlider(value: isoExposure, in: ToneISOProxy.range, onEditingChanged: onISOEditingChanged, label: { Text("ISO") })
-                        .editorSliderTicks([0, 1, 2, 3, 4, 5])
-                        .controlReset { isoExposure.wrappedValue = ToneISOProxy.exposure(white: defaults.white) }
-                        .labelsHidden()
-                }
+                .filmLock(.tone)
+                .filmLock(.whitePoint)
+                .help(ControlInfo.Topic.iso.explanation)
             }
-            .filmLock(.tone)
-            .filmLock(.whitePoint)
-            .help(ControlInfo.Topic.iso.explanation)
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
                     Text("Tone").font(.callout)
@@ -268,17 +271,17 @@ struct SlopeEditor: View {
                 HStack {
                     Text("Shadow Floor")
                     Spacer()
-                    AdjustmentField(title: "Shadow Floor", value: $mapping.shadowFloor, range: 0...Double(Float.greatestFiniteMagnitude), digits: 3)
+                    AdjustmentField(title: "Shadow Floor", value: $mapping.shadowFloor, range: 0...255, digits: 0)
                 }
                 HStack {
                     Image(systemName: "film.circle.fill").frame(width: 22).accessibilityHidden(true)
-                    EditorSlider(value: $mapping.shadowFloor, in: 0...0.05) { Text("Shadow Floor") }
+                    EditorSlider(value: $mapping.shadowFloor, in: 0...100, step: 1, label: { Text("Shadow Floor") })
                         .labelsHidden()
                         .controlReset { mapping.shadowFloor = defaults.shadowFloor }
                 }
             }
             .filmLock(.shadowFloor)
-            .help("Clips each linear RGB channel below this level to the same floor before tone mapping. Zero disables the floor.")
+            .help("Minimum SDR RGB value on a 0–255 scale, applied after tone, color, and LUT adjustments. Zero disables the floor.")
 
         }
         .font(.callout.monospacedDigit())
@@ -293,10 +296,12 @@ struct HistogramToneCurve: View {
     let mapping: ToneMapping
     let hdrPreview: Bool
     var inputMaximum = 1.0
+    var colorSpace: ProcessingColorSpace = .sRGB
 
     var body: some View {
         Canvas { context, size in
             let sdrCurve = mapping.curve(hdr: false)
+            let outputFloor = colorSpace.linearSDRValue(forCode: mapping.shadowFloor)
             let hdrCurve = mapping.curve(hdr: true)
             let maximum = hdrPreview ? max(1.25, mapping.hdrMax * 1.08) : 1.25
             func point(_ input: Double, _ output: Double) -> CGPoint {
@@ -316,7 +321,7 @@ struct HistogramToneCurve: View {
                 var path = Path()
                 for index in 0...2000 {
                     let input = Double(index) / 2000 * inputMaximum
-                    let p = point(input, curve.value(at: max(input, mapping.shadowFloor)))
+                    let p = point(input, max(curve.value(at: input), outputFloor))
                     if index == 0 { path.move(to: p) } else { path.addLine(to: p) }
                 }
                 context.stroke(path, with: .color(.black.opacity(0.8)), lineWidth: 4)

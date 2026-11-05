@@ -84,6 +84,8 @@ final class ImageBrowserModel {
     private(set) var returnFolder: URL?
     private var access: [URL] = []
     private var listing: Task<Void, Never>?
+    private var settingsChanges: AnyCancellable?
+    private var settingsChangedDuringListing: Set<URL> = []
 
     private let remembersFolder: Bool
     private var restoreStarted = false
@@ -91,7 +93,14 @@ final class ImageBrowserModel {
     private var restoreTimeout: Task<Void, Never>?
     private var bookmarkRevision = UUID()
     private static let bookmarkKey = "browser.lastFolderBookmarks"
-    init(remembersFolder: Bool = false) { self.remembersFolder = remembersFolder }
+    init(remembersFolder: Bool = false) {
+        self.remembersFolder = remembersFolder
+        settingsChanges = NotificationCenter.default.publisher(for: .developmentSettingsChanged)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] notification in
+                if let url = notification.object as? URL { self?.refreshSavedSettingsFlag(for: url) }
+            }
+    }
 
     private func rememberFolder() {
         guard remembersFolder, let root, let directory else { return }
@@ -185,6 +194,7 @@ final class ImageBrowserModel {
             recentFolders[parent] = Array(recent.prefix(3))
         }
         listing?.cancel()
+        settingsChangedDuringListing.removeAll()
         directory = url
         if !restoring { rememberFolder() }
         entries = []
@@ -222,6 +232,9 @@ final class ImageBrowserModel {
                 entries = result
                 listingRevision = UUID()
                 loading = false
+                // A save may have completed after the directory was read.
+                for url in settingsChangedDuringListing { refreshSavedSettingsFlag(for: url) }
+                settingsChangedDuringListing.removeAll()
                 // Show the directory immediately; fill counts without blocking navigation.
                 for entry in result where entry.isFolder {
                     try Task.checkCancellation()
@@ -241,6 +254,7 @@ final class ImageBrowserModel {
         }
     }
     func refreshSavedSettingsFlag(for url: URL) {
+        if loading { settingsChangedDuringListing.insert(url) }
         guard let index = entries.firstIndex(where: { $0.url.standardizedFileURL == url.standardizedFileURL }) else { return }
         let exists = FileManager.default.fileExists(atPath: RecipeStore.sidecarURL(for: url).path)
         if DoubleExposure.isDocument(url), !exists { entries.remove(at: index) }
@@ -325,10 +339,8 @@ struct ImageFileBrowser: View {
 
     private var browserBackground: some View {
         Group {
-            if !shellPanelContent {
-                if glassEffects { Rectangle().fill(.bar) }
-                else { Color.black }
-            }
+            if glassEffects { Rectangle().fill(.bar) }
+            else { Color.black }
         }
     }
 
@@ -619,7 +631,7 @@ struct ImageFileBrowser: View {
             .background { browserBackground }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background { browserBackground }
+        .background { if !shellPanelContent { browserBackground } }
         #if os(macOS)
         .background(BrowserSelectAllShortcut {
             let urls = files.map(\.url)
@@ -638,10 +650,6 @@ struct ImageFileBrowser: View {
         .onChange(of: model.directory) { _, _ in comparisonSelection?([]) }
         .onChange(of: pendingURLs, initial: true) { _, urls in
             model.pendingURLs = urls
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .developmentSettingsChanged)
-            .receive(on: DispatchQueue.main)) { notification in
-            if let url = notification.object as? URL { model.refreshSavedSettingsFlag(for: url) }
         }
         .onChange(of: selectedURL) { _, url in
             guard selection == nil, selectedFiles.count <= 1 else { return }

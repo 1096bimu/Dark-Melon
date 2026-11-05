@@ -5,27 +5,46 @@ import AppKit
 
 /// Aspect-ratio geometry shared by the transform editor and saved recipes.
 nonisolated enum CropGeometry {
-    static let ratios: [(label: String, value: Double)] = [
-        ("9:21", 9.0 / 21), ("9:16", 9.0 / 16), ("2:3", 2.0 / 3),
-        ("3:4", 3.0 / 4), ("4:5", 4.0 / 5), ("1:1", 1),
-        ("5:4", 5.0 / 4), ("4:3", 4.0 / 3), ("3:2", 3.0 / 2),
-        ("16:9", 16.0 / 9), ("21:9", 21.0 / 9), ("65:24", 65.0 / 24)
+    nonisolated struct Ratio: Identifiable, Sendable {
+        let label: String
+        let value: Double
+        let position: Double
+        var id: Double { position }
+    }
+
+    // Keep existing saved positions 0…11; -1 adds the reciprocal of 65:24.
+    static let ratios: [Ratio] = [
+        Ratio(label: "24:65", value: 24.0 / 65, position: -1),
+        Ratio(label: "9:21", value: 9.0 / 21, position: 0),
+        Ratio(label: "9:16", value: 9.0 / 16, position: 1),
+        Ratio(label: "2:3", value: 2.0 / 3, position: 2),
+        Ratio(label: "3:4", value: 3.0 / 4, position: 3),
+        Ratio(label: "4:5", value: 4.0 / 5, position: 4),
+        Ratio(label: "1:1", value: 1, position: 5),
+        Ratio(label: "5:4", value: 5.0 / 4, position: 6),
+        Ratio(label: "4:3", value: 4.0 / 3, position: 7),
+        Ratio(label: "3:2", value: 3.0 / 2, position: 8),
+        Ratio(label: "16:9", value: 16.0 / 9, position: 9),
+        Ratio(label: "21:9", value: 21.0 / 9, position: 10),
+        Ratio(label: "65:24", value: 65.0 / 24, position: 11)
     ]
+    static let positionRange = ratios.first!.position...ratios.last!.position
 
     // Equal spacing for named ratios, with continuous logarithmic interpolation between them.
     static func ratio(at position: Double) -> Double {
-        let p = min(Double(ratios.count - 1), max(0, position))
-        let i = min(ratios.count - 2, Int(p))
-        return exp(log(ratios[i].value) * (1 - (p - Double(i)))
-                   + log(ratios[i + 1].value) * (p - Double(i)))
+        let p = min(positionRange.upperBound, max(positionRange.lowerBound, position))
+        let i = min(ratios.count - 2, Int(p - positionRange.lowerBound))
+        let lower = ratios[i], upper = ratios[i + 1]
+        let t = p - lower.position
+        return exp(log(lower.value) * (1 - t) + log(upper.value) * t)
     }
 
     static func position(for ratio: Double) -> Double {
-        guard ratio.isFinite, ratio > ratios[0].value else { return 0 }
+        guard ratio.isFinite, ratio > ratios[0].value else { return positionRange.lowerBound }
         for i in 0..<(ratios.count - 1) where ratio <= ratios[i + 1].value {
-            return Double(i) + log(ratio / ratios[i].value) / log(ratios[i + 1].value / ratios[i].value)
+            return ratios[i].position + log(ratio / ratios[i].value) / log(ratios[i + 1].value / ratios[i].value)
         }
-        return Double(ratios.count - 1)
+        return positionRange.upperBound
     }
 
     static func frame(in bounds: CGRect, ratio: Double) -> CGRect {
@@ -96,26 +115,31 @@ private struct CropOverview: View {
     let polygon: [CGPoint]
 
     var body: some View {
-        Image(decorative: image, scale: 1)
-            .resizable().scaledToFit()
-            .overlay {
-                Canvas { context, size in
-                    guard polygon.count == 4 else { return }
-                    let points = polygon.map { CGPoint(x: $0.x * size.width, y: $0.y * size.height) }
-                    var path = Path()
-                    path.addLines(points)
-                    path.closeSubpath()
-                    context.fill(path, with: .color(.cyan.opacity(0.12)))
-                    context.stroke(path, with: .color(.black.opacity(0.8)), lineWidth: 4)
-                    context.stroke(path, with: .color(.cyan), lineWidth: 2)
-                    for point in points {
-                        context.fill(Path(ellipseIn: CGRect(x: point.x - 3, y: point.y - 3, width: 6, height: 6)),
-                                     with: .color(.white))
+        GeometryReader { geometry in
+            let frame = CropGeometry.frame(in: CGRect(origin: .zero, size: geometry.size), ratio: Double(image.width) / Double(image.height))
+            Image(decorative: image, scale: 1)
+                .resizable().frame(width: frame.width, height: frame.height)
+                .overlay {
+                    Canvas { context, size in
+                        guard polygon.count == 4 else { return }
+                        let points = polygon.map { CGPoint(x: $0.x * size.width, y: $0.y * size.height) }
+                        var path = Path()
+                        path.addLines(points)
+                        path.closeSubpath()
+                        context.fill(path, with: .color(.cyan.opacity(0.12)))
+                        context.stroke(path, with: .color(.black.opacity(0.8)), lineWidth: 4)
+                        context.stroke(path, with: .color(.cyan), lineWidth: 2)
+                        for point in points {
+                            context.fill(Path(ellipseIn: CGRect(x: point.x - 3, y: point.y - 3, width: 6, height: 6)),
+                                         with: .color(.white))
+                        }
                     }
                 }
-            }
-            .clipped()
-            .accessibilityLabel("Full photo with transformed crop area")
+                .position(x: frame.midX, y: frame.midY)
+        }
+        .frame(height: 180)
+        .clipped()
+        .accessibilityLabel("Full photo with transformed crop area")
     }
 }
 
@@ -129,6 +153,7 @@ struct SourceOrientationControls: View {
             Text("Orientation").font(.callout)
             HStack {
                 Picker("Orientation", selection: Binding(get: { orientation.turns }, set: {
+                    guard orientation.turns != $0 else { return }
                     orientation.quarterTurns = $0
                     commit()
                 })) {
@@ -139,6 +164,7 @@ struct SourceOrientationControls: View {
                 .pickerStyle(.segmented)
                 .labelsHidden()
                 Toggle("Mirror", isOn: Binding(get: { orientation.mirrored }, set: {
+                    guard orientation.mirrored != $0 else { return }
                     orientation.mirrored = $0
                     commit()
                 }))
@@ -156,31 +182,32 @@ struct CropRatioControls: View {
     @Binding var position: Double
     @State private var dragStart: Double?
     private let step: CGFloat = 64
-    private var maximum: Double { Double(CropGeometry.ratios.count - 1) }
+    private var minimum: Double { CropGeometry.positionRange.lowerBound }
+    private var maximum: Double { CropGeometry.positionRange.upperBound }
 
     private func setPosition(_ value: Double) {
         guard enabled else { return }
-        position = min(maximum, max(0, value))
+        position = min(maximum, max(minimum, value))
     }
 
     var body: some View {
         GeometryReader { geometry in
             HStack(spacing: 0) {
-                ForEach(CropGeometry.ratios.indices, id: \.self) { index in
+                ForEach(CropGeometry.ratios) { ratio in
                     Button {
                         guard dragStart == nil else { return }
-                        position = Double(index)
+                        position = ratio.position
                     } label: {
-                        Text(CropGeometry.ratios[index].label)
+                        Text(ratio.label)
                             .font(.callout.monospacedDigit())
-                            .foregroundStyle(abs(position - Double(index)) < 0.001 ? .primary : .secondary)
+                            .foregroundStyle(abs(position - ratio.position) < 0.001 ? .primary : .secondary)
                             .frame(width: step, height: 36)
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                 }
             }
-            .offset(x: geometry.size.width / 2 - step / 2 - CGFloat(position) * step)
+            .offset(x: geometry.size.width / 2 - step / 2 - CGFloat(position - minimum) * step)
             .frame(width: geometry.size.width, height: 36, alignment: .leading)
             .contentShape(Rectangle())
             .overlay(alignment: .bottom) {

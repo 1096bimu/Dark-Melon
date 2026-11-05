@@ -20,6 +20,20 @@ nonisolated enum ProcessingColorSpace: String, Codable, CaseIterable, Identifiab
         case .rec2020: CGColorSpace(name: CGColorSpace.itur_2020)!
         }
     }
+    /// Neutral SDR code values use the transfer function of the selected output profile.
+    func linearSDRValue(forCode code: Double) -> Double {
+        let value = min(255, max(0, code)) / 255
+        return CGColor(colorSpace: encoded, components: [value, value, value, 1])?
+            .converted(to: linear, intent: .relativeColorimetric, options: nil)?.components?.first ?? 0
+    }
+
+    func sdrCode(forLinear value: Double) -> Double {
+        let value = min(1, max(0, value))
+        let encodedValue = CGColor(colorSpace: linear, components: [value, value, value, 1])?
+            .converted(to: encoded, intent: .relativeColorimetric, options: nil)?.components?.first ?? 0
+        return min(255, max(0, encodedValue * 255))
+    }
+
     /// PQ carries extended brightness while retaining the selected primaries.
     var pq: CGColorSpace {
         switch self {

@@ -35,7 +35,9 @@ private struct EditorPanelFocus: FocusedValueKey {
 private struct TutorialFocus: FocusedValueKey {
     typealias Value = () -> Void
 }
-private struct LUTExportFocus: FocusedValueKey { typealias Value = () -> Void }
+#if DEBUG
+private struct LUTVisualizerFocus: FocusedValueKey { typealias Value = () -> Void }
+#endif
 private struct VariationExportFocus: FocusedValueKey { typealias Value = () -> Void }
 private struct BatchExportFocus: FocusedValueKey {
     typealias Value = () -> Void
@@ -43,10 +45,12 @@ private struct BatchExportFocus: FocusedValueKey {
 private struct CopyDevelopmentFocus: FocusedValueKey { typealias Value = () -> Void }
 private struct PasteDevelopmentFocus: FocusedValueKey { typealias Value = () -> Void }
 extension FocusedValues {
-    var exportSDRLUT: (() -> Void)? {
-        get { self[LUTExportFocus.self] }
-        set { self[LUTExportFocus.self] = newValue }
+    #if DEBUG
+    var showLUTVisualizer: (() -> Void)? {
+        get { self[LUTVisualizerFocus.self] }
+        set { self[LUTVisualizerFocus.self] = newValue }
     }
+    #endif
     var variationExport: (() -> Void)? {
         get { self[VariationExportFocus.self] }
         set { self[VariationExportFocus.self] = newValue }
@@ -86,7 +90,9 @@ struct EditorCommands: Commands {
     @FocusedValue(\.editorUndo) private var editUndo
     @FocusedValue(\.toggleEditorPicker) private var togglePicker
     @FocusedBinding(\.editorPanel) private var panel
-    @FocusedValue(\.exportSDRLUT) private var exportSDRLUT
+    #if DEBUG
+    @FocusedValue(\.showLUTVisualizer) private var showLUTVisualizer
+    #endif
     @FocusedValue(\.variationExport) private var variationExport
     @FocusedValue(\.batchExport) private var batchExport
     @FocusedValue(\.startTutorial) private var startTutorial
@@ -191,8 +197,8 @@ struct EditorCommands: Commands {
         }
         CommandMenu("Tools") {
             #if DEBUG
-            Button("Export SDR LUT…") { exportSDRLUT?() }
-                .disabled(exportSDRLUT == nil)
+            Button("LUT Visualizer…") { showLUTVisualizer?() }
+                .disabled(showLUTVisualizer == nil)
             Button("Variation Export…") { variationExport?() }
                 .disabled(variationExport == nil)
             Divider()

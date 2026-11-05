@@ -13,6 +13,24 @@ nonisolated struct TransformSettings: Codable, Equatable, Sendable {
 
     var aspect: Double { CropGeometry.ratio(at: ratioPosition) }
 
+    func reoriented(from old: SourceOrientation, to new: SourceOrientation) -> Self {
+        guard old != new, points.count == 4 else { return self }
+        func moved(_ point: CGPoint) -> CGPoint { new.apply(to: old.sourcePoint(point)) }
+        let corners = [CGPoint(x: 0, y: 0), CGPoint(x: 1, y: 0), CGPoint(x: 1, y: 1), CGPoint(x: 0, y: 1)]
+        let movedCorners = corners.map(moved)
+        let origin = movedCorners[0]
+        let x = CGPoint(x: movedCorners[1].x - origin.x, y: movedCorners[1].y - origin.y)
+        let y = CGPoint(x: movedCorners[3].x - origin.x, y: movedCorners[3].y - origin.y)
+        var result = self
+        result.points = corners.map { corner in moved(points[movedCorners.firstIndex(of: corner)!]) }
+        if abs(x.y) > 0.5 { result.ratioPosition = CropGeometry.position(for: 1 / aspect) }
+        result.rotation = (x.x * y.y - x.y * y.x) * rotation
+        // Perspective axes use the preview's bottom-left coordinate convention.
+        result.horizontal = x.x * horizontal - y.x * vertical
+        result.vertical = -x.y * horizontal + y.y * vertical
+        return result
+    }
+
     enum ResolutionEstimate { case conservative, maximum }
 
     func resolution(width: Int, height: Int, estimate: ResolutionEstimate = .conservative) -> CGSize {
@@ -23,12 +41,13 @@ nonisolated struct TransformSettings: Codable, Equatable, Sendable {
         let edges = [length(0, 1) / aspect, length(3, 2) / aspect,
                      length(0, 3), length(1, 2)]
         let projectedHeight = estimate == .maximum ? edges.max()! : edges.min()!
-        let outputHeight = max(1, floor(projectedHeight))
-        return CGSize(width: max(1, floor(outputHeight * aspect)), height: outputHeight)
+        // Normalized corner roundoff must not shave off a pixel after a quarter-turn.
+        let outputHeight = max(1, floor(projectedHeight + 1e-6))
+        return CGSize(width: max(1, floor(outputHeight * aspect + 1e-6)), height: outputHeight)
     }
 
     var isValid: Bool {
-        guard points.count == 4, ratioPosition.isFinite, (0...11).contains(ratioPosition),
+        guard points.count == 4, ratioPosition.isFinite, CropGeometry.positionRange.contains(ratioPosition),
               rotation.isFinite, abs(rotation) < 1e6,
               horizontal.isFinite, abs(horizontal) <= 0.3,
               vertical.isFinite, abs(vertical) <= 0.3,

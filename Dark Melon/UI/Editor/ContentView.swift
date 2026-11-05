@@ -38,6 +38,14 @@ struct ContentView: View {
     @State private var turbo = TurboMode.shared
     @AppStorage("autoTurbo") private var autoTurbo = "never"
     @State private var previewCanvas = CGSize(width: 2560, height: 2560)
+    @State private var overviewScreenPixels: CGSize?
+    private var overviewCanvas: CGSize { overviewScreenPixels ?? previewCanvas }
+    private var overviewRefinementReady: Bool {
+        guard let source = previewDevelopment, source.fullResolutionReady else { return false }
+        let scale = PreviewResolution.overviewScale(source: source.linearSource.extent.size, canvas: overviewCanvas)
+        return source.linearSource.extent.width * scale > CGFloat(source.preview.width) + 1
+            || source.linearSource.extent.height * scale > CGFloat(source.preview.height) + 1
+    }
     @State private var renderedCanvas = CGSize.zero
     @State private var renderedMapping: ToneMapping?
     @State private var previewRegion: PreviewRegion?
@@ -163,7 +171,10 @@ struct ContentView: View {
     @State private var histogram: HistogramData?
     @State private var histogramError: String?
     @State private var exportSettings = HEIFSettings.restored()
-    @State private var exportingLUT = false
+    #if DEBUG && os(macOS)
+    @State private var lutVisualizer = LUTVisualizerWindow()
+    private var lutVisualizerInput: LUTVisualizerInput { LUTVisualizerInput(mapping: mapping, colorSpace: colorSpace) }
+    #endif
     @State private var variationExportMode = false
     @AppStorage("variationExport.grid") private var variationGrid = 2
     @State private var exporting = false
@@ -244,14 +255,15 @@ struct ContentView: View {
         applied.draftSnapshot = snapshotSession.persistedDraft
         snapshotAppliedRecipe = applied
         namedSnapshots = recipe.snapshots
-        let reload = colorSpace != recipe.colorSpace || rawSettings != (recipe.rawSettings ?? rawSettings)
+        let restoredRAW = recipe.rawSettings ?? (development?.isRAW == false ? RAWSettings() : rawSettings)
+        let reload = colorSpace != recipe.colorSpace || rawSettings != restoredRAW
             || mapping.rawWhiteBalance != recipe.mapping.rawWhiteBalance || mapping.doubleExposure != recipe.mapping.doubleExposure
         cropping = false
         adjustingTone = false; adjustingWhitePoint = false; pickingWhiteBalance = false
         comparingChromaRange = false; comparingColor = false; comparingEffects = false; comparingCrossProcessing = false
         colorSpace = recipe.colorSpace
         mapping = recipe.mapping
-        if let settings = recipe.rawSettings { rawSettings = settings }
+        rawSettings = restoredRAW
         cropPolygon = mapping.transform?.points ?? [CGPoint(x: 0, y: 0), CGPoint(x: 1, y: 0), CGPoint(x: 1, y: 1), CGPoint(x: 0, y: 1)]
         if reload, let sourceURL { load(sourceURL, resetEdits: false) }
         rememberCurrentEdits()
@@ -313,7 +325,16 @@ struct ContentView: View {
     private var currentRecipe: DevelopmentRecipe {
         var savedMapping = mapping
         if cropping, let transform = draftTransform { savedMapping.transform = transform }
-        return DevelopmentRecipe(colorSpace: colorSpace, mapping: savedMapping, rawSettings: mapping.rawWhiteBalance == nil ? nil : rawSettings, snapshots: namedSnapshots, draftSnapshot: snapshotSession.persistedDraft)
+        return DevelopmentRecipe(colorSpace: colorSpace, mapping: savedMapping, rawSettings: recipeRAWSettings, snapshots: namedSnapshots, draftSnapshot: snapshotSession.persistedDraft)
+    }
+
+    private var recipeRAWSettings: RAWSettings? {
+        if development?.isRAW == true || mapping.rawWhiteBalance != nil { return rawSettings }
+        guard rawSettings.orientation != SourceOrientation() else { return nil }
+        // Non-RAW files still need their source geometry saved, without decoder adjustments.
+        var geometry = RAWSettings()
+        geometry.orientation = rawSettings.orientation
+        return geometry
     }
 
     private var draftTransform: TransformSettings? {
@@ -353,10 +374,30 @@ struct ContentView: View {
     }
 
     private var transformOrientation: Binding<SourceOrientation> {
-        Binding(get: { rawSettings.orientation }, set: {
-            commitTransform()
-            rawSettings.orientation = $0
-        })
+        Binding(get: { rawSettings.orientation }, set: changeTransformOrientation)
+    }
+
+    private func changeTransformOrientation(_ orientation: SourceOrientation) {
+        let previous = rawSettings.orientation
+        guard orientation != previous else { return }
+        commitHistory()
+        let before = currentRecipe
+        commitTransform()
+        mapping.transform = mapping.transform?.reoriented(from: previous, to: orientation)
+        rawSettings.orientation = orientation
+        cropPolygon = mapping.transform?.points ?? [CGPoint(x: 0, y: 0), CGPoint(x: 1, y: 0), CGPoint(x: 1, y: 1), CGPoint(x: 0, y: 1)]
+        cropRatioPosition = mapping.transform?.ratioPosition ?? 5
+        cropTransform = CropTransform(rotation: mapping.transform?.rotation ?? 0,
+            horizontal: mapping.transform?.horizontal ?? 0, vertical: mapping.transform?.vertical ?? 0)
+        previewDetails.removeAll()
+        previewRegion = nil
+        #if os(macOS)
+        previewViewport.zoom = 1
+        previewViewport.offset = .zero
+        #endif
+        recordRecipeChange(from: before, to: currentRecipe)
+        snapshotAppliedRecipe = currentRecipe
+        rememberCurrentEdits()
     }
 
     private func resetTransform() {
@@ -630,6 +671,9 @@ struct ContentView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .modifier(EmptyPreviewBackgroundMenu(enabled: previewImages == nil && openingImage == nil && !comparingMultiple))
+        #if os(macOS)
+        .background(OverviewDisplayProbe(pixels: $overviewScreenPixels).frame(width: 0, height: 0))
+        #endif
         .onGeometryChange(for: CGSize.self) { proxy in
             // Quantize resize requests slightly, while covering Retina physical pixels.
             CGSize(width: max(64, ceil((proxy.size.width - 32) * displayScale / 64) * 64),
@@ -814,10 +858,11 @@ struct ContentView: View {
                         if comparingMultiple { prefersHDR = enabled } else { hdrPreview = enabled }
                         tutorial.previewToggled(hdr: enabled)
                     })).toggleStyle(.button)
+                        .modifier(ShellToolbarItem())
+                        .modifier(HDRButtonGlow(isOn: prefersHDR))
                         .keyboardShortcut("h", modifiers: [])
                         .disabled(comparingMultiple ? !comparison.panes.contains(where: { $0.images?.hasHDROutput == true }) : !canPreviewHDR)
                         .help("Toggle HDR or SDR display of the developed image")
-                        .modifier(ShellToolbarItem())
                 }.labelStyle(.iconOnly).buttonStyle(.plain)
             } rightToolbar: {
                 HStack(spacing: 8) {
@@ -874,7 +919,9 @@ struct ContentView: View {
             .focusedSceneValue(\.toggleEditorPicker, pickerShortcutAction)
             #if os(macOS)
             #if DEBUG
-            .focusedSceneValue(\.exportSDRLUT, comparingMultiple || development == nil || loading || exportingLUT ? nil : { exportSDRLUT() })
+            .focusedSceneValue(\.showLUTVisualizer, comparingMultiple || development == nil || loading ? nil : { lutVisualizer.open(lutVisualizerInput) })
+            .onChange(of: lutVisualizerInput) { _, input in lutVisualizer.update(input) }
+            .onDisappear { lutVisualizer.close() }
             .focusedSceneValue(\.variationExport, comparingMultiple || development == nil || loading ? nil : { beginExportOptions(variation: true) })
             #endif
             .focusedSceneValue(\.batchExport, browserModel.directory == nil ? nil : { showingBatchExport = true })
@@ -906,11 +953,11 @@ struct ContentView: View {
             .task(id: TurboMode.Request(enabled: turbo.enabled, current: sourceURL,
                 files: browserModel.visibleFiles.map(\.url),
                 rawFiles: Set(browserModel.visibleFiles.filter(\.isRAW).map(\.url)),
-                busy: loading || comparingMultiple || exporting, film: lockedFilm), priority: .utility) {
+                busy: loading || comparingMultiple || exporting, film: lockedFilm, canvas: overviewCanvas), priority: .utility) {
                 await turbo.preload(.init(enabled: turbo.enabled, current: sourceURL,
                     files: browserModel.visibleFiles.map(\.url),
                 rawFiles: Set(browserModel.visibleFiles.filter(\.isRAW).map(\.url)),
-                    busy: loading || comparingMultiple || exporting, film: lockedFilm), overrides: batchRecipeOverrides)
+                    busy: loading || comparingMultiple || exporting, film: lockedFilm, canvas: overviewCanvas), overrides: batchRecipeOverrides)
             }
             .task(id: ComparisonRequest(inputs: comparingMultiple ? comparisonInputs : [], revision: comparisonReload, listing: browserModel.listingRevision, canvas: previewCanvas)) {
                 guard comparingMultiple else { comparison.stop(); return }
@@ -951,7 +998,6 @@ struct ContentView: View {
             }
             .onChange(of: panel) { _, _ in
                 if panel != .transform { commitTransform() }
-                else { beginTransform() }
                 pickingWhiteBalance = false
                 adjustingTone = false
                 adjustingWhitePoint = false
@@ -961,9 +1007,6 @@ struct ContentView: View {
                 let requested = pendingPicker
                 pendingPicker = nil
                 if panel == .tone, let requested { togglePicker(requested) }
-            }
-            .onChange(of: loading) { _, loading in
-                if !loading, panel == .transform, !dustEditor.enabled, !comparingMultiple { beginTransform() }
             }
             .onChange(of: development?.id) { _, _ in
                 comparingOriginal = false
@@ -999,7 +1042,7 @@ struct ContentView: View {
                 guard notification.object as? UUID == previewMapping.lutID else { return }
                 lutRevision += 1
             }
-            .task(id: "\(isolatingRAW)-\(doubleSource)-\(development?.id.uuidString ?? "")") {
+            .task(id: "\(isolatingRAW)-\(doubleSource)-\(development?.id.uuidString ?? "")-\(overviewCanvas.width)x\(overviewCanvas.height)") {
                 guard isolatingRAW, let url = activeRAWURL else { isolatedRAWDevelopment = nil; return }
                 do {
                     var settings = activeRAWSettings.wrappedValue
@@ -1010,7 +1053,7 @@ struct ContentView: View {
                     let second = doubleSource == 1
                     if second { settings.orientation = SourceOrientation() }
                     let worker = RAWDeveloper(colorSpace: colorSpace, rawSettings: settings, rawWhiteBalance: activeRAWBalance.wrappedValue, interactive: true)
-                    let source = try await worker.develop(url, previewCanvas: previewCanvas, progressive: true)
+                    let source = try await worker.develop(url, previewCanvas: overviewCanvas, progressive: true)
                     let overview = if second, let firstURL {
                         try await worker.alignSecondPreview(source, firstURL: firstURL, firstGeometry: firstGeometry, secondGeometry: localGeometry)
                     } else { source }
@@ -1034,7 +1077,7 @@ struct ContentView: View {
                     try await Task.sleep(for: .milliseconds(150))
                     await fullSourceWorker.discardSourcePixels()
                     try Task.checkCancellation()
-                    let rebuilt = try await developer.replacingDust(current, spots: spots, canvas: previewCanvas)
+                    let rebuilt = try await developer.replacingDust(current, spots: spots, canvas: overviewCanvas)
                     try Task.checkCancellation()
                     guard development?.id == current.id, (mapping.dustSpots ?? []) == spots else { return }
                     previewDetails.removeAll()
@@ -1044,12 +1087,13 @@ struct ContentView: View {
                 } catch is CancellationError {} catch { errorMessage = error.localizedDescription }
             }
             .task(id: PreviewRequest(mapping: previewMapping,
-                                     sourceID: previewDevelopment?.id, loading: loading || comparingMultiple, canvas: previewCanvas, lutRevision: lutRevision)) {
+                                     sourceID: previewDevelopment?.id, loading: loading || comparingMultiple, canvas: overviewCanvas, lutRevision: lutRevision,
+                                     refinementReady: overviewRefinementReady)) {
                 guard let development = previewDevelopment, !loading, !comparingMultiple, confirmingPreset == nil,
                       development.dustSpots == (previewMapping.dustSpots ?? []) else { return }
                 do {
                     let renderedMapping = previewMapping
-                    let canvas = previewCanvas
+                    let canvas = overviewCanvas
                     if canvas != renderedCanvas { try await Task.sleep(for: .milliseconds(100)) }
                     let source = try await developer.overview(development, canvas: canvas)
                     let images = try await developer.previews(source, mapping: renderedMapping)
@@ -1279,7 +1323,7 @@ struct ContentView: View {
             openingImage = RAWImageCache.shared.firstDisplay(for: url)
             if openingImage == nil {
                 quickOpeningTask = Task {
-                    let image = await QuickOpeningPreview.image(url)
+                    let image = await QuickOpeningPreview.image(url, canvas: overviewCanvas)
                     guard !Task.isCancelled, openingID == requestID, renderedPreviewImages == nil else { return }
                     openingImage = image
                 }
@@ -1372,7 +1416,7 @@ struct ContentView: View {
                 }
                 guard openingID == requestID, !Task.isCancelled else { return }
                 histogramWorker = RAWDeveloper(colorSpace: colorSpace, rawSettings: options, rawWhiteBalance: mapping.rawWhiteBalance)
-                let loaded = try await developer.develop(url, previewCanvas: CGSize(width: 2560, height: 2560), progressive: true, dustSpots: mapping.dustSpots ?? [])
+                let loaded = try await developer.develop(url, previewCanvas: overviewCanvas, progressive: true, dustSpots: mapping.dustSpots ?? [])
                 guard openingID == requestID, !Task.isCancelled else { return }
                 let defaults = loaded.rawDefaults ?? RAWSettings()
                 rawSettings = options?.resolved(using: defaults) ?? defaults
@@ -2196,33 +2240,6 @@ struct ContentView: View {
         #endif
     }
 
-    private func exportSDRLUT() {
-        #if os(macOS)
-        let captured = mapping
-        let worker = RAWDeveloper(colorSpace: colorSpace,
-            lutConfiguration: captured.lutID.map { LUTStore.shared.configuration(for: $0) })
-        let panel = NSSavePanel()
-        panel.allowedContentTypes = [UTType(filenameExtension: "cube") ?? .data]
-        panel.nameFieldStringValue = "Dark Melon Look.cube"
-        panel.title = String(localized: "Export SDR LUT")
-        panel.message = String(localized: "33 × 33 × 33 · sRGB input and output. Includes per-pixel tone and color adjustments and the selected LUT. Excludes RAW decoding, grain, blur, halation, vignette, Clarity, BadHDR, and transforms.")
-        panel.canCreateDirectories = true
-        panel.begin { response in
-            guard response == .OK, let url = panel.url else { return }
-            exportingLUT = true
-            Task {
-                defer { exportingLUT = false }
-                do {
-                    let data = try await worker.exportSDRLUT(mapping: captured)
-                    let access = url.startAccessingSecurityScopedResource()
-                    defer { if access { url.stopAccessingSecurityScopedResource() } }
-                    try data.write(to: url, options: .atomic)
-                } catch { errorMessage = error.localizedDescription }
-            }
-        }
-        #endif
-    }
-
     #if os(macOS)
     private func chooseExportDestination(_ plan: ExportPlan, worker: RAWDeveloper, window: NSWindow?) {
         guard let item = plan.items.first else { return }
@@ -2249,6 +2266,7 @@ private struct PreviewRequest: Equatable {
     let loading: Bool
     let canvas: CGSize
     var lutRevision: Int = 0
+    var refinementReady = false
 }
 
 private struct DetailPreviewRequest: Equatable {

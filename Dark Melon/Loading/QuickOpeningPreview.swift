@@ -5,9 +5,9 @@ import ImageIO
 actor QuickOpeningPreview {
     private static let worker = QuickOpeningPreview()
 
-    static func image(_ url: URL) async -> CGImage? { await worker.read(url) }
+    static func image(_ url: URL, canvas: CGSize) async -> CGImage? { await worker.read(url, canvas: canvas) }
 
-    private func read(_ url: URL) -> CGImage? {
+    private func read(_ url: URL, canvas: CGSize) -> CGImage? {
         guard !Task.isCancelled, !DoubleExposure.isDocument(url) else { return nil }
         let access = url.startAccessingSecurityScopedResource()
         defer { if access { url.stopAccessingSecurityScopedResource() } }
@@ -17,7 +17,7 @@ actor QuickOpeningPreview {
             kCGImageSourceCreateThumbnailFromImageIfAbsent: true,
             kCGImageSourceCreateThumbnailWithTransform: true,
             kCGImageSourceShouldCacheImmediately: true,
-            kCGImageSourceThumbnailMaxPixelSize: 2560
+            kCGImageSourceThumbnailMaxPixelSize: max(1, max(canvas.width, canvas.height))
         ] as CFDictionary)
     }
 }

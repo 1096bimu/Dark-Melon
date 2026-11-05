@@ -290,14 +290,20 @@ struct HDRImagePreview: NSViewRepresentable {
                 sampleCenter = nil
                 circle.path = nil
             }
-            imageSize = sourceSize
+            if imageSize == .zero { imageSize = sourceSize }
             CATransaction.begin()
             CATransaction.setDisableActions(true)
             imageLayer.preferredDynamicRange = hdr ? .high : .standard
             imageLayer.contentsHeadroom = hdr ? CGFloat(image.contentHeadroom) : 1
             if displayedImage !== image {
                 displayedImage = image
-                render(surface, fallback: image, on: imageLayer, hdr: hdr)
+                render(surface, fallback: image, on: imageLayer, hdr: hdr) { [weak self] in
+                    guard let self, self.displayedImage === image else { return false }
+                    // Geometry belongs to the completed frame, not a newer decoder's metadata.
+                    self.imageSize = sourceSize
+                    self.positionImage()
+                    return true
+                }
             }
             if displayedSDR !== sdrImage {
                 displayedSDR = sdrImage

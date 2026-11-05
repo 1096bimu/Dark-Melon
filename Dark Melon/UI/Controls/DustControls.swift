@@ -96,33 +96,54 @@ struct DustInspector: View {
         })
     }
     var body: some View {
-        VStack(alignment:.leading,spacing:8) {
-            HStack { Text("Dust Correction").font(.headline); Spacer(); Button { editor.selected=nil } label: { Image(systemName:"xmark") }.buttonStyle(.plain) }
-            if let spot=editor.selectedSpot {
-                DustProfileGraph(profile:editor.profile,spot:spot).frame(height:90)
-                HStack { Text("Source").foregroundStyle(.secondary); Text("Corrected").foregroundStyle(.cyan); Text("Background").foregroundStyle(.orange) }.font(.caption2)
-                row("Angle",value(\.angle,scale:180 / .pi))
-                row("Line Length",value(\.length,scale:100))
-                row("Radius",value(\.radius,scale:100))
-                row("Falloff",value(\.feather,scale:100))
-                row("Attenuation",value(\.attenuation,scale:100))
-                HStack {
-                    Text("Center")
-                    AdjustmentField(title:"X",value: Binding(get:{spot.center.x},set:{var s=spot;s.center.x=$0;editor.update(s)}),range:0...1,digits:3,scale:100,width:75,commit:{ if let s=editor.selectedSpot { editor.resample(s) } })
-                    AdjustmentField(title:"Y",value: Binding(get:{spot.center.y},set:{var s=spot;s.center.y=$0;editor.update(s)}),range:0...1,digits:3,scale:100,width:75,commit:{ if let s=editor.selectedSpot { editor.resample(s) } })
-                }.textFieldStyle(.roundedBorder)
-                Text("Distances and coordinates are percentages of the native image; distances use its shorter edge.").font(.caption2).foregroundStyle(.secondary)
-                HStack {
-                    Button("Refit") { editor.fit(spot) }.disabled(editor.busy)
-                    Button("Delete",role:.destructive) { editor.remove() }
-                    if editor.busy { ProgressView().controlSize(.small) }
-                }.buttonStyle(.bordered)
+        EditorSection(title: "Dust Correction") {
+            Button("Close", systemImage: "xmark") { editor.selected = nil }
+                .labelStyle(.iconOnly)
+        } content: {
+            VStack(alignment: .leading, spacing: 18) {
+                if let spot = editor.selectedSpot {
+                    VStack(alignment: .leading, spacing: 8) {
+                        DustProfileGraph(profile: editor.profile, spot: spot)
+                            .frame(height: 90)
+                            .background(.black.opacity(0.2), in: .rect(cornerRadius: EditorGraphStyle.scopeCornerRadius))
+                            .clipShape(.rect(cornerRadius: EditorGraphStyle.scopeCornerRadius))
+                        HStack {
+                            Text("Source").foregroundStyle(.secondary)
+                            Text("Corrected").foregroundStyle(.cyan)
+                            Text("Background").foregroundStyle(.orange)
+                        }
+                        .font(.caption)
+                    }
+                    row("Falloff", value(\.feather, scale: 100), range: 0.0001...200)
+                    row("Attenuation", value(\.attenuation, scale: 100), range: 0...95)
+                    HStack {
+                        Button("Refit") { editor.fit(spot) }.disabled(editor.busy)
+                        if editor.busy { ProgressView().controlSize(.small) }
+                        Spacer()
+                        Button("Delete", role: .destructive) { editor.remove() }
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.regular)
+                }
+                if let message = editor.message {
+                    Text(message).font(.caption).foregroundStyle(.orange)
+                }
             }
-            if let message=editor.message { Text(message).font(.caption).foregroundStyle(.orange) }
-        }.padding(12).frame(width:280).background(.regularMaterial,in:RoundedRectangle(cornerRadius:12))
+        }
+        .padding(EditorSectionLayout.inset)
+        .modifier(ShellGlass())
+        .frame(width: EditorSectionLayout.width)
+        .preferredColorScheme(.dark)
     }
-    private func row(_ title: LocalizedStringKey,_ binding: Binding<Double>) -> some View {
-        HStack { Text(title);Spacer();AdjustmentField(title:title,value:binding,range:-100000...100000,digits:3,width:85,commit:{ if let spot=editor.selectedSpot { editor.resample(spot) } }) }
+
+    private func row(_ title: LocalizedStringKey, _ binding: Binding<Double>, range: ClosedRange<Double>) -> some View {
+        HStack {
+            Text(title)
+            Spacer()
+            AdjustmentField(title: title, value: binding, range: range, digits: 3, unit: "%",
+                commit: { if let spot = editor.selectedSpot { editor.resample(spot) } })
+                .fixedSize(horizontal: true, vertical: false)
+        }
     }
 }
 
@@ -166,7 +187,13 @@ final class DustOverlay: NSView {
             if inspector==nil { inspector=NSHostingView(rootView:DustInspector(editor:editor));addSubview(inspector!) }
             inspector?.isHidden=false
             let p=screen(spot.center)
-            inspector?.frame=CGRect(x:min(max(8,p.x+35),max(8,bounds.width-312)),y:min(max(8,p.y+20),max(8,bounds.height-460)),width:304,height:450)
+            if let inspector {
+                let size = inspector.fittingSize
+                inspector.frame = CGRect(
+                    x: min(max(8, p.x + 35), max(8, bounds.width - size.width - 8)),
+                    y: min(max(8, p.y + 20), max(8, bounds.height - size.height - 8)),
+                    width: size.width, height: size.height)
+            }
         } else { inspector?.isHidden=true }
     }
     private func screen(_ p: CGPoint) -> CGPoint {

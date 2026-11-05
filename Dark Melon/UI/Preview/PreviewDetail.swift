@@ -25,6 +25,12 @@ nonisolated struct PreviewDetail: @unchecked Sendable {
 }
 
 nonisolated enum PreviewResolution {
+    static func displayCanvas(points: CGSize, scale: CGFloat) -> CGSize? {
+        guard points.width.isFinite, points.height.isFinite, scale.isFinite,
+              points.width > 0, points.height > 0, scale > 0 else { return nil }
+        return CGSize(width: max(1, floor(points.width * scale)), height: max(1, floor(points.height * scale)))
+    }
+
     static func overviewScale(source: CGSize, canvas: CGSize) -> Double {
         guard source.width > 0, source.height > 0 else { return 1 }
         return min(1, max(1, canvas.width) / source.width, max(1, canvas.height) / source.height)

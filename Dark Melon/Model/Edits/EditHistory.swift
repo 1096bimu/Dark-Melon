@@ -123,6 +123,7 @@ import AppKit
 
     static func actionName(from old: DevelopmentRecipe, to new: DevelopmentRecipe) -> String {
         if old.colorSpace != new.colorSpace { return String(localized: "Color space") }
+        if (old.rawSettings?.orientation ?? SourceOrientation()) != (new.rawSettings?.orientation ?? SourceOrientation()) { return String(localized: "Orientation") }
         if old.rawSettings != new.rawSettings { return String(localized: "RAW") }
         let a = old.mapping, b = new.mapping
         if a.lutID != b.lutID || a.lutStrength != b.lutStrength { return String(localized: "LUT") }

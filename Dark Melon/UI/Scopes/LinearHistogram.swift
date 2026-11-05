@@ -97,7 +97,7 @@ struct LinearHistogram: View {
             }
             .clipped()
             .overlay {
-                if !sourceOnly && !showingSDR { HistogramToneCurve(mapping: mapping, hdrPreview: hdrPreview, inputMaximum: inputMaximum).allowsHitTesting(false) }
+                if !sourceOnly && !showingSDR { HistogramToneCurve(mapping: mapping, hdrPreview: hdrPreview, inputMaximum: inputMaximum, colorSpace: colorSpace).allowsHitTesting(false) }
             }
             .overlay {
                 HoverPixelOverlay(source: showingSDR ? sdrSource : development?.preview,

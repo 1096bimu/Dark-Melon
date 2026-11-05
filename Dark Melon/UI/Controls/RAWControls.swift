@@ -159,25 +159,29 @@ struct RAWControls: View {
                 SourceOrientationControls(orientation: $settings.orientation, halfTurnsOnly: halfTurnsOnly, commit: commit)
             }
             if isRAW {
-                Text("RAW 9").font(.callout)
-                Picker("RAW 9", selection: Binding(get: { settings.decoderMode }, set: {
-                    settings.decoderMode = $0; commit()
-                })) {
-                    ForEach(RAW9Mode.allCases, id: \.self) { mode in
-                        Text(LocalizedStringKey(mode.title)).tag(mode)
+                if settings.supportsRAW9 {
+                    Text("RAW 9").font(.callout)
+                    Picker("RAW 9", selection: Binding(get: { settings.decoderMode }, set: {
+                        settings.decoderMode = $0; commit()
+                    })) {
+                        ForEach(RAW9Mode.allCases, id: \.self) { mode in
+                            Text(LocalizedStringKey(mode.title)).tag(mode)
+                        }
                     }
+                    .pickerStyle(.segmented).labelsHidden()
+                    .filmLock(.rawDecoder)
+                    .help("Uses Apple's neural demosaic and denoise when supported. Changing the decoder may change detail and color.")
                 }
-                .pickerStyle(.segmented).labelsHidden()
-                .disabled(!settings.supportsRAW9).filmLock(.rawDecoder)
-                .help("Uses Apple's neural demosaic and denoise when supported. Changing the decoder may change detail and color.")
-                Toggle("Lens Correction", isOn: Binding(get: { settings.lensCorrection }, set: {
-                    settings.lensCorrection = $0; commit()
-                }))
-                .disabled(!settings.supportsLensCorrection).filmLock(.lensCorrection)
-                Toggle("Highlight Recovery", isOn: Binding(get: { settings.highlightRecovery }, set: {
-                    settings.highlightRecovery = $0; commit()
-                }))
-                .disabled(!settings.supportsHighlightRecovery).filmLock(.highlightRecovery)
+                if showAdvancedRAWControls {
+                    Toggle("Lens Correction", isOn: Binding(get: { settings.lensCorrection }, set: {
+                        settings.lensCorrection = $0; commit()
+                    }))
+                    .disabled(!settings.supportsLensCorrection).filmLock(.lensCorrection)
+                    Toggle("Highlight Recovery", isOn: Binding(get: { settings.highlightRecovery }, set: {
+                        settings.highlightRecovery = $0; commit()
+                    }))
+                    .disabled(!settings.supportsHighlightRecovery).filmLock(.highlightRecovery)
+                }
                 ForEach(RAWAdjustment.allCases.filter { showAdvancedRAWControls || $0 == .exposure || $0 == .shadowBias }) { control in
                     RAWAdjustmentControl(control: control,
                         value: Binding(get: { settings.values[control] ?? 0 }, set: { settings.values[control] = $0 }),

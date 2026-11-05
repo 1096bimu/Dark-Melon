@@ -34,6 +34,7 @@ struct EditorSettingsView: View {
     @AppStorage("previewMouseControls") private var mouseControls = false
     @AppStorage("previewReverseMouseScroll") private var reverseMouseScroll = false
     @AppStorage("showHueTwister") private var showHueTwister = false
+    @AppStorage("showISOSlider") private var showISOSlider = false
     @AppStorage("showContrastDistribution") private var showContrastDistribution = true
     @AppStorage("showAdvancedRAWControls") private var showAdvancedRAWControls = false
     @AppStorage(RAWSettings.maximizeRangePreferenceKey) private var alwaysMaximizeRAWRange = false
@@ -143,10 +144,11 @@ struct EditorSettingsView: View {
                 Text("Automatically fit the maximum RAW highlight data into the editing space when opening new files.")
             }
             Section {
+                Toggle("ISO Slider", isOn: $showISOSlider)
                 Toggle("Contrast Distribution", isOn: $showContrastDistribution)
                 Toggle("Hue Twister", isOn: $showHueTwister)
                 Toggle("Advanced RAW Sliders", isOn: $showAdvancedRAWControls)
-                    .help("Show Offset, noise reduction, sharpness, detail, local edge contrast, and moiré reduction.")
+                    .help("Show Lens Correction, Highlight Recovery, Offset, noise reduction, sharpness, detail, local edge contrast, and moiré reduction.")
             } header: {
                 Text("Controls")
             } footer: {

@@ -104,6 +104,14 @@ nonisolated struct DevelopmentRecipe: Codable, Equatable, Sendable {
             result.mapping.doubleExposure!.secondRAW.orientation = result.mapping.doubleExposure!.secondRAW.orientation.halfTurnsOnly
         }
         try result.validate()
+        if let mapping = document["mapping"] as? [String: Any],
+           mapping["storedShadowFloorCode"] == nil,
+           let stored = mapping["storedShadowFloor"], !(stored is NSNull) {
+            guard let old = stored as? Double, old.isFinite,
+                  (0...Double(Float.greatestFiniteMagnitude)).contains(old) else { throw RecipeError.invalid }
+            let black = result.mapping.curve(hdr: false).value(at: old)
+            result.mapping.shadowFloor = result.colorSpace.sdrCode(forLinear: black)
+        }
         result.snapshots = try snapshots.map { item in
             guard let idString = item["id"] as? String, let id = UUID(uuidString: idString),
                   let name = item["name"] as? String, !name.isEmpty,
@@ -167,7 +175,7 @@ nonisolated struct DevelopmentRecipe: Codable, Equatable, Sendable {
               m.vertexWarp.allSatisfy({ within($0.monochromeResponse, -1...1) && within($0.darkerHue, -Double.pi...Double.pi) && within($0.lighterHue, -Double.pi...Double.pi) && within($0.chroma, AdjustmentLimits.chroma) && within($0.lightness, AdjustmentLimits.density) && within($0.rotation, -1...1) && ($0.hueOffset.map { within($0, -Double.pi...Double.pi) } ?? true) }),
               m.hls.count == 6,
               within(m.white, 0...2), m.white >= ToneMapping.minimumRange * 0.999,
-              within(m.shadowFloor, 0...Double(Float.greatestFiniteMagnitude)), within(m.tonePosition, 0...2), within(m.concentration, -1...1),
+              within(m.shadowFloor, 0...255), within(m.tonePosition, 0...2), within(m.concentration, -1...1),
               m.contrastDistribution.count == 4, m.contrastDistribution.allSatisfy({ within($0, AdjustmentLimits.distributionLog) }),
               m.dyeMixers.isValid,
               m.dyePurity.count == 3, m.dyePurity.allSatisfy({ within($0, 0...1) }),

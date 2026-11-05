@@ -34,11 +34,8 @@ nonisolated final class MetalPreviewRenderer: @unchecked Sendable {
         let target = Target(layer)
         queue.async { [weak self, target] in
             guard let self, let layer = target.layer, let device, self.isCurrent(key, generation) else { return }
-            defer {
-                self.lock.lock()
-                if self.generations[key] == generation { self.generations.removeValue(forKey: key) }
-                self.lock.unlock()
-            }
+            var submitted = false
+            defer { if !submitted { self.finish(key, generation) } }
             autoreleasepool {
                 if self.workingSpace != surface.colorSpace || self.context == nil {
                     self.context = CIContext(mtlDevice: device, options: [.workingColorSpace: surface.colorSpace,
@@ -54,24 +51,37 @@ nonisolated final class MetalPreviewRenderer: @unchecked Sendable {
                 let image = surface.image.transformed(by: CGAffineTransform(translationX: -extent.minX, y: -extent.minY))
                 context.render(image, to: drawable.texture, commandBuffer: command,
                                bounds: CGRect(origin: .zero, size: extent.size), colorSpace: surface.colorSpace)
-                guard self.isCurrent(key, generation) else { return }
-                if let install {
-                    // Commit the patch geometry and its first drawable together on main.
-                    command.addCompletedHandler { buffer in
-                        guard buffer.status == .completed else { return }
-                        DispatchQueue.main.async {
-                            CATransaction.begin()
-                            CATransaction.setDisableActions(true)
-                            if install() { drawable.present() }
-                            CATransaction.commit()
+                // Never abandon encoded Core Image work: subsequent frames can reuse
+                // its intermediates. Only presentation may be skipped when superseded.
+                command.addCompletedHandler { [weak self] buffer in
+                    guard let self else { return }
+                    guard buffer.status == .completed else {
+                        self.queue.async {
+                            if self.context === context { context.clearCaches() }
                         }
+                        self.finish(key, generation)
+                        return // Preserve the last successfully presented drawable.
                     }
-                } else {
-                    command.present(drawable)
+                    // Presentation shares the main queue with generation changes, so
+                    // a stale completion cannot race a newer frame onto the layer.
+                    DispatchQueue.main.async {
+                        defer { self.finish(key, generation) }
+                        guard self.isCurrent(key, generation) else { return }
+                        CATransaction.begin()
+                        CATransaction.setDisableActions(true)
+                        if install?() ?? true { drawable.present() }
+                        CATransaction.commit()
+                    }
                 }
                 command.commit()
+                submitted = true
             }
         }
+    }
+
+    private func finish(_ key: ObjectIdentifier, _ generation: UUID) {
+        lock.lock(); defer { lock.unlock() }
+        if generations[key] == generation { generations.removeValue(forKey: key) }
     }
 
     private func isCurrent(_ key: ObjectIdentifier, _ generation: UUID) -> Bool {

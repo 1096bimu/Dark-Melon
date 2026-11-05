@@ -169,7 +169,10 @@ actor RAWDeveloper {
         dustGeometry = development.dustGeometry
         try Task.checkCancellation()
         let source = development.linearSource
-        let scale = PreviewResolution.overviewScale(source: source.extent.size, canvas: canvas)
+        let availableScale = development.fullResolutionReady ? 1 : min(
+            Double(development.preview.width) / source.extent.width,
+            Double(development.preview.height) / source.extent.height)
+        let scale = min(availableScale, PreviewResolution.overviewScale(source: source.extent.size, canvas: canvas))
         let size = CGSize(width: floor(source.extent.width * scale), height: floor(source.extent.height * scale))
         if let cached = overviewCache, cached.0 == development.id, cached.1 == size { return cached.2 }
         let access = development.url.startAccessingSecurityScopedResource()
@@ -224,7 +227,17 @@ actor RAWDeveloper {
             previewBatch = command
         }
         previewGPUTime = interactive ? 0 : nil
-        defer { previewGPUTime = nil; previewBatch = nil }
+        defer {
+            // Core Image may reuse intermediates encoded by a cancelled batch. Submit
+            // that work before releasing it, even though its result will not be shown.
+            if let command = previewBatch, command.status == .notEnqueued {
+                command.commit()
+                command.waitUntilCompleted()
+                if command.status != .completed { context.clearCaches() }
+            }
+            previewGPUTime = nil
+            previewBatch = nil
+        }
         // Keep the reference pair in linear light until the final LUT and display
         // conversion; an 8-bit SDR intermediate would corrupt highlight RGB gains.
         let input = try materialized(adjustedInput(CIImage(cgImage: source), mapping: mapping))
@@ -233,8 +246,8 @@ actor RAWDeveloper {
         let sdr = try finishDevelopment(input, mapping: mapping, hdr: logLUT)
         let hdr = mapping.hdrEnabled && !logLUT ? try finishDevelopment(input, mapping: mapping, hdr: true) : sdr
         let full = try finalLUTPair(sdr: sdr, hdr: hdr, mapping: mapping)
-        let fullSDRSurface = try displaySurface(full.sdr, hdr: false)
-        let fullHDRSurface = outputHDR ? try displaySurface(full.hdr, hdr: true) : fullSDRSurface
+        let fullSDRSurface = try displaySurface(applyingShadowFloor(full.sdr, mapping: mapping), hdr: false)
+        let fullHDRSurface = outputHDR ? try displaySurface(applyingShadowFloor(full.hdr, mapping: mapping), hdr: true) : fullSDRSurface
         guard let transform = mapping.transform else {
             try finishPreviewBatch()
             let fullSDR = try displayPreview(fullSDRSurface.image, hdr: false, headroom: mapping.hdrMax)
@@ -248,8 +261,8 @@ actor RAWDeveloper {
         }
         let cropped = try finalLUTPair(sdr: transform.apply(to: sdr),
                                       hdr: mapping.hdrEnabled ? transform.apply(to: hdr) : sdr, mapping: mapping)
-        let croppedSDRSurface = try displaySurface(cropped.sdr, hdr: false)
-        let croppedHDRSurface = outputHDR ? try displaySurface(cropped.hdr, hdr: true) : croppedSDRSurface
+        let croppedSDRSurface = try displaySurface(applyingShadowFloor(cropped.sdr, mapping: mapping), hdr: false)
+        let croppedHDRSurface = outputHDR ? try displaySurface(applyingShadowFloor(cropped.hdr, mapping: mapping), hdr: true) : croppedSDRSurface
         try finishPreviewBatch()
         let fullSDR = try displayPreview(fullSDRSurface.image, hdr: false, headroom: mapping.hdrMax)
         let fullHDR = outputHDR
@@ -290,8 +303,8 @@ actor RAWDeveloper {
         let pair = try finalLUTPair(sdr: mapping.transform?.apply(to: sdr) ?? sdr,
             hdr: mapping.transform?.apply(to: hdr) ?? hdr, mapping: mapping)
         let outputHDR = mapping.hdrEnabled && !logLUT
-        let sdrBitmap = try displayPreview(pair.sdr, hdr: false, headroom: 1)
-        let hdrBitmap = outputHDR ? try displayPreview(pair.hdr, hdr: true, headroom: mapping.hdrMax) : sdrBitmap
+        let sdrBitmap = try displayPreview(applyingShadowFloor(pair.sdr, mapping: mapping), hdr: false, headroom: 1)
+        let hdrBitmap = outputHDR ? try displayPreview(applyingShadowFloor(pair.hdr, mapping: mapping), hdr: true, headroom: mapping.hdrMax) : sdrBitmap
         return PreviewImages(source: development.preview, sdr: sdrBitmap, hdr: hdrBitmap,
             fullSDR: sdrBitmap, fullHDR: hdrBitmap, hasHDROutput: outputHDR)
     }
@@ -397,52 +410,59 @@ actor RAWDeveloper {
     /// Sample the pointwise SDR rendering transform. Spatial effects cannot be
     /// represented by a 3D LUT: adjacent grid entries are colors, not neighbors.
     func exportSDRLUT(mapping: ToneMapping, dimension: Int = 33) throws -> Data {
+        try sampleSDRLUT(mapping: mapping, dimension: dimension).encoded()
+    }
+
+    private var lutInputGrid: (dimension: Int, image: CIImage)?
+
+    func sampleSDRLUT(mapping: ToneMapping, dimension: Int) throws -> SDRLUT {
+        try Task.checkCancellation()
         guard (2...65).contains(dimension) else { throw LUTError.invalid }
-        var settings = mapping
-        settings.transform = nil
-        settings.dustSpots = nil
-        settings.hdf = 0
-        settings.vignette.amount = 0
-        settings.halation.inputCurve = 0
-        settings.grain.strength = 0
-        settings.badHDR.strength = 0
-        settings.clarity = 0
+        let settings = SDRLUT.pointwiseMapping(mapping)
+        guard settings.white.isFinite, settings.white > 0 else { throw LUTError.invalid }
         let count = dimension * dimension * dimension
-        var pixels = [Float]()
-        pixels.reserveCapacity(count * 4)
-        for b in 0..<dimension { for g in 0..<dimension { for r in 0..<dimension {
-            pixels.append(contentsOf: [Float(r) / Float(dimension - 1),
-                Float(g) / Float(dimension - 1), Float(b) / Float(dimension - 1), 1])
-        } } }
         let srgb = CGColorSpace(name: CGColorSpace.sRGB)!
-        let input = CIImage(bitmapData: pixels.withUnsafeBytes { Data($0) },
-            bytesPerRow: dimension * 16, size: CGSize(width: dimension, height: dimension * dimension),
-            format: .RGBAf, colorSpace: srgb)
-        let output = try mappedImage(input, mapping: settings, hdr: false)
+        let input: CIImage
+        if let cached = lutInputGrid, cached.dimension == dimension { input = cached.image }
+        else {
+            var pixels = [Float]()
+            pixels.reserveCapacity(count * 4)
+            for b in 0..<dimension { for g in 0..<dimension { for r in 0..<dimension {
+                pixels.append(contentsOf: [Float(r) / Float(dimension - 1),
+                    Float(g) / Float(dimension - 1), Float(b) / Float(dimension - 1), 1])
+            } } }
+            input = CIImage(bitmapData: pixels.withUnsafeBytes { Data($0) },
+                bytesPerRow: dimension * 16, size: CGSize(width: dimension, height: dimension * dimension),
+                format: .RGBAf, colorSpace: srgb).insertingIntermediate(cache: true)
+            // Convert into the linear working gamut before scaling exposure. Keeping the
+            // grid separate also avoids rebuilding it for every edit or losing dark colors
+            // to an optimized, very-low-exposure ColorSync conversion.
+            lutInputGrid = (dimension, input)
+        }
+        // Normalize the linear input interval 0…white onto the cube's fixed 0…1 domain.
+        // A straight curve divides by white, cancelling this scale and leaving an identity LUT.
+        let scaled = input.applyingFilter("CIColorMatrix", parameters: [
+            "inputRVector": CIVector(x: settings.white, y: 0, z: 0, w: 0),
+            "inputGVector": CIVector(x: 0, y: settings.white, z: 0, w: 0),
+            "inputBVector": CIVector(x: 0, y: 0, z: settings.white, w: 0)
+        ])
+        let output = try mappedImage(scaled, mapping: settings, hdr: false)
         var rendered = [Float](repeating: 0, count: count * 4)
         context.render(output, toBitmap: &rendered, rowBytes: dimension * 16,
             bounds: input.extent, format: .RGBAf, colorSpace: srgb)
         try Task.checkCancellation()
-        var text = """
-        TITLE "Dark Melon SDR"
-        # Input: encoded sRGB. Output: encoded sRGB.
-        # Spatial effects, crop and RAW decoder settings excluded.
-        LUT_3D_SIZE \(dimension)
-        DOMAIN_MIN 0 0 0
-        DOMAIN_MAX 1 1 1
-
-        """
-        let locale = Locale(identifier: "en_US_POSIX")
-        for index in 0..<count {
-            let rgb = (0..<3).map { rendered[index * 4 + $0] }
-            guard rgb.allSatisfy(\.isFinite) else { throw LUTError.invalid }
-            text += String(format: "%.7f %.7f %.7f\n", locale: locale,
-                min(1, max(0, rgb[0])), min(1, max(0, rgb[1])), min(1, max(0, rgb[2])))
+        let values = stride(from: 0, to: rendered.count, by: 4).map { index in
+            SIMD3<Float>(rendered[index], rendered[index + 1], rendered[index + 2])
         }
-        return Data(text.utf8)
+        guard values.allSatisfy({ $0.x.isFinite && $0.y.isFinite && $0.z.isFinite }) else { throw LUTError.invalid }
+        return SDRLUT(dimension: dimension, values: values.map { simd_clamp($0, .zero, .one) })
     }
 
     func mappedImage(_ image: CIImage, mapping: ToneMapping, hdr: Bool) throws -> CIImage {
+        try applyingShadowFloor(gradedImage(image, mapping: mapping, hdr: hdr), mapping: mapping)
+    }
+
+    private func gradedImage(_ image: CIImage, mapping: ToneMapping, hdr: Bool) throws -> CIImage {
         if lutPipeline.outputsSDR(mapping) {
             let developed = try developedImage(image, mapping: mapping, hdr: true)
             let transformed = try mapping.transform?.apply(to: developed) ?? developed
@@ -463,6 +483,17 @@ actor RAWDeveloper {
     }
 
     private lazy var shadowFloorKernel = MetalImageKernels.color("shadowFloor")
+
+    private func applyingShadowFloor(_ image: CIImage, mapping: ToneMapping) throws -> CIImage {
+        guard mapping.shadowFloor > 0 else { return image }
+        // Clamp the finished RGB channels, rather than moving the tone curve's input black point.
+        let floor = colorSpace.linearSDRValue(forCode: mapping.shadowFloor)
+        guard let output = shadowFloorKernel?.apply(extent: image.extent, arguments: [image, floor]) else {
+            throw DevelopmentError.decode
+        }
+        return output
+    }
+
 
     /// Render only a narrow, rotated strip; never read a full-resolution bitmap to fit a spot.
     func dustProfile(_ development: RAWDevelopment, spot: DustSpot, spots: [DustSpot]) throws -> DustProfile {
@@ -532,13 +563,6 @@ actor RAWDeveloper {
         image = try badHDR.apply(to: image, settings: mapping.badHDR, whitePoint: mapping.white,
                                 weights: colorSpace.luminance)
         image = try filmResponse.apply(to: image, mapping: mapping)
-        if mapping.shadowFloor > 0 {
-            guard let adjusted = shadowFloorKernel?.apply(extent: image.extent,
-                arguments: [image, mapping.shadowFloor]) else {
-                throw DevelopmentError.decode
-            }
-            image = adjusted
-        }
         return image
     }
 
@@ -663,9 +687,11 @@ actor RAWDeveloper {
     }
 
     private func completePreviewCommand(_ command: MTLCommandBuffer) throws {
-        try Task.checkCancellation()
+        // Once encoded, a buffer must execute so cached CI intermediates remain valid.
+        // Cancellation prevents publication after completion, not submission.
         command.commit()
         command.waitUntilCompleted()
+        if command.status != .completed { context.clearCaches() }
         try Task.checkCancellation()
         guard command.status == .completed else { throw DevelopmentError.decode }
         if let elapsed = previewGPUTime {
@@ -1083,7 +1109,7 @@ actor RAWDeveloper {
         guard let bitmap = canvas.makeImage() else { throw HEIFExportError.encoding }
         let properties = ExportMetadata.properties(ExportMetadata.read(doubleExposure?.urls(relativeTo: url).first ?? url), width: width, height: height,
             mapping: mapping, rawExposure: Double(rawSettings?.values[.exposure] ?? 0), effectiveISO: settings.effectiveISO)
-        let gallery = CIImage(cgImage: bitmap).settingProperties(properties).settingContentHeadroom(1)
+        let gallery = try applyingShadowFloor(CIImage(cgImage: bitmap), mapping: mapping).settingProperties(properties).settingContentHeadroom(1)
         return settings.format == .heif ? try encodeSDR(gallery, settings: settings) : try encodeStandardImage(gallery, settings: settings)
     }
 
@@ -1091,7 +1117,7 @@ actor RAWDeveloper {
         let properties = source.properties
         let source = try bakeDust(source, spots: mapping.dustSpots ?? []).settingProperties(properties)
         return try encodeExport(sourceSize: source.extent.integral.size, mapping: mapping, settings: settings, sourceProperties: source.properties) { hdr in
-            try self.mappedImage(source, mapping: mapping, hdr: hdr)
+            try self.gradedImage(source, mapping: mapping, hdr: hdr)
         }
     }
 
@@ -1122,21 +1148,21 @@ actor RAWDeveloper {
                     "inputBVector": CIVector(x: 0, y: 0, z: scale, w: 0)
                 ])
             }
-            return try encodeStandardImage(image, settings: settings)
+            return try encodeStandardImage(applyingShadowFloor(image, mapping: mapping), settings: settings)
         }
         if settings.format == .heif && outputHDR && settings.heifHDRMode == .direct {
-            let hdr = resized(try image(true))
+            let hdr = try applyingShadowFloor(resized(image(true)), mapping: mapping)
                 .settingContentHeadroom(Float(mapping.hdrMax))
             try Task.checkCancellation()
             let encoded = try context.heif10Representation(of: hdr, colorSpace: colorSpace.pq,
                 options: [CIImageRepresentationOption(rawValue: kCGImageDestinationLossyCompressionQuality as String): settings.quality])
             return try ExportMetadata.retainingMetadata(in: encoded, properties: properties)
         }
-        let sdr = resized(try image(false))
+        let sdr = try applyingShadowFloor(resized(image(false)), mapping: mapping)
         guard outputHDR,
               !(settings.format == .heif && settings.heifHDRMode == .off)
         else { return try encodeSDR(sdr, settings: settings) }
-        let hdr = resized(try image(true))
+        let hdr = try applyingShadowFloor(resized(image(true)), mapping: mapping)
             .settingContentHeadroom(Float(mapping.hdrMax))
         return try encodeHEIF(sdr: sdr, hdr: hdr, settings: settings, reusePrepared: reusePreparedGainMap)
     }
@@ -1312,17 +1338,36 @@ actor RAWDeveloper {
             if abs(CGFloat(cached.preview.width) - requestedSize.width) <= 1,
                abs(CGFloat(cached.preview.height) - requestedSize.height) <= 1 {
                 overviewCache = (cached.id, requestedSize, cached.preview)
+                return cached
             }
-            return cached
+            if cached.fullResolutionReady ||
+               (requestedSize.width <= CGFloat(cached.preview.width) + 1 && requestedSize.height <= CGFloat(cached.preview.height) + 1) {
+                let preview = try overview(cached, canvas: previewCanvas)
+                let linearSource: CIImage
+                if cached.fullResolutionReady { linearSource = cached.linearSource }
+                else {
+                    let bounds = cached.linearSource.extent
+                    linearSource = CIImage(cgImage: preview)
+                        .transformed(by: CGAffineTransform(scaleX: bounds.width / CGFloat(preview.width), y: bounds.height / CGFloat(preview.height)))
+                        .cropped(to: bounds)
+                }
+                let resized = RAWDevelopment(id: cached.id, preview: preview, linearSource: linearSource, url: cached.url,
+                    width: cached.width, height: cached.height, whitePoint: cached.whitePoint, metadata: cached.metadata,
+                    isRAW: cached.isRAW, rawDefaults: cached.rawDefaults, sourceHeadroom: cached.sourceHeadroom,
+                    fullResolutionReady: cached.fullResolutionReady, dustGeometry: cached.dustGeometry, dustSpots: cached.dustSpots)
+                RAWImageCache.shared.insert(resized, stamp: stamp, space: colorSpace, settings: rawSettings, balance: rawWhiteBalance, composite: doubleExposure)
+                return resized
+            }
         }
         cacheStamp = stamp
         discardDustInputs(url, spots: dustSpots)
-        let source = try sourceImage(url, previewLimit: progressive ? 2560 : nil)
+        let previewLimit = max(1, max(previewCanvas.width, previewCanvas.height))
+        let source = try sourceImage(url, previewLimit: progressive ? previewLimit : nil)
         try Task.checkCancellation()
         let rawImage = source.image
         let image: CIImage
         if progressive, doubleExposure != nil || !dustSpots.isEmpty {
-            let proxyScale = min(1, 2560 / max(rawImage.extent.width, rawImage.extent.height))
+            let proxyScale = min(1, previewLimit / max(rawImage.extent.width, rawImage.extent.height))
             image = try bakeDust(rawImage.transformed(by: CGAffineTransform(scaleX: proxyScale, y: proxyScale)), spots: dustSpots)
                 .transformed(by: CGAffineTransform(scaleX: 1/proxyScale, y: 1/proxyScale))
                 .cropped(to: rawImage.extent)
