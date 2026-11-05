@@ -168,7 +168,7 @@ struct SlopeEditor: View {
                     onToneEditingChanged(editing)
                 }
                         .controlReset { mapping.tonePosition = min(mapping.white, defaults.tonePosition); mapping.setAutomaticHDRTarget() }
-                        .editorSliderTrack(EditorSliderTracks.tone)
+                        .editorSliderTrack(EditorSliderTracks.tone(contrast: mapping.concentration))
                         .labelsHidden()
                         .accessibilityValue(mapping.tonePosition.formatted(.number.precision(.fractionLength(3))))
                 }
@@ -242,6 +242,7 @@ struct SlopeEditor: View {
                             onHDRGainAdjustment()
                         }
                     }) { Text("HDR Gain") }
+                        .editorSliderTrack(EditorSliderTracks.hdrGain)
                         .editorSliderTicks([1, 2, 4])
                         .controlReset { mapping.hdrGain = defaults.hdrGain; onHDRGainAdjustment() }
                         .labelsHidden()

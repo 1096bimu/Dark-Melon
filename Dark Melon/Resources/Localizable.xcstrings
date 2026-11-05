@@ -1,6 +1,57 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Highlight" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ハイライト"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "高光"
+          }
+        }
+      }
+    },
+    "Tone adjustment is ineffective at low contrast." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "コントラストが低い場合、トーン調整は効果がありません。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "低对比度时，色调调整效果不明显。"
+          }
+        }
+      }
+    },
+    "Black and White lift the endpoint slopes. Shadows and Highlight independently shape the curve before and after Tone while keeping its brightness and slope fixed. Increasing Shadows concentrates the shadow-side adjustment toward Tone; increasing Highlight extends the highlight-side adjustment away from Tone. Both at 50%, with Black and White at 0%, reproduce the original beta curve. The graph shows the neutral SDR tone curve from black to the white point." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "黒と白は両端の傾きを引き上げます。シャドウとハイライトは、トーン位置の明るさと傾きを保ちながら、その前後のカーブを個別に調整します。シャドウを上げると暗部の調整がトーン付近に集中し、ハイライトを上げると明部の調整がトーンから広がります。両方を50%、黒と白を0%にすると元のベータカーブを再現します。グラフは黒から白点までのニュートラルなSDRトーンカーブです。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "黑和白提高两端的斜率。阴影和高光分别调整色调前后的曲线，同时保持色调处的亮度和斜率不变。提高阴影会使暗部调整向色调集中；提高高光会使亮部调整从色调向外延伸。两者均为 50%、黑和白均为 0% 时，重现原始贝塔曲线。图表显示从黑色到白点的中性 SDR 色调曲线。"
+          }
+        }
+      }
+    },
     "" : {
       "shouldTranslate" : false
     },
@@ -2120,19 +2171,19 @@
         }
       }
     },
-    "Contrast indicates the level of contrast centered around the luminance indicated by Tone." : {
+    "Contrast shapes the beta curve around Tone. Zero is linear; negative values reduce contrast around Tone." : {
       "extractionState" : "manual",
       "localizations" : {
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "コントラストは、トーンで指定した輝度を中心とするコントラストの強さを示します。"
+            "value" : "コントラストはトーン付近のベータカーブを調整します。0では直線になり、負の値ではトーン付近のコントラストが低下します。"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "对比度控制以影调所指亮度为中心的反差程度。"
+            "value" : "对比度调整色调附近的贝塔曲线。零为线性，负值降低色调附近的对比度。"
           }
         }
       }
@@ -6645,22 +6696,6 @@
         }
       }
     },
-    "Redistributes contrast across the SDR range. The middle controls lie halfway from black to Tone and from Tone to white. Equal weights leave the original curve unchanged; higher relative weights add contrast locally." : {
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "SDRレンジ全体のコントラストを再配分します。中間のコントロールは、黒からトーン、トーンから白までのそれぞれ中間にあります。すべて同じ重みでは元のカーブを維持し、相対的に重みを上げた領域ではコントラストが高まります。"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在 SDR 范围内重新分配对比度。中间两个控制点分别位于黑色与影调、影调与白色之间的中点。所有权重相等时保持原始曲线不变；相对权重越高，局部对比度越强。"
-          }
-        }
-      }
-    },
     "Redo" : {
       "localizations" : {
         "ja" : {
@@ -8263,36 +8298,19 @@
         }
       }
     },
-    "Tone adjustment is ineffective at low contrast." : {
+    "Tone locates the central contrast region in source brightness. Its output brightness follows the beta curve." : {
       "extractionState" : "manual",
       "localizations" : {
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "コントラストが低い場合、トーン調整は効果がありません。"
+            "value" : "トーンは入力輝度上のコントラストの中心を設定します。出力輝度はベータカーブに従います。"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "低对比度时，影调调整效果不明显。"
-          }
-        }
-      }
-    },
-    "Tone indicates the range of luminance that is of the most interest, usually set to skin tones, or 50% grey. Its luminance is generally protected when adjusting Contrast." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "トーンは最も重視する輝度の範囲を示します。通常は肌のトーンまたは50%グレーに設定します。コントラストを調整しても、この輝度は基本的に維持されます。"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "影调表示最关注的亮度范围，通常选在肤色或 50% 灰附近。调整对比度时，该范围的亮度通常会得到保留。"
+            "value" : "色调设置源亮度中的中心对比度区域。输出亮度由贝塔曲线决定。"
           }
         }
       }
@@ -9092,7 +9110,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "零为线性。负值会降低影调位置附近的对比度。"
+            "value" : "零为线性。负值会降低色调位置附近的对比度。"
           }
         }
       }

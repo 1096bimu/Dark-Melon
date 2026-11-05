@@ -3,7 +3,6 @@ import SwiftUI
 /// SDR and HDR intervals have separate labeled widths so all four handles remain usable.
 struct ChromaCurveEditor: View {
     let title: String
-    @GestureState private var dragging: Int?
     @Binding var start: Double
     @Binding var middle: Double
     @Binding var sdr: Double
@@ -16,52 +15,17 @@ struct ChromaCurveEditor: View {
     private var labels: [String] { ["0", "SDR ½", "SDR", "HDR"] }
     private var levels: [Double] { [0, sdrMaximum/2, sdrMaximum, sdrMaximum*cbrt(hdrMax)] }
 
-    private func position(_ index: Int) -> Double { Double(index) / 3 }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text(LocalizedStringKey(title)).fontWeight(.medium)
                 ControlInfo(info)
             }
-            GeometryReader { proxy in
-                let width = max(1, proxy.size.width-28)
-                let height = max(1, proxy.size.height-28)
-                let values = [start, middle, sdr, hdrMax > 1 ? hdr : sdr]
-                ZStack {
-                    Path { path in
-                        for i in 0..<4 {
-                            let x = 14 + CGFloat(position(i))*width
-                            path.move(to: CGPoint(x: x, y: 14))
-                            path.addLine(to: CGPoint(x: x, y: 14+height))
-                        }
-                        path.move(to: CGPoint(x: 14,y: 14+height/2))
-                        path.addLine(to: CGPoint(x: 14+width,y: 14+height/2))
-                    }.stroke(EditorGraphStyle.guideColor, style: EditorGraphStyle.guide)
-                    Path { path in
-                        for i in 0..<4 {
-                            let p = CGPoint(x: 14+CGFloat(position(i))*width,y: 14+(1-values[i].clamped(to: 0...2)/2)*height)
-                            if i == 0 { path.move(to: p) } else { path.addLine(to: p) }
-                        }
-                    }.stroke(EditorGraphStyle.trackColor, style: EditorGraphStyle.trackStroke)
-                    ForEach(0..<4) { index in
-                        EditorGraphHandle(isDragging: dragging == index)
-                            .controlReset { controls[index].wrappedValue = resetValues[index] }
-                            .position(x: 14+CGFloat(position(index))*width,y: 14+(1-values[index].clamped(to: 0...2)/2)*height)
-                            .gesture(DragGesture(minimumDistance: 0,coordinateSpace: .named(title))
-                                .updating($dragging) { _, state, _ in state = index }
-                                .onChanged {
-                                controls[index].wrappedValue = (2*(1-($0.location.y-14)/height)).clamped(to: 0...2)
-                            })
-                            .accessibilityLabel("\(title) \(labels[index])")
-                            .accessibilityValue(values[index].formatted(.number.precision(.fractionLength(2))))
-                            .accessibilityAdjustableAction { direction in
-                                controls[index].wrappedValue = (values[index]+(direction == .increment ? 0.02 : -0.02)).clamped(to: 0...2)
-                            }
-                            .disabled(index == 3 && hdrMax <= 1)
-                    }
-                }.coordinateSpace(name: title)
-            }.frame(height: 150).modifier(DisabledControlAppearance())
+            FourSliderGraph(
+                controls: hdrMax > 1 ? controls : Array(controls.prefix(3)) + [.constant(sdr)],
+                labels: labels.map { LocalizedStringKey("\(title) \($0)") }, range: 0...2,
+                resetValues: resetValues, disabled: hdrMax > 1 ? [] : [3])
+
             HStack {
                 ForEach(0..<4) { index in
                     VStack(spacing: 2) {

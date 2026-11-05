@@ -28,11 +28,11 @@ struct ControlInfo: View {
             case .iso:
                 String(localized: "Equivalent to the familiar \"Exposure\" slider, here it only moves the white point and Tone sliders by proxy. Due to the property of ISO Invariance in modern sensors, using this slider is in most ways identical to changing the ISO setting in-camera during capture.")
             case .tone:
-                String(localized: "Tone indicates the range of luminance that is of the most interest, usually set to skin tones, or 50% grey. Its luminance is generally protected when adjusting Contrast.")
+                String(localized: "Tone locates the central contrast region in source brightness. Its output brightness follows the beta curve.")
             case .contrast:
-                String(localized: "Contrast indicates the level of contrast centered around the luminance indicated by Tone.")
+                String(localized: "Contrast shapes the beta curve around Tone. Zero is linear; negative values reduce contrast around Tone.")
             case .contrastDistribution:
-                String(localized: "Redistributes contrast across the SDR range. The middle controls lie halfway from black to Tone and from Tone to white. Equal weights leave the original curve unchanged; higher relative weights add contrast locally.")
+                String(localized: "Black and White lift the endpoint slopes. Shadows and Highlight independently shape the curve before and after Tone while keeping its brightness and slope fixed. Increasing Shadows concentrates the shadow-side adjustment toward Tone; increasing Highlight extends the highlight-side adjustment away from Tone. Both at 50%, with Black and White at 0%, reproduce the original beta curve. The graph shows the neutral SDR tone curve from black to the white point.")
             case .hdrRolloff:
                 String(localized: "Adjusts HDR curvature while preserving the starting tangent. Zero is straight; 100% ends flat; -100% bends upward to nearly twice the straight endpoint. HDR Gain multiplies the result and can be increased if the curves cross.")
             case .hdrGain:

@@ -68,6 +68,18 @@ enum EditorSliderTracks {
             })
         })
     static let tone = LinearGradient(colors: [.black, .white], startPoint: .leading, endPoint: .trailing)
+    static func tone(contrast: Double) -> LinearGradient {
+        let strength = min(1, abs(contrast) * 2)
+        let colors: [Color] = contrast < 0 ? [.white, .black] : [.black, .white]
+        return LinearGradient(colors: colors.map { EditorGraphStyle.trackColor.mix(with: $0, by: strength) },
+                              startPoint: .leading, endPoint: .trailing)
+    }
+    // Gain uses a linear 0–5 range, so its neutral 1× stop is at one fifth.
+    static let hdrGain = LinearGradient(stops: [
+        .init(color: .mint, location: 0),
+        .init(color: Color(white: 0.8), location: 1.0 / 5),
+        .init(color: .orange, location: 1)
+    ], startPoint: .leading, endPoint: .trailing)
     static let temperature = LinearGradient(colors: [.blue, Color(white: 0.8), .orange], startPoint: .leading, endPoint: .trailing)
     static let tint = LinearGradient(colors: [.green, Color(white: 0.8), Color(red: 1, green: 0, blue: 1)], startPoint: .leading, endPoint: .trailing)
 }

@@ -9,7 +9,5 @@ nonisolated enum AdjustmentLimits {
     static let chroma = 0.0...16.0
     static let density = -1.0...1.0
     static let grainSize = 0.05...16.0
-    static let distributionWeight = (1.0 / 256)...256.0
-    static let distributionLog = -8.0...8.0
     static let vignetteStops = 0.0...32.0
 }

@@ -38,8 +38,12 @@ nonisolated struct ToneMapping: Codable, Equatable, Sendable {
     var toneUsesSourceLuminance = true
     var peakPosition: Double { tonePosition }
     var concentration = 0.2
-    // Log2 relative derivative weights, from ¼× to 4×.
-    var contrastDistribution = [0.0, 0.0, 0.0, 0.0]
+    // A new key deliberately discards the former distribution weights and experimental curve settings.
+    private var storedContrastDistribution: ToneContrastDistribution?
+    var contrastDistribution: ToneContrastDistribution {
+        get { storedContrastDistribution ?? ToneContrastDistribution() }
+        set { storedContrastDistribution = newValue == ToneContrastDistribution() ? nil : newValue }
+    }
     var channelContrast = [0.0, 0.0, 0.0]
     var dyeMixers = DyeMixers()
     private var storedDyePurity: [Double]?
@@ -147,7 +151,7 @@ nonisolated struct ToneMapping: Codable, Equatable, Sendable {
         var white: Double
         var tone: Double
         var contrast: Double
-        var distribution: [Double]
+        var distribution: ToneContrastDistribution
         var hdr: Bool
         var target: Double
         var gain: Double
@@ -171,119 +175,26 @@ nonisolated struct ToneMapping: Codable, Equatable, Sendable {
         return result
     }
 
+    // The LUT viewer's ramp uses encoded sRGB on both axes, with its linear
+    // input scaled to the white point. This samples only the SDR tone function.
+    private static let rampInputs: [Double] = (0...256).map {
+        let x = Double($0) / 256
+        return x <= 0.04045 ? x / 12.92 : pow((x + 0.055) / 1.055, 2.4)
+    }
+
+    func neutralSDRRamp() -> [Double] {
+        let curve = curve(hdr: false)
+        return Self.rampInputs.map { input in
+            let output = curve.value(at: input * white).clamped(to: 0...1)
+            return output <= 0.0031308 ? output * 12.92 : 1.055 * pow(output, 1 / 2.4) - 0.055
+        }
+    }
+
     private func uncachedCurve(hdr: Bool) -> ToneCurve {
         if hdr && hdrEnabled { return hdrCurve() }
-        let upperInput = white
-        let outputMax = 1.0
-        let span = max(Self.minimumRange, upperInput)
-        let count = 2000
-        let effectiveConcentration = concentration
-        let neutralDistribution = contrastDistribution.allSatisfy { $0 == contrastDistribution[0] }
-        guard effectiveConcentration != 0 || !neutralDistribution else {
-            return ToneCurve(values: (0...count).map { Double($0) / Double(count) * outputMax },
-                             black: 0, white: upperInput)
-        }
-        let sharedPeak = min(white, max(0, peakPosition))
-        let peak = min(1, max(0, sharedPeak / span))
-        // Beta(alpha = 1 + k*p, beta = 1 + k*(1-p)). Its mode is p.
-        // Exponential slider spacing gives finer control near the linear end.
-        // Negative contrast subtracts a broad beta-shaped slope profile.
-        // Its nonnegative density preserves monotonicity without singular endpoints.
-        let negative = effectiveConcentration < 0
-        let k = negative ? 2.0 : expm1(log(257) * min(1, effectiveConcentration))
-        let a = k * peak
-        let b = k * (1 - peak)
-        let peakLog = (a == 0 ? 0 : a * log(peak))
-                    + (b == 0 ? 0 : b * log1p(-peak))
-        let distribution = ToneContrastDistribution(peak: peak, weights: contrastDistribution)
-        func density(_ x: Double) -> Double {
-            let profile = exp(a * log(x) + b * log1p(-x) - peakLog)
-            let base = negative ? max(0, 1 - min(1, -effectiveConcentration) * profile) : profile
-            return neutralDistribution ? base : base * distribution.weight(at: x)
-        }
-        // Midpoint integration avoids sampling endpoint singular limits as k
-        // approaches zero. Subtracting peakLog keeps all weights well scaled.
-        var values = [Double](repeating: 0, count: count + 1)
-        for i in 0..<count {
-            let x0 = (Double(i) + 0.25) / Double(count)
-            let x1 = (Double(i) + 0.75) / Double(count)
-            values[i + 1] = values[i] + (density(x0) + density(x1)) / (2 * Double(count))
-        }
-        let scale = outputMax / values[count]
-        return ToneCurve(values: values.map { $0 * scale }, black: 0, white: upperInput)
-    }
-}
-
-/// Positive, C1-continuous relative slope weights. Subtracting a common log
-/// weight removes overall gain before integration, so equal handles are identity.
-nonisolated struct ToneContrastDistribution {
-    let curve: FourPointCubic
-    private let mean: Double
-    var positions: [Double] { curve.positions }
-
-    init(peak: Double, weights: [Double]) {
-        let m = peak.clamped(to: 0...1)
-        curve = FourPointCubic(positions: [0, m / 2, (m + 1) / 2, 1], values: weights)
-        mean = weights.reduce(0, +) / 4
-    }
-
-    func logWeight(segment: Int, fraction: Double) -> Double {
-        curve.value(segment: segment, fraction: fraction)
-    }
-
-    func weight(at x: Double) -> Double {
-        let i = (0..<3).first { x < positions[$0 + 1] } ?? 2
-        let span = positions[i + 1] - positions[i]
-        let t = span > 0 ? (x - positions[i]) / span : 1
-        return exp2(logWeight(segment: i, fraction: t) - mean)
-    }
-}
-
-/// Four-point PCHIP, shared by the derivative and the graph's nonuniform axis.
-nonisolated struct FourPointCubic {
-    let positions: [Double]
-    let values: [Double]
-    private let slopes: [Double]
-
-    init(positions: [Double], values: [Double]) {
-        self.positions = positions
-        self.values = values
-        let h = (0..<3).map { positions[$0 + 1] - positions[$0] }
-        let d = (0..<3).map { h[$0] > 0 ? (values[$0 + 1] - values[$0]) / h[$0] : 0 }
-        // PCHIP: weighted harmonic means preserve monotonic intervals without
-        // overshoot. Only extrema and flat intervals require horizontal tangents.
-        func endpoint(_ h0: Double, _ h1: Double, _ d0: Double, _ d1: Double) -> Double {
-            guard h0 > 0 else { return 0 }
-            let slope = ((2 * h0 + h1) * d0 - h0 * d1) / (h0 + h1)
-            guard slope * d0 > 0 else { return 0 }
-            return d0 * d1 <= 0 && abs(slope) > 3 * abs(d0) ? 3 * d0 : slope
-        }
-        var tangents = [Double](repeating: 0, count: 4)
-        tangents[0] = endpoint(h[0], h[1], d[0], d[1])
-        tangents[3] = endpoint(h[2], h[1], d[2], d[1])
-        for i in 1...2 {
-            // A coincident endpoint has no area and must not constrain its neighbor.
-            if h[i - 1] == 0 { tangents[i] = d[i] }
-            else if h[i] == 0 { tangents[i] = d[i - 1] }
-            else if d[i - 1] * d[i] > 0 {
-                let w1 = 2 * h[i] + h[i - 1], w2 = h[i] + 2 * h[i - 1]
-                tangents[i] = (w1 + w2) / (w1 / d[i - 1] + w2 / d[i])
-            }
-        }
-        slopes = tangents
-    }
-
-    func value(segment i: Int, fraction: Double) -> Double {
-        let t = fraction.clamped(to: 0...1), h = positions[i + 1] - positions[i]
-        let t2 = t * t, t3 = t2 * t
-        return (2*t3 - 3*t2 + 1) * values[i] + (t3 - 2*t2 + t) * h * slopes[i]
-            + (-2*t3 + 3*t2) * values[i + 1] + (t3 - t2) * h * slopes[i + 1]
-    }
-
-    func bezierControls(segment i: Int) -> (start: Double, first: Double, second: Double, end: Double) {
-        let third = (positions[i + 1] - positions[i]) / 3
-        return (values[i], values[i] + third * slopes[i],
-                values[i + 1] - third * slopes[i + 1], values[i + 1])
+        let values = contrastDistribution.values(
+            peak: peakPosition / max(Self.minimumRange, white), contrast: concentration)
+        return ToneCurve(values: values, black: 0, white: white)
     }
 }
 

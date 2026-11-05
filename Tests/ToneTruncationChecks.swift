@@ -11,7 +11,7 @@ import CoreGraphics
                     original.white = white
                     original.tonePosition = min(0.04, white)
                     original.concentration = contrast
-                    original.contrastDistribution = [-1, 0, 1, 0]
+                    original.contrastDistribution = ToneContrastDistribution(black: 0.5, shadowWidth: 0.3, highlightWidth: 0.3, white: 1)
                     let result = ToneTruncation.applying(to: original, space: space)
                     precondition(result.white <= original.white && result.white >= ToneMapping.minimumRange)
                     precondition(abs(result.concentration - contrast * result.white / white) < 1e-12)

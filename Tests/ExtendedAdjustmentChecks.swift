@@ -19,7 +19,7 @@ import Foundation
         mapping.vertexWarp[0].chroma = 3
         mapping.vertexWarp[0].lightness = 0.4
         mapping.color.saturationMid = 3
-        mapping.contrastDistribution = [-3, 0, 1, 3]
+        mapping.contrastDistribution = ToneContrastDistribution(black: 0.2, shadowWidth: 0.3, highlightWidth: 0.3, white: 0.8)
         mapping.channelContrast = [0.3, -0.3, 0]
         mapping.vertexWarp = OKLabVertexWarp.expanded(mapping.vertexWarp, space: .displayP3)
         let recipe = DevelopmentRecipe(colorSpace: .displayP3, mapping: mapping)
