@@ -23,6 +23,12 @@ import Foundation
         edit.halation.inputCurve = 1; edit.vignette.amount = 2; edit.badHDR.strength = 1
         let spatial = try await worker.exportSDRLUT(mapping: edit, dimension: 9)
         precondition(spatial == edited, "Spatial effects contaminated the color grid")
+        edit.grain.output = .filmDensity
+        let analogue = try await worker.exportSDRLUT(mapping: edit, dimension: 9)
+        precondition(analogue != edited, "LUT must include the Analogue mean response")
+        edit.grain.strength = 0
+        let noTexture = try await worker.exportSDRLUT(mapping: edit, dimension: 9)
+        precondition(analogue == noTexture, "LUT must exclude noise while retaining the dye response")
         for space in ProcessingColorSpace.allCases {
             let worker = RAWDeveloper(colorSpace: space)
             let identity = try await worker.sampleSDRLUT(mapping: neutral, dimension: 9)

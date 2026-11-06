@@ -103,9 +103,9 @@ import CoreImage
         precondition(scaled == native)
         var mapping = ToneMapping(); mapping.grain = settings
         let comparison = mapping.comparingEffects(crossProcessing: false, effects: true)
-        precondition(!comparison.grain.isEnabled && comparison.grain.output == .additive)
+        precondition(comparison.grain == mapping.grain)
         precondition(mapping.grain.output == .filmDensity)
-        precondition(!SDRLUT.pointwiseMapping(mapping).grain.isEnabled, "LUTs continue to exclude the spatial grain effect")
+        precondition(SDRLUT.pointwiseMapping(mapping).grain.strength == 0, "LUTs exclude texture but retain the Analogue response")
         let worker = RAWDeveloper(colorSpace: space)
         let baselineLUT = try await worker.exportSDRLUT(mapping: comparison, dimension: 9)
         let densityLUT = try await worker.exportSDRLUT(mapping: mapping, dimension: 9)

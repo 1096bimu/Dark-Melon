@@ -1,138 +1,19 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "Analogue adds fog and compresses highlights, even at zero grain strength." : {
+    "Noise" : {
       "extractionState" : "manual",
       "localizations" : {
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "アナログは、粒子の強度がゼロでもカブリを加え、ハイライトを圧縮します。"
+            "value" : "ノイズ"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "模拟模式会抬高黑位并压缩高光，即使颗粒强度为零也会生效。"
-          }
-        }
-      }
-    },
-    "Grain output" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "粒子の出力"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "颗粒输出"
-          }
-        }
-      }
-    },
-    "Digital" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "デジタル"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "数码"
-          }
-        }
-      }
-    },
-    "Analogue" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "アナログ"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "模拟"
-          }
-        }
-      }
-    },
-    "Color Scale" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "カラーのスケール"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "彩色尺度"
-          }
-        }
-      }
-    },
-    "Highlight" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ハイライト"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "高光"
-          }
-        }
-      }
-    },
-    "Tone adjustment is ineffective at low contrast." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "コントラストが低い場合、トーン調整は効果がありません。"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "低对比度时，色调调整效果不明显。"
-          }
-        }
-      }
-    },
-    "Black and White lift the endpoint slopes. Shadows and Highlight independently shape the curve before and after Tone while keeping its brightness and slope fixed. Increasing Shadows concentrates the shadow-side adjustment toward Tone; increasing Highlight extends the highlight-side adjustment away from Tone. Both at 50%, with Black and White at 0%, reproduce the original beta curve. The graph shows the neutral SDR tone curve from black to the white point." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "黒と白は両端の傾きを引き上げます。シャドウとハイライトは、トーン位置の明るさと傾きを保ちながら、その前後のカーブを個別に調整します。シャドウを上げると暗部の調整がトーン付近に集中し、ハイライトを上げると明部の調整がトーンから広がります。両方を50%、黒と白を0%にすると元のベータカーブを再現します。グラフは黒から白点までのニュートラルなSDRトーンカーブです。"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "黑和白提高两端的斜率。阴影和高光分别调整色调前后的曲线，同时保持色调处的亮度和斜率不变。提高阴影会使暗部调整向色调集中；提高高光会使亮部调整从色调向外延伸。两者均为 50%、黑和白均为 0% 时，重现原始贝塔曲线。图表显示从黑色到白点的中性 SDR 色调曲线。"
+            "value" : "噪声"
           }
         }
       }
@@ -987,6 +868,40 @@
         }
       }
     },
+    "Analogue" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "アナログ"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "模拟"
+          }
+        }
+      }
+    },
+    "Analogue dye controls reshape the grain density response in log exposure. Equal RGB values leave that response unchanged. The main SDR and HDR tone curves are applied afterward." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "アナログの色素コントロールは、対数露光量に対する粒子の濃度応答を変化させます。RGBが同じ値なら応答は変わりません。メインのSDRとHDRトーンカーブはその後に適用されます。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "模拟模式的染料控制会改变颗粒密度对对数曝光量的响应。RGB数值相同时不改变该响应。主SDR和HDR色调曲线在之后应用。"
+          }
+        }
+      }
+    },
     "Angle" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1387,6 +1302,23 @@
         }
       }
     },
+    "Black and White lift the endpoint slopes. Shadows and Highlight independently shape the curve before and after Tone while keeping its brightness and slope fixed. Increasing Shadows concentrates the shadow-side adjustment toward Tone; increasing Highlight extends the highlight-side adjustment away from Tone. Both at 50%, with Black and White at 0%, reproduce the original beta curve. The graph shows the neutral SDR tone curve from black to the white point." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "黒と白は両端の傾きを引き上げます。シャドウとハイライトは、トーン位置の明るさと傾きを保ちながら、その前後のカーブを個別に調整します。シャドウを上げると暗部の調整がトーン付近に集中し、ハイライトを上げると明部の調整がトーンから広がります。両方を50%、黒と白を0%にすると元のベータカーブを再現します。グラフは黒から白点までのニュートラルなSDRトーンカーブです。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "黑和白提高两端的斜率。阴影和高光分别调整色调前后的曲线，同时保持色调处的亮度和斜率不变。提高阴影会使暗部调整向色调集中；提高高光会使亮部调整从色调向外延伸。两者均为 50%、黑和白均为 0% 时，重现原始贝塔曲线。图表显示从黑色到白点的中性 SDR 色调曲线。"
+          }
+        }
+      }
+    },
     "Blue" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1599,22 +1531,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "中心"
-          }
-        }
-      }
-    },
-    "Changes relative film-layer contrast around Tone in log exposure. Equal RGB values have no effect; the SDR and HDR tone curves remain unchanged." : {
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "対数露光量上でトーンを中心に、フィルム層間の相対コントラストを調整します。RGBが同じ値の場合は変化しません。SDRとHDRのトーンカーブは変更されません。"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在 log 曝光中围绕影调调整各胶片层的相对对比度。RGB 数值相同时无效果，SDR 和 HDR 色调曲线保持不变。"
           }
         }
       }
@@ -1984,6 +1900,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "色彩降噪"
+          }
+        }
+      }
+    },
+    "Color Scale" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "カラーのスケール"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "彩色尺度"
           }
         }
       }
@@ -2868,6 +2801,7 @@
       }
     },
     "Digital" : {
+      "extractionState" : "manual",
       "localizations" : {
         "ja" : {
           "stringUnit" : {
@@ -2879,6 +2813,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "数码"
+          }
+        }
+      }
+    },
+    "Digital uses additive grain and color matrices. Analogue combines grain, dye response, and purity in a shared film density response." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "デジタルは加算粒子とカラーマトリクスを使用します。アナログは粒子、色素応答、純度を共通のフィルム濃度応答で処理します。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "数码模式使用加法颗粒和颜色矩阵。模拟模式在同一个胶片密度响应中处理颗粒、染料响应与纯度。"
           }
         }
       }
@@ -3597,6 +3548,7 @@
       }
     },
     "Film response processing failed." : {
+      "extractionState" : "stale",
       "localizations" : {
         "ja" : {
           "stringUnit" : {
@@ -4368,6 +4320,23 @@
         }
       }
     },
+    "Highlight" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ハイライト"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "高光"
+          }
+        }
+      }
+    },
     "Highlight hue" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -4456,34 +4425,36 @@
         }
       }
     },
-    "Hold to preview without Cross Processing and Dye Purity. Release to restore them." : {
+    "Hold to preview without Cross Processing, grain, and noise. Release to restore them." : {
+      "extractionState" : "manual",
       "localizations" : {
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "長押しするとクロスプロセスと色素純度を無効にして表示します。離すと元に戻ります。"
+            "value" : "押している間、クロスプロセス、フィルム粒子、ノイズを無効にします。離すと元に戻ります。"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "按住可预览不含交叉冲洗和染料纯度效果的图像，松开后恢复。"
+            "value" : "按住可预览不含交叉冲洗、胶片颗粒和噪声的图像。松开即可恢复。"
           }
         }
       }
     },
-    "Hold to preview without the effects in this section. Cross Processing stays applied." : {
+    "Hold to preview without the effects in this section. Cross Processing, grain, and noise stay applied." : {
+      "extractionState" : "manual",
       "localizations" : {
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "長押しすると、このセクションのエフェクトを無効にして表示します。クロスプロセスは適用されたままです。"
+            "value" : "押している間、このセクションの効果を無効にします。クロスプロセス、フィルム粒子、ノイズは維持されます。"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "按住可预览不含此部分效果的图像。交叉冲洗仍然生效。"
+            "value" : "按住可预览不含本节效果的图像。交叉冲洗、胶片颗粒和噪声保持应用。"
           }
         }
       }
@@ -5111,18 +5082,19 @@
         }
       }
     },
-    "Lower purity introduces absorption in other color bands. Neutral compensation preserves the existing gray response. 100% leaves the dye unchanged." : {
+    "Lower purity mixes the noisy dye densities across color bands before transmission. Equal layer densities stay neutral; 100% leaves each layer unchanged." : {
+      "extractionState" : "manual",
       "localizations" : {
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "純度を下げると、他の色域でも光を吸収するようになります。ニュートラル補正により既存のグレーの応答を維持します。100%では色素を変更しません。"
+            "value" : "純度を下げると、透過率に変換する前に粒子を含む色素濃度が他の色帯域に混ざります。各層が同じ濃度なら無彩色を保ち、100%では各層を変更しません。"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "降低纯度会增加对其他色带的吸收。中性补偿保留现有灰阶响应。100% 表示不改变染料。"
+            "value" : "降低纯度会在转换为透射率之前，将含噪声的染料密度混入其他色带。各层密度相同时保持中性；100%时各层保持不变。"
           }
         }
       }
@@ -6364,6 +6336,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "上一个／下一个文件"
+          }
+        }
+      }
+    },
+    "Processing mode" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "処理モード"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "处理模式"
           }
         }
       }
@@ -8208,6 +8197,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "影调"
+          }
+        }
+      }
+    },
+    "Tone adjustment is ineffective at low contrast." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "コントラストが低い場合、トーン調整は効果がありません。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "低对比度时，色调调整效果不明显。"
           }
         }
       }

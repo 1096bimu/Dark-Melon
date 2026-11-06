@@ -13,13 +13,6 @@ import CoreImage
     static func multiply(_ m: [Double], _ rgb: [Double]) -> [Double] {
         (0..<3).map { i in (0..<3).reduce(0.0) { $0 + m[i * 3 + $1] * rgb[$1] } }
     }
-    static func response(_ x: Double, reference: Double, offset: Double) -> Double {
-        guard x > 0 else { return 0 }
-        let h = log2(x / max(1e-6, reference))
-        let neutral = 1 / (1 + exp(-h / 2))
-        let layer = 1 / (1 + exp(-h * (1 + offset) / 2))
-        return x * exp2(8 * (layer - neutral))
-    }
     static func main() async throws {
         var mapping = ToneMapping()
         mapping.color.splitTone.nodes = []
@@ -70,7 +63,7 @@ import CoreImage
                 context.render(image,toBitmap:&output,rowBytes:output.count*4,bounds:source.extent,format:.RGBAf,colorSpace:space)
                 for (index, rgb) in colors.enumerated() {
                     let mixed = multiply(mapping.dyeMixers.a,rgb)
-                    let curved = mixed.enumerated().map { response(max(0,$0.element),reference:tone,offset:mapping.dyeContrastOffsets[$0.offset]) }
+                    let curved = mixed.map { max(0, $0) }
                     let expected = multiply(mapping.dyeMixers.b,curved).map { max(0,$0) }
                     for c in 0..<3 {
                         let value = Double(output[index*4+c])
@@ -97,6 +90,6 @@ import CoreImage
         let unchanged = CIImage(color:.red)
         let bypassed = try film.apply(to:unchanged,mapping:mapping)
         precondition(bypassed === unchanged)
-        print("PASS: coordinated random matrices, neutral axis, log-film GPU parity, black/reference/HDR range, identity bypass, shared SDR/HDR input, persistence and lock")
+        print("PASS: coordinated random matrices, neutral axis, Digital matrix-only GPU parity, black/reference/HDR range, identity bypass, shared SDR/HDR input, persistence and lock")
     }
 }

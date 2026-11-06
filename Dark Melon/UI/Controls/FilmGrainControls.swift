@@ -4,24 +4,19 @@ struct FilmGrainControls: View {
     @Environment(\.resetMapping) private var defaults
     @Binding var settings: FilmGrainSettings
 
+    private var strengthTitle: LocalizedStringKey { settings.output == .additive ? "Noise" : "Film Grain" }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Film Grain").font(.headline)
-                AdjustmentField(title: "Film Grain", value: $settings.strength, range: AdjustmentLimits.strength, digits: 2, scale: 1)
+                Text(strengthTitle).font(.headline)
+                AdjustmentField(title: strengthTitle, value: $settings.strength, range: AdjustmentLimits.strength, digits: 2, scale: 1)
             }
             HStack {
                 Image(systemName: "circle.bottomrighthalf.pattern.checkered").frame(width: 22).accessibilityHidden(true)
-                EditorSlider(value: $settings.strength, in: 0...2.5, label: { Text("Film Grain") })
+                EditorSlider(value: $settings.strength, in: 0...2.5, label: { Text(strengthTitle) })
                     .controlReset { settings.strength = defaults.grain.strength }.labelsHidden()
             }
-            Picker("Grain output", selection: $settings.output) {
-                Text("Digital").tag(FilmGrainSettings.Output.additive)
-                Text("Analogue").tag(FilmGrainSettings.Output.filmDensity)
-            }
-            .pickerStyle(.segmented).labelsHidden()
-            .controlReset { settings.output = defaults.grain.output }
-            .help("Analogue adds fog and compresses highlights, even at zero grain strength.")
             if settings.output == .additive {
                 HStack {
                     Text("Offset")

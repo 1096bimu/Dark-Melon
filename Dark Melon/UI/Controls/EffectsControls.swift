@@ -51,93 +51,115 @@ struct EffectsControls: View {
   private var crossProcessingSection: some View {
     EditorSection(title: "Cross Processing") {
       HoldCompareButton(comparing: $comparingCrossProcessing,
-        help: "Hold to preview without Cross Processing and Dye Purity. Release to restore them.")
+        help: "Hold to preview without Cross Processing, grain, and noise. Release to restore them.")
       Button("Reset") {
-        channelContrast = defaults.channelContrast
-        dyeMixers = defaults.dyeMixers
-        dyePurity = defaults.dyePurity
-      }.filmLock(.dyeResponse)
+        if !lockedItems.contains(.dyeResponse) {
+          channelContrast = defaults.channelContrast
+          dyeMixers = defaults.dyeMixers
+          dyePurity = defaults.dyePurity
+        }
+        if !lockedItems.contains(.grain) {
+          let mode = grain.output
+          grain = defaults.grain
+          if lockedItems.contains(.dyeResponse) { grain.output = mode }
+        }
+      }.disabled(lockedItems.contains(.dyeResponse) && lockedItems.contains(.grain))
     } content: {
-      VStack(alignment: .leading, spacing: 8) {
-        ForEach(0..<3, id: \.self) { channel in
-          let name = ["Red", "Green", "Blue"][channel]
-          let value = Binding<Double>(
-            get: { channelContrast[channel] },
-            set: {
-              channelContrast[channel] = $0
-            })
+      VStack(alignment: .leading, spacing: 18) {
+        Picker("Processing mode", selection: $grain.output) {
+          Text("Digital").tag(FilmGrainSettings.Output.additive)
+          Text("Analogue").tag(FilmGrainSettings.Output.filmDensity)
+        }
+        .pickerStyle(.segmented).labelsHidden()
+        .disabled(lockedItems.contains(.grain) || lockedItems.contains(.dyeResponse))
+        .controlReset { grain.output = defaults.grain.output }
+        .help("Digital uses additive grain and color matrices. Analogue combines grain, dye response, and purity in a shared film density response.")
+        VStack(alignment: .leading, spacing: 8) {
+          if grain.output == .filmDensity {
+            ForEach(0..<3, id: \.self) { channel in
+              let name = ["Red", "Green", "Blue"][channel]
+              let value = Binding<Double>(
+                get: { channelContrast[channel] },
+                set: {
+                  channelContrast[channel] = $0
+                })
+              HStack(spacing: 8) {
+                Image(systemName: "circle.lefthalf.striped.horizontal")
+                  .foregroundStyle([Color.red, .green, .blue][channel])
+                  .frame(width: 22)
+                  .accessibilityHidden(true)
+                EditorSlider(value: value, in: -0.2...0.2)
+                  .controlReset { channelContrast[channel] = defaults.channelContrast[channel] }
+                  .accessibilityLabel(Text(LocalizedStringKey(name)))
+                AdjustmentField(
+                  title: LocalizedStringKey(name), value: value, range: -1...1,
+                  digits: 1, scale: 100, unit: "%")
+                  .frame(width: valueColumnWidth)
+              }
+            }
+          }
           HStack(spacing: 8) {
-            Image(systemName: "circle.lefthalf.striped.horizontal")
-              .foregroundStyle([Color.red, .green, .blue][channel])
+            Image(systemName: "laser.burst")
               .frame(width: 22)
               .accessibilityHidden(true)
-            EditorSlider(value: value, in: -0.2...0.2)
-              .controlReset { channelContrast[channel] = defaults.channelContrast[channel] }
-              .accessibilityLabel(Text(LocalizedStringKey(name)))
-            AdjustmentField(
-              title: LocalizedStringKey(name), value: value, range: -1...1,
-              digits: 1, scale: 100, unit: "%")
-              .frame(width: valueColumnWidth)
+            EditorSlider(value: $randomStrength, in: 0...3)
+              .editorSliderTrack(brewTrack)
+              .controlReset { randomStrength = 1 }
+              .accessibilityLabel(Text("Randomization strength"))
+            Button {
+              randomizeDye(randomStrength)
+              refreshBrewTrack()
+            } label: {
+              Text("Brew").frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .frame(width: 72)
+            .frame(width: valueColumnWidth, alignment: .leading)
           }
-        }
-        HStack(spacing: 8) {
-          Image(systemName: "laser.burst")
-            .frame(width: 22)
-            .accessibilityHidden(true)
-          EditorSlider(value: $randomStrength, in: 0...3)
-            .editorSliderTrack(brewTrack)
-            .controlReset { randomStrength = 1 }
-            .accessibilityLabel(Text("Randomization strength"))
-          Button {
-            randomizeDye(randomStrength)
-            refreshBrewTrack()
-          } label: {
-            Text("Brew").frame(maxWidth: .infinity)
+          .help(
+            "Sets the range for the next Brew. Zero produces identity matrices; 100% uses the original range; 300% triples it. Existing matrices are unchanged until you brew."
+          )
+          DyeMatrixField(mixers: $dyeMixers, rgb: $channelContrast)
+          if grain.output == .filmDensity {
+            Text("Dye Purity").fontWeight(.medium)
+            ForEach(0..<3, id: \.self) { channel in
+              let name = ["Cyan", "Magenta", "Yellow"][channel]
+              let value = Binding<Double>(get: { dyePurity[channel] }, set: { dyePurity[channel] = $0 })
+              HStack(spacing: 8) {
+                Circle().fill([Color.cyan, .pink, .yellow][channel])
+                  .frame(width: 12, height: 12).frame(width: 22)
+                EditorSlider(value: value, in: 0...1)
+                  .controlReset { dyePurity[channel] = defaults.dyePurity[channel] }
+                  .accessibilityLabel(Text(LocalizedStringKey(name)))
+                AdjustmentField(
+                  title: LocalizedStringKey(name), value: value, range: 0...1,
+                  digits: 0, scale: 100, unit: "%")
+                  .frame(width: valueColumnWidth)
+              }
+            }
+            .help(
+              "Lower purity mixes the noisy dye densities across color bands before transmission. Equal layer densities stay neutral; 100% leaves each layer unchanged."
+            )
           }
-          .buttonStyle(.bordered)
-          .frame(width: 72)
-          .frame(width: valueColumnWidth, alignment: .leading)
-        }
-        .help(
-          "Sets the range for the next Brew. Zero produces identity matrices; 100% uses the original range; 300% triples it. Existing matrices are unchanged until you brew."
-        )
-        DyeMatrixField(mixers: $dyeMixers, rgb: $channelContrast)
-        Text("Dye Purity").fontWeight(.medium)
-        ForEach(0..<3, id: \.self) { channel in
-          let name = ["Cyan", "Magenta", "Yellow"][channel]
-          let value = Binding<Double>(get: { dyePurity[channel] }, set: { dyePurity[channel] = $0 })
-          HStack(spacing: 8) {
-            Circle().fill([Color.cyan, .pink, .yellow][channel])
-              .frame(width: 12, height: 12).frame(width: 22)
-            EditorSlider(value: value, in: 0...1)
-              .controlReset { dyePurity[channel] = defaults.dyePurity[channel] }
-              .accessibilityLabel(Text(LocalizedStringKey(name)))
-            AdjustmentField(
-              title: LocalizedStringKey(name), value: value, range: 0...1,
-              digits: 0, scale: 100, unit: "%")
-              .frame(width: valueColumnWidth)
-          }
-        }
-        .help(
-          "Lower purity introduces absorption in other color bands. Neutral compensation preserves the existing gray response. 100% leaves the dye unchanged."
-        )
 
+        }
+        .onAppear { if brewHues.isEmpty { refreshBrewTrack() } }
+        .filmLock(.dyeResponse)
+        .help(
+          "Analogue dye controls reshape the grain density response in log exposure. Equal RGB values leave that response unchanged. The main SDR and HDR tone curves are applied afterward."
+        )
+        Divider()
+        FilmGrainControls(settings: $grain).filmLock(.grain)
       }
-      .onAppear { if brewHues.isEmpty { refreshBrewTrack() } }
-      .filmLock(.dyeResponse)
-      .help(
-        "Changes relative film-layer contrast around Tone in log exposure. Equal RGB values have no effect; the SDR and HDR tone curves remain unchanged."
-      )
     }
   }
 
   private var effectsSection: some View {
     EditorSection(title: "Effects") {
       HoldCompareButton(comparing: $comparing,
-        help: "Hold to preview without the effects in this section. Cross Processing stays applied.")
+        help: "Hold to preview without the effects in this section. Cross Processing, grain, and noise stay applied.")
       Button("Reset") {
         if !lockedItems.contains(.badHDR) { badHDR = defaults.badHDR }
-        if !lockedItems.contains(.grain) { grain = defaults.grain }
         if !lockedItems.contains(.halation) { halation = defaults.halation }
         if !lockedItems.contains(.clarity) {
           clarity = defaults.clarity
@@ -151,7 +173,7 @@ struct EffectsControls: View {
       }
       .disabled(
         clarity == defaults.clarity && radius == defaults.clarityRadius && hdf == defaults.hdf
-          && hdfRadius == defaults.hdfRadius && grain == defaults.grain
+          && hdfRadius == defaults.hdfRadius
           && halation == defaults.halation && vignette == defaults.vignette
           && badHDR == defaults.badHDR)
     } content: {
@@ -232,8 +254,6 @@ struct EffectsControls: View {
             }
           }
         }
-        Divider()
-        FilmGrainControls(settings: $grain).filmLock(.grain)
         Divider()
         VStack(alignment: .leading, spacing: 6) {
           HStack {

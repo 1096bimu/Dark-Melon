@@ -81,15 +81,45 @@ nonisolated final class FilmGrain {
         float luminance=dot(band,luminanceWeights);
         return mix(float3(luminance),band,colorWeight);
     }
-    float3 filmDensity(float3 exposure) {
-        // Fixed fog and a saturating characteristic curve. Matching maximum
-        // density and half-exposure keeps the initial density slope at one.
+    float3 filmDensity(float3 exposure, float3 slopes) {
         float3 e=max(exposure,0.0);
-        return 0.0025+4.0*(e/(e+4.0));
+        float3 neutral=e/(e+4.0);
+        // Tilt the same saturating density curve in log exposure. All layer
+        // curves keep the original fog, midpoint (E=4), and maximum density.
+        float3 h=log(max(e,float3(1e-30))/4.0);
+        float3 shaped=1.0/(1.0+exp(-clamp(h*slopes,-80.0,80.0)));
+        return 0.0025+4.0*select(shaped,neutral,slopes==1.0);
     }
-    [[stitchable]] float4 grainResponse(sample_t picture) {
+    float3 filmExposure(float3 rgb, float3 a0, float3 a1, float3 a2) {
+        return max(float3(dot(a0,rgb),dot(a1,rgb),dot(a2,rgb)),0.0);
+    }
+    float3 filmOutput(float3 exposed, float3 unit, float strength, float offset, float analogue,
+                      float3 slopes, float3 purity, float3 b0, float3 b1, float3 b2) {
+        float3 developed;
+        if (analogue>0.5) {
+            float3 density=filmDensity(exposed,slopes);
+            density=max(density+8.0*strength*0.0008505*sqrt(density)*unit,0.0);
+            // Cross-absorption acts on the noisy layers before transmission.
+            // Convex mixing preserves neutral density and finite headroom.
+            float3 impurity=3.0*(1.0-purity);
+            float3 mixed=density+float3(
+                0.08*impurity.g*(density.g-density.r)+0.03*impurity.b*(density.b-density.r),
+                0.16*impurity.r*(density.r-density.g)+0.10*impurity.b*(density.b-density.g),
+                0.06*impurity.r*(density.r-density.b)+0.20*impurity.g*(density.g-density.b));
+            developed=1.0-exp(-max(mixed,0.0));
+        } else {
+            float3 shifted=unit+3.0*offset;
+            float3 oneSided=offset>=0.0 ? max(shifted,0.0):min(shifted,0.0);
+            developed=max(exposed+strength*0.0008505*mix(shifted,oneSided,abs(offset)),0.0);
+        }
+        return max(float3(dot(b0,developed),dot(b1,developed),dot(b2,developed)),0.0);
+    }
+    [[stitchable]] float4 grainResponse(sample_t picture, float analogue,
+                                      float3 a0, float3 a1, float3 a2, float3 b0, float3 b1, float3 b2,
+                                      float3 slopes, float3 purity) {
         float4 color=unpremultiply(picture);
-        color.rgb=1.0-exp(-filmDensity(color.rgb));
+        float3 exposed=filmExposure(color.rgb,a0,a1,a2);
+        color.rgb=filmOutput(exposed,float3(0.0),0.0,0.0,analogue,slopes,purity,b0,b1,b2);
         return premultiply(color);
     }
     [[stitchable]] float4 grainWhite(float seed, destination dest) {
@@ -115,7 +145,9 @@ nonisolated final class FilmGrain {
         return float4(value,1.0);
     }
     [[stitchable]] float4 grainFinish(sampler picture, sampler field, sampler means, sampler squares,
-                                    float strength, float offset, float densityOutput, destination dest) {
+                                    float strength, float offset, float analogue,
+                                    float3 a0, float3 a1, float3 a2, float3 b0, float3 b1, float3 b2,
+                                    float3 slopes, float3 purity, destination dest) {
         float2 p=dest.coord();
         float3 mean=means.sample(means.transform(float2(0.5))).rgb;
         float3 second=squares.sample(squares.transform(float2(0.5))).rgb;
@@ -124,24 +156,9 @@ nonisolated final class FilmGrain {
         variance=float3(dot(variance,float3(1.0/3.0)));
         float3 value=field.sample(field.transform(p)).rgb;
         float3 unit=select(float3(0.0),(value-mean)*rsqrt(max(variance,float3(1e-12))),variance>1e-12);
-        float amplitude=(densityOutput>0.5 ? 8.0:1.0)*strength*0.0008505;
         float4 color=unpremultiply(picture.sample(picture.transform(p)));
-        if (densityOutput>0.5) {
-            // The same centered texture now varies developed density, with
-            // counting-statistics amplitude and Beer-Lambert transmission.
-            // Offset belongs only to the additive model; fog is fixed here.
-            float3 density=filmDensity(color.rgb);
-            density=max(density+amplitude*sqrt(density)*unit,0.0);
-            color.rgb=1.0-exp(-density);
-            return premultiply(color);
-        }
-        // Shift the centered field toward the former three-sigma positive
-        // floor, or its negative counterpart. Blend tail clipping smoothly.
-        float shift=3.0*offset;
-        float3 shifted=unit+shift;
-        float3 oneSided=offset>=0.0 ? max(shifted,0.0):min(shifted,0.0);
-        float3 exposure=amplitude*mix(shifted,oneSided,abs(offset));
-        color.rgb=max(color.rgb+exposure,0.0);
+        float3 exposed=filmExposure(color.rgb,a0,a1,a2);
+        color.rgb=filmOutput(exposed,unit,strength,offset,analogue,slopes,purity,b0,b1,b2);
         return premultiply(color);
     }
     }}
@@ -166,13 +183,25 @@ nonisolated final class FilmGrain {
     }
 
     func apply(to image: CIImage, settings: FilmGrainSettings, seed: UInt32 = 1,
-               luminance: SIMD3<Double> = SIMD3(0.2126, 0.7152, 0.0722), renderScale: Double = 1) throws -> CIImage {
-        guard settings.isEnabled else { return image }
+               luminance: SIMD3<Double> = SIMD3(0.2126, 0.7152, 0.0722), renderScale: Double = 1,
+               mixers: DyeMixers = DyeMixers(), slopes: SIMD3<Double> = SIMD3(repeating: 1),
+               purity: SIMD3<Double> = SIMD3(repeating: 1)) throws -> CIImage {
+        guard settings.isEnabled || !mixers.isIdentity else { return image }
+        guard mixers.isValid, (0..<3).allSatisfy({ slopes[$0].isFinite && slopes[$0] > 0
+            && purity[$0].isFinite && (0...1).contains(purity[$0]) }) else { throw GrainError.kernel }
+        let rows = [mixers.a, mixers.b].flatMap { matrix in
+            stride(from: 0, to: 9, by: 3).map { i in
+                CIVector(x: matrix[i], y: matrix[i + 1], z: matrix[i + 2])
+            }
+        }
+        let model: [Any] = [settings.output == .filmDensity ? 1.0 : 0.0] + rows + [
+            CIVector(x: slopes.x, y: slopes.y, z: slopes.z),
+            CIVector(x: purity.x, y: purity.y, z: purity.z)]
         let extent = image.extent
         // Zero Strength retains the film response without generating, blurring
         // or reducing a noise field. Additive zero remains an exact bypass.
         if settings.strength <= 0 {
-            guard let result = response.apply(extent: extent, arguments: [image]) else { throw GrainError.kernel }
+            guard let result = response.apply(extent: extent, arguments: [image] + model) else { throw GrainError.kernel }
             return result
         }
         let size = settings.size.clamped(to: AdjustmentLimits.grainSize)
@@ -213,8 +242,7 @@ nonisolated final class FilmGrain {
         guard let result = finish.apply(extent: extent, roiCallback: { index, rect in
             index >= 2 ? mean.extent : rect
         }, arguments: [softened, field, mean, squares,
-                       settings.strength.clamped(to: AdjustmentLimits.strength), settings.offset.clamped(to: -1...1),
-                       settings.output == .filmDensity ? 1.0 : 0.0]) else {
+                       settings.strength.clamped(to: AdjustmentLimits.strength), settings.offset.clamped(to: -1...1)] + model) else {
             throw GrainError.kernel
         }
         return result

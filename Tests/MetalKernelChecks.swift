@@ -76,7 +76,6 @@ import Metal
             for variant in 0..<7 {
                 let args = fixture.arguments.map { argument($0[0], $0[1], variant: variant) }
                 var modernArgs = args
-                if fixture.name == "filmResponse" { modernArgs.append(CIVector(x: 1, y: 1, z: 1)) }
                 if fixture.name == "combinedOKLab" { modernArgs.insert(0.0, at: 9) }
                 let a = render(legacy,args), b = render(modern!,modernArgs)
                 for (x,y) in zip(a,b) {

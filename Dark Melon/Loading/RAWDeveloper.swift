@@ -133,7 +133,6 @@ actor RAWDeveloper {
     func useLUTConfiguration(_ value: LUTConfiguration?) { lutPipeline.configurationOverride = value }
     private var grainSeed: UInt32 = 1
     private var grainSourceSize: CGSize?
-    private var filmGrain: FilmGrain?
     private lazy var halation = Halation()
     private lazy var vignette = Vignette()
     private let dustCorrection = DustCorrection()
@@ -567,15 +566,11 @@ actor RAWDeveloper {
                                        hdrBrightness: mapping.hdrMax, ceiling: 0, monochrome: mapping.color.monochrome,
                                        sourceScale: OpticalBlur.scale)
         }
-        if mapping.grain.isEnabled {
-            if filmGrain == nil { filmGrain = try FilmGrain() }
-            let nativeShort = grainSourceSize.map { min($0.width, $0.height) }
-                ?? min(image.extent.width, image.extent.height)
-            let renderScale = min(image.extent.width, image.extent.height) / max(1, nativeShort)
-            image = try filmGrain!.apply(to: image, settings: mapping.grain, seed: grainSeed,
-                                        luminance: colorSpace.luminance, renderScale: renderScale)
-        }
-        image = try filmResponse.apply(to: image, mapping: mapping)
+        let nativeShort = grainSourceSize.map { min($0.width, $0.height) }
+            ?? min(image.extent.width, image.extent.height)
+        let renderScale = min(image.extent.width, image.extent.height) / max(1, nativeShort)
+        image = try filmResponse.apply(to: image, mapping: mapping, seed: grainSeed,
+            luminance: colorSpace.luminance, renderScale: renderScale)
         return image
     }
 
@@ -591,7 +586,7 @@ actor RAWDeveloper {
             color.saturationStart = 1; color.saturationEnd = 1; color.saturationMid = 1; color.saturationHDR = 1
             color.luminanceSaturationStart = 1; color.luminanceSaturationEnd = 1; color.luminanceSaturationMid = 1; color.luminanceSaturationHDR = 1
         }
-        // Shared by preview/export: vignette → HDF → BadHDR → halation → grain → film response (A → log curves → B) → tone → RGB WB → OKLab → clarity.
+        // Shared by preview/export: vignette → HDF → BadHDR → halation → film (A → grain/dye density → B) → tone → RGB WB → OKLab → clarity.
         // RAW decoder white balance is already part of the decoded source.
         let toned = try applyTone(image, curves: mapping.channelCurves(hdr: hdr))
         let balanced = try applyWhiteBalance(toned, mapping: mapping)

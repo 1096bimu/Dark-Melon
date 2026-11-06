@@ -1,38 +1,20 @@
 import CoreImage
 
-/// Film-inspired color response relative to a neutral film, not a fitted stock.
-/// Optical effects feed this stage; both SDR and HDR tone maps consume its output.
+/// One shared film stage: input mixing, Digital grain or Analogue dye density,
+/// then output mixing. The main SDR/HDR tone curves follow this stage.
 nonisolated final class FilmResponse {
-    // A positive-film density sigmoid has D = Dmin + range * (1 - sigmoid).
-    // Dividing its transmission by the neutral film's transmission cancels the
-    // common compression: E' = E * 2^(8 * (sigmoid_channel - sigmoid_neutral)).
-    // h = log2(E / Tone); width = 2 stops; slope = 1 + channel offset.
-    // Thus E=Tone is fixed, equal sliders are identity, and no HDR ceiling enters.
-    // d(log2 E')/dh = 1 + 4*(s*p*(1-p) - q*(1-q)) > 0 for s > 0.
-    // This preserves monotonic layer responses without extra global tone mapping.
-    private enum Failure: LocalizedError {
-        case processing
-        var errorDescription: String? { String(localized: "Film response processing failed.") }
-    }
-    private lazy var kernel = MetalImageKernels.color("filmResponse")
+    private var grain: FilmGrain?
+    private enum Failure: Error { case invalidLayers }
 
-    func apply(to image: CIImage, mapping: ToneMapping) throws -> CIImage {
-        let offsets = mapping.dyeContrastOffsets
-        let mixers = mapping.dyeMixers
-        guard mapping.dyePurity != [1, 1, 1] || !mixers.isIdentity || offsets.contains(where: { abs($0) > 1e-12 }) else { return image }
-        guard mixers.isValid, mapping.dyePurity.count == 3, mapping.dyePurity.allSatisfy({ $0.isFinite && (0...1).contains($0) }) else { throw Failure.processing }
-        let rows = [mixers.a, mixers.b].flatMap { matrix in
-            stride(from: 0, to: 9, by: 3).map { i in
-                CIVector(x: matrix[i], y: matrix[i + 1], z: matrix[i + 2])
-            }
-        }
-        let slopes = CIVector(x: 1 + offsets[0], y: 1 + offsets[1], z: 1 + offsets[2])
-        // Tone can be exactly zero. Only the logarithm's reference needs a floor.
-        guard let result = kernel?.apply(extent: image.extent,
-            arguments: [image] + rows + [slopes, max(1e-6, mapping.tonePosition),
-                CIVector(x: mapping.dyePurity[0], y: mapping.dyePurity[1], z: mapping.dyePurity[2])]) else {
-            throw Failure.processing
-        }
-        return result
+    func apply(to image: CIImage, mapping: ToneMapping, seed: UInt32 = 1,
+               luminance: SIMD3<Double> = SIMD3(0.2126, 0.7152, 0.0722), renderScale: Double = 1) throws -> CIImage {
+        guard mapping.grain.isEnabled || !mapping.dyeMixers.isIdentity else { return image }
+        guard mapping.channelContrast.count == 3, mapping.dyePurity.count == 3 else { throw Failure.invalidLayers }
+        if grain == nil { grain = try FilmGrain() }
+        let slopes = mapping.dyeContrastOffsets.map { 1 + $0 }
+        let purity = mapping.dyePurity
+        return try grain!.apply(to: image, settings: mapping.grain, seed: seed,
+            luminance: luminance, renderScale: renderScale, mixers: mapping.dyeMixers,
+            slopes: SIMD3(slopes[0], slopes[1], slopes[2]), purity: SIMD3(purity[0], purity[1], purity[2]))
     }
 }

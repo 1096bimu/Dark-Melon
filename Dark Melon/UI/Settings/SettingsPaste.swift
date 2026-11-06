@@ -147,7 +147,7 @@ nonisolated struct SettingsPasteSelection: Codable, Sendable, Equatable {
         }
         if contains(.vertices) { result.color.monochrome = source.color.monochrome; result.hls = source.hls; result.blackAndWhite = source.blackAndWhite }
         if contains(.splitTone) { result.color.splitTone = source.color.splitTone }
-        if contains(.dyeResponse) { result.channelContrast = source.channelContrast; result.dyeMixers = source.dyeMixers; result.dyePurity = source.dyePurity }
+        if contains(.dyeResponse) { result.channelContrast = source.channelContrast; result.dyeMixers = source.dyeMixers; result.dyePurity = source.dyePurity; result.grain.output = source.grain.output }
         if contains(.clarity) { result.clarity = source.clarity; result.clarityRadius = source.clarityRadius }
         if contains(.hdf) { result.hdf = source.hdf; result.hdfRadius = source.hdfRadius }
         if contains(.grain) { result.grain = source.grain }

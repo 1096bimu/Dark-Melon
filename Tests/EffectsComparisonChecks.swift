@@ -19,12 +19,13 @@ import Foundation
         expectedCross.channelContrast = [0, 0, 0]
         expectedCross.dyeMixers = DyeMixers()
         expectedCross.dyePurity = [1, 1, 1]
+        expectedCross.grain.strength = 0
+        expectedCross.grain.output = .additive
         precondition(cross == expectedCross, "Cross compare must only bypass film response")
         let effects = mapping.comparingEffects(crossProcessing: false, effects: true)
         var expectedEffects = mapping
         expectedEffects.clarity = 0
         expectedEffects.hdf = 0
-        expectedEffects.grain.strength = 0
         expectedEffects.halation.inputCurve = 0
         expectedEffects.vignette.amount = 0
         expectedEffects.badHDR = BadHDRSettings()

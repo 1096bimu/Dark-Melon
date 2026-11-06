@@ -34,30 +34,6 @@ extern "C" float4 dustCorrection(coreimage::sampler source, coreimage::sampler p
 static float glslMod(float x, float y) { return x - y * floor(x / y); }
 
 
-extern "C" float4 filmResponse(sample_t pixel, float3 a0, float3 a1, float3 a2,
-                         float3 b0, float3 b1, float3 b2, float3 slopes, float reference, float3 purity) {
-    float4 p = unpremultiply(pixel);
-    float3 exposed = max(float3(dot(a0,p.rgb), dot(a1,p.rgb), dot(a2,p.rgb)), float3(0.0));
-    float3 h = log2(max(exposed,float3(1e-20)) / reference);
-    float3 base = float3(1.0) / (float3(1.0) + exp(-h * 0.5));
-    float3 layer = float3(1.0) / (float3(1.0) + exp(-h * slopes * 0.5));
-    // Three-band cross-absorption, compensated against the same dyes at
-    // each channel's neutral exposure to preserve the existing gray response.
-    float3 impurity = 1.0 - purity;
-    float3 densityDelta = float3(0.0);
-    for (int i = 0; i < 3; ++i) {
-        float3 neutralLayer = 1.0 / (1.0 + exp(-h[i] * slopes * 0.5));
-        float3 weights = i == 0 ? float3(0.0, 0.08, 0.03)
-                       : i == 1 ? float3(0.16, 0.0, 0.10)
-                                : float3(0.06, 0.20, 0.0);
-        densityDelta[i] = 3.0 * dot(weights * impurity, neutralLayer - layer);
-    }
-    float3 response = exposed * exp2(8.0 * (layer - base - densityDelta));
-    float3 returned = max(float3(dot(b0,response), dot(b1,response), dot(b2,response)), float3(0.0));
-    return premultiply(float4(returned,p.a));
-}
-
-
 extern "C" float4 hdfAdd(sample_t pixel, sample_t blurred, float amount) {
     float4 p = unpremultiply(pixel);
     float3 glow = unpremultiply(blurred).rgb;

@@ -51,6 +51,8 @@ import Foundation
         let space = ProcessingColorSpace.sRGB
         let worker = RAWDeveloper(colorSpace: space)
         let context = CIContext(options: [.workingColorSpace: space.linear, .workingFormat: CIFormat.RGBAf])
+        for mode in [FilmGrainSettings.Output.additive, .filmDensity] {
+        mapping.grain.output = mode
         for hdr in [false, true] {
             for input in [0.05, 0.25, 0.6, 0.95] {
                 let image = CIImage(color: CIColor(red: input, green: input, blue: input, colorSpace: space.linear)!)
@@ -60,13 +62,16 @@ import Foundation
                 context.render(output,toBitmap:&pixel,rowBytes:16,bounds:image.extent,format:.RGBAf,colorSpace:space.linear)
                 let curves = mapping.channelCurves(hdr: hdr)
                 for c in 0..<3 {
-                    let h = log2(input / max(1e-6,mapping.tonePosition))
-                    let base = 1 / (1 + exp(-h/2))
-                    let layer = 1 / (1 + exp(-h*(1+mapping.dyeContrastOffsets[c])/2))
-                    let exposed = input * exp2(8*(layer-base))
+                    let exposed: Double
+                    if mode == .filmDensity {
+                        let h = log(input / 4)
+                        let density = 0.0025 + 4 / (1 + exp(-h*(1+mapping.dyeContrastOffsets[c])))
+                        exposed = 1-exp(-density)
+                    } else { exposed = input }
                     assert(abs(Double(pixel[c])-curves[c].value(at:exposed)) < 0.002)
                 }
             }
+        }
         }
         print("Dye response common-offset invariance, zero-sum limits, identity, monotonicity, persistence, migration, paste, and SDR/HDR GPU parity passed.")
     }
