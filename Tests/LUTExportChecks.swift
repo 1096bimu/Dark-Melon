@@ -3,7 +3,8 @@ import Foundation
 @main struct LUTExportChecks {
     static func main() async throws {
         let worker = RAWDeveloper(colorSpace: .sRGB)
-        let neutral = ToneMapping.fresh(isRAW: false, sourceHeadroom: 1)
+        var neutral = ToneMapping.fresh(isRAW: false, sourceHeadroom: 1)
+        neutral.grain.output = .additive
         let data = try await worker.exportSDRLUT(mapping: neutral, dimension: 9)
         let cube = try LUTCube(data: data)
         precondition(cube.dimension == 9)

@@ -133,7 +133,7 @@ import CoreImage
         precondition(roundTrip == recipe)
         let old = Data("{\"size\":2,\"strength\":1,\"offset\":0,\"colorScale\":0.5}".utf8)
         let restored = try JSONDecoder().decode(FilmGrainSettings.self, from: old)
-        precondition(restored.output == .additive, "Existing recipes must retain their original mix")
+        precondition(restored.output == .additive, "Grain settings alone default to Digital; recipe migration inspects dye edits")
         let unknown = Data("{\"output\":\"unknown\"}".utf8)
         do { _ = try JSONDecoder().decode(FilmGrainSettings.self, from: unknown); fatalError("Unknown output accepted") }
         catch DecodingError.dataCorrupted { }

@@ -11,7 +11,7 @@ nonisolated enum PasteItem: String, CaseIterable, Codable, Sendable, Identifiabl
     case tone, contrast, whitePoint, hdrGain, hdrRolloff, rgbWhiteBalance, rawWhiteBalance
     case colorChrome, chromaCurve, lightnessChromaCurve, vertices, hueTwister, splitTone
     case dyeResponse, clarity, hdf, grain, halation, vignette, badHDR
-    case transform, dustCorrection, lut
+    case transform, chromaticAberration, dustCorrection, lut
     // Decode-only retired selection; never shown or applied.
     case offset
     case sourceOrientation, rawDecoder, exposure, shadowBias, luminanceNoise, colorNoise, sharpness, detail, edgeContrast, moire, lensCorrection, highlightRecovery
@@ -40,6 +40,7 @@ nonisolated enum PasteItem: String, CaseIterable, Codable, Sendable, Identifiabl
         case .vignette: "Vignette"
         case .badHDR: "BadHDR"
         case .dustCorrection: "Dust Correction"
+        case .chromaticAberration: "Chromatic Aberration"
         case .transform: "Transform"
         case .lut: "LUT"
         case .sourceOrientation: "Orientation and Mirror"
@@ -154,6 +155,7 @@ nonisolated struct SettingsPasteSelection: Codable, Sendable, Equatable {
         if contains(.halation) { result.halation = source.halation }
         if contains(.vignette) { result.vignette = source.vignette }
         if contains(.badHDR) { result.badHDR = source.badHDR }
+        if contains(.chromaticAberration) { result.chromaticAberration = source.chromaticAberration }
         if contains(.dustCorrection) { result.dustSpots = source.dustSpots }
         if contains(.transform) { result.transform = source.transform }
         if contains(.lut) { result.lutID = source.lutID; result.lutStrength = source.lutStrength }
@@ -308,7 +310,7 @@ struct SettingsPasteOptions: View {
                 tree("Tone", items: PasteItem.toneItems + PasteItem.balanceItems)
                 tree("Color", items: PasteItem.colorItems)
                 tree("Effects", items: PasteItem.effectItems)
-                tree("Transform", items: [.transform, .dustCorrection])
+                tree("Transform", items: [.transform, .chromaticAberration, .dustCorrection])
                 tree("RAW", items: PasteItem.rawItems)
                 tree("LUT", items: [.lut])
                 if selectingLock {

@@ -21,6 +21,10 @@ nonisolated struct RAWDevelopment: @unchecked Sendable {
     var fullResolutionReady = true
     var dustGeometry = DustGeometry()
     var dustSpots: [DustSpot] = []
+    var chromaticAberration = ChromaticAberration()
+    func matchesSourceCorrections(_ mapping: ToneMapping) -> Bool {
+        dustSpots == (mapping.dustSpots ?? []) && chromaticAberration == mapping.chromaticAberration
+    }
 }
 
 nonisolated struct HistogramData: Sendable {
@@ -491,6 +495,47 @@ actor RAWDeveloper {
         return try lutPipeline.apply(transformed, id: lutPipeline.activeID(mapping), strength: mapping.lutStrength)
     }
 
+    /// Read a narrow radial RGB strip from the retained source, with enough
+    /// margin to preview every supported scale without decoding or baking again.
+    func chromaticProfile(_ development: RAWDevelopment, line: RadialSampleLine) throws -> ChromaticProfile {
+        try Task.checkCancellation()
+        let image = development.linearSource.clampedToExtent()
+        let geometry = development.dustGeometry
+        let native = geometry.nativeSize(development.linearSource.extent.size)
+        guard development.fullResolutionReady, abs(native.width-line.size.width)<1,
+              abs(native.height-line.size.height)<1 else { throw DustFailure.source }
+        let base = development.chromaticAberration
+        let scales = [1.0, (1+base.red/100)/1.05, (1+base.red/100)/0.95,
+                      (1+base.blue/100)/1.05, (1+base.blue/100)/0.95]
+        let lower=max(0,line.lower*scales.min()!-2), upper=line.upper*scales.max()!+2
+        let n=min(8192,max(256,Int(ceil((upper-lower)*2))))
+        func pixel(_ radius: Double, across: Double = 0) -> CGPoint {
+            var p=line.point(at:radius)
+            p.x -= line.direction.y*across/native.width
+            p.y += line.direction.x*across/native.height
+            p=geometry.display(p)
+            let e=development.linearSource.extent
+            return CGPoint(x:e.minX+p.x*e.width,y:e.minY+(1-p.y)*e.height)
+        }
+        let a=pixel(lower), b=pixel(upper), c=pixel(lower,across:1)
+        let dx=(b.x-a.x)/Double(n-1), dy=(b.y-a.y)/Double(n-1)
+        let vx=c.x-a.x, vy=c.y-a.y
+        let transform=CGAffineTransform(a:dx,b:dy,c:vx,d:vy,tx:a.x-dx*0.5-vx*2.5,ty:a.y-dy*0.5-vy*2.5)
+        let strip=image.transformed(by:transform.inverted())
+        var pixels=[Float](repeating:0,count:n*5*4)
+        context.render(strip,toBitmap:&pixels,rowBytes:n*16,bounds:CGRect(x:0,y:0,width:n,height:5),format:.RGBAf,colorSpace:linearSpace)
+        var channels=[[Double]](repeating:[],count:3)
+        for channel in 0..<3 {
+            channels[channel]=(0..<n).map { x in
+                var sum=0.0
+                for y in 0..<5 { sum += Double(pixels[(y*n+x)*4+channel]) }
+                return sum/5
+            }
+        }
+        try Task.checkCancellation()
+        return ChromaticProfile(line:line,sampleLower:lower,sampleUpper:upper,baseline:base,channels:channels)
+    }
+
     /// Render only a narrow, rotated strip; never read a full-resolution bitmap to fit a spot.
     func dustProfile(_ development: RAWDevelopment, spot: DustSpot, spots: [DustSpot]) throws -> DustProfile {
         try Task.checkCancellation()
@@ -504,7 +549,8 @@ actor RAWDeveloper {
         let uncorrected: CIImage
         if development.dustSpots.isEmpty && development.fullResolutionReady { uncorrected = development.linearSource }
         else { uncorrected = try sourceImage(development.url).image }
-        let image = try dustCorrection.apply(uncorrected, spots: others, geometry: geometry)
+        let image = try dustCorrection.apply(uncorrected, spots: others, geometry: geometry,
+            chromaticAberration: development.dustSpots.isEmpty && development.fullResolutionReady ? ChromaticAberration() : development.chromaticAberration)
         let size = geometry.nativeSize(image.extent.size)
         let short = min(size.width,size.height)
         let strip = min(spot.length*0.02, max(1/short,spot.length*0.005))
@@ -945,7 +991,7 @@ actor RAWDeveloper {
     func exportHEIF(_ url: URL, mapping: ToneMapping, settings: HEIFSettings) throws -> Data {
         let accessed = url.startAccessingSecurityScopedResource()
         defer { if accessed { url.stopAccessingSecurityScopedResource() } }
-        discardDustInputs(url, spots: mapping.dustSpots ?? [])
+        discardCorrectionInputs(url, spots: mapping.dustSpots ?? [], chromaticAberration: mapping.chromaticAberration)
         let source = try sourceImage(url, whiteBalance: mapping.rawWhiteBalance).image
         return try exportImage(source.settingProperties(ExportMetadata.read(doubleExposure?.urls(relativeTo: url).first ?? url)), mapping: mapping, settings: settings)
     }
@@ -1011,8 +1057,8 @@ actor RAWDeveloper {
             let accessed = url.startAccessingSecurityScopedResource()
             defer { if accessed { url.stopAccessingSecurityScopedResource() } }
             let spots = mapping.dustSpots ?? []
-            discardDustInputs(url, spots: spots)
-            let source = try bakeDust(sourceImage(url, whiteBalance: mapping.rawWhiteBalance).image, spots: spots)
+            discardCorrectionInputs(url, spots: spots, chromaticAberration: mapping.chromaticAberration)
+            let source = try bakeSourceCorrections(sourceImage(url, whiteBalance: mapping.rawWhiteBalance).image, spots: spots, chromaticAberration: mapping.chromaticAberration)
             let input = try materialized(adjustedInput(source, mapping: mapping))
             exportRender = ExportRender(url: url, mapping: mapping,
                                         sourceSize: source.extent.integral.size, properties: ExportMetadata.read(doubleExposure?.urls(relativeTo: url).first ?? url), lutConfiguration: configuration, input: input)
@@ -1080,9 +1126,9 @@ actor RAWDeveloper {
         let access = url.startAccessingSecurityScopedResource()
         defer { if access { url.stopAccessingSecurityScopedResource() } }
         let spots = mapping.dustSpots ?? []
-        discardDustInputs(url, spots: spots)
+        discardCorrectionInputs(url, spots: spots, chromaticAberration: mapping.chromaticAberration)
         let decoded = try sourceImage(url, whiteBalance: mapping.rawWhiteBalance).image
-        let source = try materialized(bakeDust(decoded, spots: spots))
+        let source = try materialized(bakeSourceCorrections(decoded, spots: spots, chromaticAberration: mapping.chromaticAberration))
         let size = mapping.transform?.resolution(width: Int(source.extent.width), height: Int(source.extent.height), estimate: .maximum) ?? source.extent.size
         let width = max(1, Int((size.width * settings.scale).rounded()))
         let height = max(1, Int((size.height * settings.scale).rounded()))
@@ -1120,7 +1166,7 @@ actor RAWDeveloper {
 
     func exportImage(_ source: CIImage, mapping: ToneMapping, settings: HEIFSettings) throws -> Data {
         let properties = source.properties
-        let source = try bakeDust(source, spots: mapping.dustSpots ?? []).settingProperties(properties)
+        let source = try bakeSourceCorrections(source, spots: mapping.dustSpots ?? [], chromaticAberration: mapping.chromaticAberration).settingProperties(properties)
         return try encodeExport(sourceSize: source.extent.integral.size, mapping: mapping, settings: settings, sourceProperties: source.properties) { hdr in
             try self.gradedImage(source, mapping: mapping, hdr: hdr)
         }
@@ -1302,9 +1348,9 @@ actor RAWDeveloper {
         return result
     }
 
-    private func bakeDust(_ source: CIImage, spots: [DustSpot]) throws -> CIImage {
-        guard doubleExposure != nil || spots.contains(where: { $0.attenuation > 0 }) else { return source }
-        let corrected = try dustCorrection.apply(source, spots: spots, geometry: dustGeometry)
+    private func bakeSourceCorrections(_ source: CIImage, spots: [DustSpot], chromaticAberration: ChromaticAberration) throws -> CIImage {
+        guard !chromaticAberration.isIdentity || doubleExposure != nil || spots.contains(where: { $0.attenuation > 0 }) else { return source }
+        let corrected = try dustCorrection.apply(source, spots: spots, geometry: dustGeometry, chromaticAberration: chromaticAberration)
         guard let bitmap = context.createCGImage(corrected, from: corrected.extent,
             format: .RGBAh, colorSpace: linearSpace, deferred: false) else { throw DevelopmentError.decode }
         try Task.checkCancellation()
@@ -1312,8 +1358,8 @@ actor RAWDeveloper {
             translationX: source.extent.minX, y: source.extent.minY))
     }
 
-    private func discardDustInputs(_ url: URL, spots: [DustSpot]) {
-        guard !spots.isEmpty else { return }
+    private func discardCorrectionInputs(_ url: URL, spots: [DustSpot], chromaticAberration: ChromaticAberration) {
+        guard !spots.isEmpty || !chromaticAberration.isIdentity else { return }
         RAWImageCache.shared.discardPixels(for: url)
     }
 
@@ -1323,19 +1369,19 @@ actor RAWDeveloper {
     }
 
     /// Replaces the retained source. The previous corrected frame stays visible until this returns.
-    func replacingDust(_ development: RAWDevelopment, spots: [DustSpot], canvas: CGSize) throws -> RAWDevelopment {
+    func replacingSourceCorrections(_ development: RAWDevelopment, spots: [DustSpot], canvas: CGSize, chromaticAberration: ChromaticAberration? = nil) throws -> RAWDevelopment {
         RAWImageCache.shared.discardPixels(for: development.url)
         discardSourcePixels()
-        return try develop(development.url, previewCanvas: canvas, dustSpots: spots)
+        return try develop(development.url, previewCanvas: canvas, dustSpots: spots, chromaticAberration: chromaticAberration ?? development.chromaticAberration)
     }
 
-    func develop(_ url: URL, previewCanvas: CGSize = CGSize(width: 2560, height: 2560), progressive: Bool = false, dustSpots: [DustSpot] = []) throws -> RAWDevelopment {
+    func develop(_ url: URL, previewCanvas: CGSize = CGSize(width: 2560, height: 2560), progressive: Bool = false, dustSpots: [DustSpot] = [], chromaticAberration: ChromaticAberration = ChromaticAberration()) throws -> RAWDevelopment {
         grainSeed = FilmGrain.seed(for: url)
         try Task.checkCancellation()
         let accessed = url.startAccessingSecurityScopedResource()
         defer { if accessed { url.stopAccessingSecurityScopedResource() } }
         let stamp = interactive && !exporting ? RAWImageCache.FileStamp(url) : nil
-        if let stamp, let cached = RAWImageCache.shared.lookup(stamp, space: colorSpace, settings: rawSettings, balance: rawWhiteBalance, dustSpots: dustSpots, requireFull: !progressive, composite: doubleExposure) {
+        if let stamp, let cached = RAWImageCache.shared.lookup(stamp, space: colorSpace, settings: rawSettings, balance: rawWhiteBalance, dustSpots: dustSpots, chromaticAberration: chromaticAberration, requireFull: !progressive, composite: doubleExposure) {
             dustGeometry = cached.dustGeometry
             cacheStamp = stamp
             let size = cached.linearSource.extent.size
@@ -1360,24 +1406,24 @@ actor RAWDeveloper {
                 let resized = RAWDevelopment(id: cached.id, preview: preview, linearSource: linearSource, url: cached.url,
                     width: cached.width, height: cached.height, whitePoint: cached.whitePoint, metadata: cached.metadata,
                     isRAW: cached.isRAW, rawDefaults: cached.rawDefaults, sourceHeadroom: cached.sourceHeadroom,
-                    fullResolutionReady: cached.fullResolutionReady, dustGeometry: cached.dustGeometry, dustSpots: cached.dustSpots)
+                    fullResolutionReady: cached.fullResolutionReady, dustGeometry: cached.dustGeometry, dustSpots: cached.dustSpots, chromaticAberration: cached.chromaticAberration)
                 RAWImageCache.shared.insert(resized, stamp: stamp, space: colorSpace, settings: rawSettings, balance: rawWhiteBalance, composite: doubleExposure)
                 return resized
             }
         }
         cacheStamp = stamp
-        discardDustInputs(url, spots: dustSpots)
+        discardCorrectionInputs(url, spots: dustSpots, chromaticAberration: chromaticAberration)
         let previewLimit = max(1, max(previewCanvas.width, previewCanvas.height))
         let source = try sourceImage(url, previewLimit: progressive ? previewLimit : nil)
         try Task.checkCancellation()
         let rawImage = source.image
         let image: CIImage
-        if progressive, doubleExposure != nil || !dustSpots.isEmpty {
+        if progressive, doubleExposure != nil || !dustSpots.isEmpty || !chromaticAberration.isIdentity {
             let proxyScale = min(1, previewLimit / max(rawImage.extent.width, rawImage.extent.height))
-            image = try bakeDust(rawImage.transformed(by: CGAffineTransform(scaleX: proxyScale, y: proxyScale)), spots: dustSpots)
+            image = try bakeSourceCorrections(rawImage.transformed(by: CGAffineTransform(scaleX: proxyScale, y: proxyScale)), spots: dustSpots, chromaticAberration: chromaticAberration)
                 .transformed(by: CGAffineTransform(scaleX: 1/proxyScale, y: 1/proxyScale))
                 .cropped(to: rawImage.extent)
-        } else { image = try bakeDust(rawImage, spots: dustSpots) }
+        } else { image = try bakeSourceCorrections(rawImage, spots: dustSpots, chromaticAberration: chromaticAberration) }
         let bounds = image.extent.integral
         let scale = PreviewResolution.overviewScale(source: bounds.size, canvas: previewCanvas)
         let previewImage = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
@@ -1399,13 +1445,14 @@ actor RAWDeveloper {
         var development = RAWDevelopment(preview: preview, linearSource: retainedImage, url: url, width: Int(bounds.width), height: Int(bounds.height), whitePoint: source.whitePoint, metadata: metadata, isRAW: source.isRAW, rawDefaults: source.rawDefaults, sourceHeadroom: source.headroom)
         development.dustGeometry = dustGeometry
         development.dustSpots = dustSpots
+        development.chromaticAberration = chromaticAberration
         let isHEIF = type?.conforms(to: .heif) == true || type?.conforms(to: .heic) == true
         // HDR HEIF's lazy decoder can return incomplete tiles for cropped ROI requests.
         // Show the overview first, then use one fully decoded bitmap for all detail patches.
-        let needsFullDecode = !dustSpots.isEmpty || source.isRAW || (isHEIF && source.headroom > 1)
+        let needsFullDecode = !dustSpots.isEmpty || !chromaticAberration.isIdentity || source.isRAW || (isHEIF && source.headroom > 1)
         development.fullResolutionReady = !progressive || (!needsFullDecode && scale >= 1)
         overviewCache = (development.id, CGSize(width: floor(image.extent.width * scale), height: floor(image.extent.height * scale)), preview)
-        if let stamp, progressive || !dustSpots.isEmpty || doubleExposure != nil {
+        if let stamp, progressive || !dustSpots.isEmpty || !chromaticAberration.isIdentity || doubleExposure != nil {
             RAWImageCache.shared.insert(development, stamp: stamp, space: colorSpace, settings: rawSettings, balance: rawWhiteBalance, composite: doubleExposure)
         }
         return development
@@ -1434,14 +1481,14 @@ actor RAWDeveloper {
         let access = development.url.startAccessingSecurityScopedResource()
         defer { if access { development.url.stopAccessingSecurityScopedResource() } }
         let stamp = interactive && !exporting ? RAWImageCache.FileStamp(development.url) : nil
-        if let stamp, var cached = RAWImageCache.shared.lookup(stamp, space: colorSpace, settings: rawSettings, balance: rawWhiteBalance, dustSpots: development.dustSpots, requireFull: true, composite: doubleExposure) {
+        if let stamp, var cached = RAWImageCache.shared.lookup(stamp, space: colorSpace, settings: rawSettings, balance: rawWhiteBalance, dustSpots: development.dustSpots, chromaticAberration: development.chromaticAberration, requireFull: true, composite: doubleExposure) {
             cached.id = development.id
             return cached
         }
         cacheStamp = stamp
-        discardDustInputs(development.url, spots: development.dustSpots)
+        discardCorrectionInputs(development.url, spots: development.dustSpots, chromaticAberration: development.chromaticAberration)
         let decoded = try sourceImage(development.url).image
-        let source = try dustCorrection.apply(decoded, spots: development.dustSpots, geometry: dustGeometry)
+        let source = try dustCorrection.apply(decoded, spots: development.dustSpots, geometry: dustGeometry, chromaticAberration: development.chromaticAberration)
         guard let bitmap = context.createCGImage(source, from: source.extent,
             format: .RGBAh, colorSpace: linearSpace, deferred: false) else { throw DevelopmentError.decode }
         try Task.checkCancellation()
@@ -1452,6 +1499,7 @@ actor RAWDeveloper {
         result.id = development.id
         result.dustGeometry = development.dustGeometry
         result.dustSpots = development.dustSpots
+        result.chromaticAberration = development.chromaticAberration
         if interactive, !exporting, let stamp = cacheStamp, stamp == RAWImageCache.FileStamp(development.url) {
             RAWImageCache.shared.insert(result, stamp: stamp, space: colorSpace, settings: rawSettings, balance: rawWhiteBalance, composite: doubleExposure)
         }

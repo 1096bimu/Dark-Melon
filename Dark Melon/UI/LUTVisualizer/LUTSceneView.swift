@@ -1,4 +1,4 @@
-#if DEBUG && os(macOS)
+#if os(macOS)
 import SwiftUI
 import SceneKit
 

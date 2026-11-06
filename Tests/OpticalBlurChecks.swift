@@ -33,6 +33,7 @@ import CoreImage
         precondition(OpticalBlur.expanded(shiftedLow, extent: shifted).extent == shifted)
         // Constant fields remove resampling approximation from the order check.
         var mapping = ToneMapping.fresh(isRAW: false, sourceHeadroom: 1)
+        mapping.grain.output = .additive
         mapping.hdrGain = 1
         mapping.hdf = 0.25; mapping.hdfRadius = 70
         mapping.badHDR.strength = 1; mapping.badHDR.radius = 0.8

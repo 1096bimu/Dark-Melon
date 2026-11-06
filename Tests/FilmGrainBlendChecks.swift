@@ -33,7 +33,7 @@ import CoreImage
         precondition(seed == FilmGrain.seed(for: url))
         precondition(seed == FilmGrain.seed(for: URL(fileURLWithPath: "/photos/../photos/a.dng")))
         precondition(seed != FilmGrain.seed(for: URL(fileURLWithPath: "/photos/b.dng")))
-        var settings = FilmGrainSettings(); settings.strength = 1; settings.colorScale = 0
+        var settings = FilmGrainSettings(); settings.output = .additive; settings.strength = 1; settings.colorScale = 0
         let neutral = image(0.18)
         let output = try grain.apply(to: neutral, settings: settings, seed: seed)
         let base = red(output)

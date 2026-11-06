@@ -1,23 +1,6 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "Noise" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ノイズ"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "噪声"
-          }
-        }
-      }
-    },
     "" : {
       "shouldTranslate" : false
     },
@@ -26,6 +9,12 @@
     },
     "…" : {
       "shouldTranslate" : false
+    },
+    "· %@ at limits" : {
+
+    },
+    "· %@ clipped hidden" : {
+
     },
     "%" : {
       "localizations" : {
@@ -140,6 +129,9 @@
           }
         }
       }
+    },
+    "%@ points" : {
+
     },
     "%@ saturation" : {
       "extractionState" : "manual",
@@ -295,6 +287,9 @@
         }
       }
     },
+    "%lld³" : {
+
+    },
     "%lldnm" : {
       "shouldTranslate" : false
     },
@@ -335,6 +330,9 @@
           }
         }
       }
+    },
+    "1 · White point" : {
+
     },
     "1.0 · SDR white" : {
       "extractionState" : "manual",
@@ -713,6 +711,23 @@
         }
       }
     },
+    "Align the red and blue transitions with green. The graph previews your adjustments; Apply rebuilds the source." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "赤と青のエッジを緑に合わせます。グラフで調整を確認し、「適用」でソースを再生成します。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "将红色和蓝色的边缘与绿色对齐。图表预览调整结果；点击“应用”重新生成源图像。"
+          }
+        }
+      }
+    },
     "All" : {
       "localizations" : {
         "ja" : {
@@ -902,6 +917,9 @@
         }
       }
     },
+    "Analysis" : {
+
+    },
     "Angle" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1037,6 +1055,12 @@
           }
         }
       }
+    },
+    "Auto rotate" : {
+
+    },
+    "Auto Rotate" : {
+
     },
     "Auto Turbo" : {
       "localizations" : {
@@ -1636,6 +1660,23 @@
         }
       }
     },
+    "Chromatic Aberration" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "色収差"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "色差"
+          }
+        }
+      }
+    },
     "Clarity" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1903,6 +1944,9 @@
           }
         }
       }
+    },
+    "Color Region" : {
+
     },
     "Color Scale" : {
       "extractionState" : "manual",
@@ -2983,6 +3027,9 @@
         }
       }
     },
+    "Drag to rotate · Scroll to zoom" : {
+
+    },
     "Drag toward a hue to increase that color in the image." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2996,6 +3043,40 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "向某个色相拖动以增加图像中的该颜色。"
+          }
+        }
+      }
+    },
+    "Draw across a high-contrast edge. The line follows a radius from the image center." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "コントラストの高いエッジを横切る線を描いてください。線は画像中心からの放射方向に沿います。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "画线穿过高反差边缘。线条会沿图像中心的径向方向延伸。"
+          }
+        }
+      }
+    },
+    "Draw Again" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "描き直す"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重新绘制"
           }
         }
       }
@@ -3248,6 +3329,9 @@
         }
       }
     },
+    "Export LUT…" : {
+
+    },
     "Export Only" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -3266,7 +3350,6 @@
       }
     },
     "Export SDR LUT" : {
-      "extractionState" : "stale",
       "localizations" : {
         "ja" : {
           "stringUnit" : {
@@ -3916,6 +3999,23 @@
         }
       }
     },
+    "Green · reference" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "緑・基準"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "绿色 · 参考"
+          }
+        }
+      }
+    },
     "Green gain" : {
       "localizations" : {
         "ja" : {
@@ -4388,6 +4488,9 @@
         }
       }
     },
+    "Highlights channels reaching 0 or 1 from an interior input, or exceeding that range. Other points are dimmed." : {
+
+    },
     "Histogram unavailable: %@" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -4640,6 +4743,12 @@
         }
       }
     },
+    "Input → RGB output" : {
+
+    },
+    "Inspector" : {
+
+    },
     "Intended input gamma/gamut" : {
       "localizations" : {
         "ja" : {
@@ -4671,6 +4780,9 @@
           }
         }
       }
+    },
+    "Interactive RGB LUT cube. Drag to rotate; scroll or pinch to zoom." : {
+
     },
     "Interface" : {
       "localizations" : {
@@ -5000,6 +5112,9 @@
         }
       }
     },
+    "Live SDR export · sRGB input and output\nInput is normalized from black to the white point over 0–1. Point density also sets the exported LUT size. RAW decoding and spatial effects are excluded." : {
+
+    },
     "Liz" : {
       "localizations" : {
         "ja" : {
@@ -5147,6 +5262,12 @@
           }
         }
       }
+    },
+    "LUT Visualizer" : {
+
+    },
+    "LUT Visualizer…" : {
+
     },
     "LZW compression." : {
       "localizations" : {
@@ -5352,6 +5473,9 @@
         }
       }
     },
+    "Mode" : {
+
+    },
     "Moiré Reduction" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -5482,6 +5606,15 @@
           }
         }
       }
+    },
+    "Neutral input ramp and red, green, blue output curves" : {
+
+    },
+    "Neutral ramp" : {
+
+    },
+    "Neutrals Only" : {
+
     },
     "Never" : {
       "localizations" : {
@@ -5647,6 +5780,23 @@
         }
       }
     },
+    "Noise" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ノイズ"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "噪声"
+          }
+        }
+      }
+    },
     "None" : {
       "localizations" : {
         "ja" : {
@@ -5659,6 +5809,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "无"
+          }
+        }
+      }
+    },
+    "Normalize Channels" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "チャンネルを正規化"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "归一化通道"
           }
         }
       }
@@ -6175,6 +6342,15 @@
           }
         }
       }
+    },
+    "Point density" : {
+
+    },
+    "Point Density" : {
+
+    },
+    "Point size as a percentage of the viewport’s shorter edge" : {
+
     },
     "Position in folder" : {
       "localizations" : {
@@ -6861,6 +7037,12 @@
         }
       }
     },
+    "Reset Zoom and Pan" : {
+
+    },
+    "Reset zoom and pan, preserving rotation" : {
+
+    },
     "Reverse Scroll Direction" : {
       "localizations" : {
         "ja" : {
@@ -6890,6 +7072,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "RGB 增益图"
+          }
+        }
+      }
+    },
+    "RGB levels along the radial sampling line" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "放射状サンプリング線上のRGBレベル"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "径向采样线上的RGB水平"
           }
         }
       }
@@ -6939,6 +7138,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "相同区域"
+          }
+        }
+      }
+    },
+    "Sample Edge" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "エッジをサンプリング"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "采样边缘"
           }
         }
       }
@@ -7525,6 +7741,9 @@
         }
       }
     },
+    "Show Clipping" : {
+
+    },
     "Show in Finder" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -7558,6 +7777,12 @@
         }
       }
     },
+    "Show Ramp" : {
+
+    },
+    "Show Vectors" : {
+
+    },
     "Showing 4 of %lld" : {
       "localizations" : {
         "ja" : {
@@ -7573,6 +7798,9 @@
           }
         }
       }
+    },
+    "Shows only points that are not clipped, with their original colors." : {
+
     },
     "Size" : {
       "extractionState" : "manual",
@@ -7590,6 +7818,9 @@
           }
         }
       }
+    },
+    "Slice axis" : {
+
     },
     "Smaller Thumbnails" : {
       "localizations" : {
@@ -7700,6 +7931,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "按 OKLCH 色相和明度显示源像素分布。上下拖动颜色节点可调整密度。"
+          }
+        }
+      }
+    },
+    "Spatially scales red and blue around the image center, keeping green fixed. Positive values enlarge the channel. Changes rebuild the source before dust correction." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "緑を固定し、画像の中心を基準に赤と青を拡大・縮小します。正の値はチャンネルを拡大します。変更すると、ダスト補正の前にソース画像を再生成します。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "以图像中心为基准缩放红色和蓝色通道，绿色保持不变。正值会放大通道。更改后会在灰尘校正之前重新生成源图像。"
           }
         }
       }
@@ -8781,6 +9029,9 @@
           }
         }
       }
+    },
+    "Visualization" : {
+
     },
     "W" : {
       "extractionState" : "manual",

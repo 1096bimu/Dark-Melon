@@ -37,6 +37,7 @@ struct HDRImagePreview: NSViewRepresentable {
     var cropInsets = CGSize.zero
     var panelEdgePadding: CGFloat = 0
     var dustEditor: DustEditor? = nil
+    var chromaticEditor: ChromaticEdgeEditor? = nil
     let sampleTool: PreviewSampleTool?
     let hover: (CGPoint?) -> Void
     let sample: (CGPoint, CGFloat) -> Void
@@ -67,12 +68,19 @@ struct HDRImagePreview: NSViewRepresentable {
         view.dustOverlay.editor = dustEditor
         dustEditor?.redraw = { [weak view] in view?.dustOverlay.refresh() }
         view.dustOverlay.refresh()
+        if view.chromaticOverlay.superview == nil { view.addSubview(view.chromaticOverlay) }
+        view.chromaticOverlay.frame = view.bounds
+        view.chromaticOverlay.imageFrame = view.dustOverlay.imageFrame
+        view.chromaticOverlay.editor = chromaticEditor
+        chromaticEditor?.redraw = { [weak view] in view?.chromaticOverlay.refresh() }
+        view.chromaticOverlay.refresh()
         view.sample = sample
         view.sampleTool = sampleTool
     }
 
     final class ImageDisplay: NSView {
         let dustOverlay = DustOverlay()
+        let chromaticOverlay = ChromaticEdgeOverlay()
         var allowsWhiteBalance = true
         var comparisonClip: CGRect? { didSet { if oldValue != comparisonClip { positionImage() } } }
         var viewportChanged: (() -> Void)?
@@ -201,7 +209,7 @@ struct HDRImagePreview: NSViewRepresentable {
                     }
                     let rect = CGRect(x: -self.imageLayer.bounds.width / 2, y: -self.imageLayer.bounds.height / 2,
                                       width: self.imageLayer.bounds.width, height: self.imageLayer.bounds.height)
-                    if let point = local, self.dustOverlay.hitTest(self.convert(window.mouseLocationOutsideOfEventStream, from: nil)) == nil, self.navigationBounds.contains(viewPoint), self.visibleRect.contains(viewPoint), rect.contains(point),
+                    if let point = local, self.dustOverlay.hitTest(self.convert(window.mouseLocationOutsideOfEventStream, from: nil)) == nil, self.chromaticOverlay.hitTest(self.convert(window.mouseLocationOutsideOfEventStream, from: nil)) == nil, self.navigationBounds.contains(viewPoint), self.visibleRect.contains(viewPoint), rect.contains(point),
                        rect.width > 0, rect.height > 0, self.imageSize.width > 0, self.imageSize.height > 0 {
                         // Pixel centers suppress repeated sampling within the same image pixel.
                         let x = floor((point.x - rect.minX) / rect.width * self.imageSize.width)
@@ -442,6 +450,9 @@ struct HDRImagePreview: NSViewRepresentable {
             dustOverlay.frame = bounds
             dustOverlay.imageFrame = CGRect(x: imageLayer.frame.minX, y: bounds.height-imageLayer.frame.maxY, width: imageLayer.frame.width, height: imageLayer.frame.height)
             dustOverlay.refresh()
+            chromaticOverlay.frame = bounds
+            chromaticOverlay.imageFrame = dustOverlay.imageFrame
+            chromaticOverlay.refresh()
             sdrLayer.bounds = imageLayer.bounds
             sdrLayer.position = imageLayer.position
             sdrLayer.transform = imageLayer.transform

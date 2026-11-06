@@ -82,13 +82,13 @@ nonisolated final class RAWImageCache: @unchecked Sendable {
         }
     }
 
-    func lookup(_ stamp: FileStamp, space: ProcessingColorSpace, settings: RAWSettings?, balance: RAWWhiteBalance?, dustSpots: [DustSpot] = [], requireFull: Bool = false, composite: DoubleExposure? = nil) -> RAWDevelopment? {
+    func lookup(_ stamp: FileStamp, space: ProcessingColorSpace, settings: RAWSettings?, balance: RAWWhiteBalance?, dustSpots: [DustSpot] = [], chromaticAberration: ChromaticAberration = ChromaticAberration(), requireFull: Bool = false, composite: DoubleExposure? = nil) -> RAWDevelopment? {
         lock.lock(); defer { lock.unlock() }
         // A modified/replaced file invalidates every old decode of that path.
         entries.removeAll { $0.stamp.url == stamp.url && $0.stamp != stamp }
         let sourceStamps = composite?.urls(relativeTo: stamp.url).compactMap(FileStamp.init) ?? []
         guard let index = entries.firstIndex(where: {
-            $0.stamp == stamp && $0.space == space && $0.composite == composite && $0.sourceStamps == sourceStamps && (!requireFull || $0.development.fullResolutionReady) && $0.development.dustSpots == dustSpots
+            $0.stamp == stamp && $0.space == space && $0.composite == composite && $0.sourceStamps == sourceStamps && (!requireFull || $0.development.fullResolutionReady) && $0.development.dustSpots == dustSpots && $0.development.chromaticAberration == chromaticAberration
                 && $0.settings == (settings?.resolved(using: $0.development.rawDefaults ?? RAWSettings()) ?? $0.development.rawDefaults ?? RAWSettings())
                 && $0.balance == (balance ?? $0.development.whitePoint.map(RAWWhiteBalance.init))
         }) else { return nil }

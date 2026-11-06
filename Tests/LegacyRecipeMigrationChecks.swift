@@ -5,6 +5,12 @@ import ImageIO
 @main struct LegacyRecipeMigrationChecks {
     @MainActor static func main() async throws {
         var original = DevelopmentRecipe(colorSpace: .displayP3, mapping: ToneMapping())
+        precondition(FilmGrainSettings().output == .additive)
+        precondition(ToneMapping.fresh(isRAW: false, sourceHeadroom: 1).grain.output == .additive)
+        original.mapping.grain.output = .filmDensity
+        original.mapping.channelContrast = [0.15, -0.1, 0.05]
+        original.mapping.dyePurity = [0.8, 0.7, 0.9]
+        original.mapping.dyeMixers.a[1] = 0.1
         original.mapping.white = 0.73
         original.mapping.concentration = 0.37
         original.mapping.whiteBalance.red = 1.2
@@ -25,7 +31,8 @@ import ImageIO
         let restored = try DevelopmentRecipe.decode(JSONSerialization.data(withJSONObject: old))
         precondition(restored == expected, "Only grain amount is inherited; unrelated edits remain intact")
         let direct = try JSONDecoder().decode(FilmGrainSettings.self, from: JSONSerialization.data(withJSONObject: oldGrain))
-        precondition(direct == expected.mapping.grain)
+        var directExpected = expected.mapping.grain; directExpected.output = .additive
+        precondition(direct == directExpected)
         // Discard retired fields without attempting to decode their obsolete types.
         let malformed = legacy(current, distribution: "retired", grain: ["size": "retired", "distribution": "retired", "strength": 0.8])
         precondition(tryDecode(malformed) == expected)
@@ -51,8 +58,31 @@ import ImageIO
         precondition(savedGrain["distribution"] == nil && savedGrain["size"] as? Double == 2)
         let repeated = try DevelopmentRecipe.decode(nested.encoded())
         precondition(repeated == nested, "Migration must be idempotent")
+        // The immediately preceding schema has Offset/Color Scale but no mode.
+        var prior = current
+        var priorMapping = prior["mapping"] as! [String: Any]
+        var priorGrain = priorMapping["grain"] as! [String: Any]
+        priorGrain.removeValue(forKey: "output")
+        priorMapping["grain"] = priorGrain; prior["mapping"] = priorMapping
+        precondition(tryDecode(prior) == original, "Missing mode must retain dye settings in Analogue")
+        // No explicit mode: only meaningful legacy dye settings select Analogue.
+        let cleanRecipe = DevelopmentRecipe(colorSpace: .sRGB, mapping: ToneMapping())
+        let cleanDocument = try JSONSerialization.jsonObject(with: cleanRecipe.encoded()) as! [String: Any]
+        for kind in 0..<5 {
+            var document = cleanDocument
+            var mapping = document["mapping"] as! [String: Any]
+            mapping["grain"] = ["strength": 0.0]
+            if kind == 1 { mapping["channelContrast"] = [0.1,-0.1,0] }
+            if kind == 2 { mapping["storedDyePurity"] = [0.9,1,1] }
+            if kind == 3 { mapping["dyeMixers"] = ["a":[1.0,0.1,0,0,1,0,0,0,1],"b":DyeMixers.identity] }
+            if kind == 4 { mapping["channelContrast"] = [0.1,0.1,0.1] }
+            document["mapping"] = mapping
+            let decoded = try DevelopmentRecipe.decode(JSONSerialization.data(withJSONObject: document))
+            precondition(decoded.mapping.grain.output == ((kind == 0 || kind == 4) ? .additive:.filmDensity))
+        }
         // Current edits must not be reset by legacy migration.
         var modern = original
+        modern.mapping.grain.output = .additive
         modern.mapping.grain.size = 6.5; modern.mapping.grain.strength = 1.7
         modern.mapping.grain.offset = -0.4; modern.mapping.grain.colorScale = 0.9
         modern.mapping.contrastDistribution = ToneContrastDistribution(black: 0.3, shadowWidth: 0.2, highlightWidth: 0.7, white: 0.4)

@@ -10,6 +10,7 @@ nonisolated struct SDRLUT: Sendable {
         var settings = mapping
         settings.transform = nil
         settings.dustSpots = nil
+        settings.chromaticAberration = ChromaticAberration()
         settings.hdf = 0
         settings.vignette.amount = 0
         settings.halation.inputCurve = 0

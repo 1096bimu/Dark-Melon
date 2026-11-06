@@ -14,7 +14,7 @@ import CoreImage
         (0..<3).map { i in (0..<3).reduce(0.0) { $0 + m[i * 3 + $1] * rgb[$1] } }
     }
     static func main() async throws {
-        var mapping = ToneMapping()
+        var mapping = ToneMapping(); mapping.grain.output = .additive
         mapping.color.splitTone.nodes = []
         mapping.vertexWarp = OKLabVertexWarp.expanded(mapping.vertexWarp, space: .sRGB)
         var rng = Generator()

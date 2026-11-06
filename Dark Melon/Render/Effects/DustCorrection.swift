@@ -62,9 +62,10 @@ nonisolated struct DustGeometry: Equatable, Sendable {
 nonisolated final class DustCorrection {
     private let kernel = MetalImageKernels.general("dustCorrection")
     private var cached: (spots: [DustSpot], geometry: DustGeometry, image: CIImage)?
-    func apply(_ source: CIImage, spots: [DustSpot], geometry: DustGeometry) throws -> CIImage {
+    func apply(_ source: CIImage, spots: [DustSpot], geometry: DustGeometry, chromaticAberration: ChromaticAberration = ChromaticAberration()) throws -> CIImage {
         let active = spots.filter { $0.attenuation > 0 && $0.isValid }
-        guard !active.isEmpty else { return source }
+        guard chromaticAberration.isValid else { throw DustFailure.kernel }
+        guard !active.isEmpty || !chromaticAberration.isIdentity else { return source }
         let parameters: CIImage
         if let cached, cached.spots == active, cached.geometry == geometry { parameters = cached.image }
         else {
@@ -73,16 +74,30 @@ nonisolated final class DustCorrection {
                 let p = geometry.display(spot.center)
                 values += [Float(p.x), Float(p.y), Float(spot.radius), Float(spot.feather), Float(spot.attenuation), 0, 0, 0]
             }
+            if values.isEmpty { values = [Float](repeating: 0, count: 8) }
             let data = values.withUnsafeBytes { Data($0) }
-            parameters = CIImage(bitmapData: data, bytesPerRow: active.count * 32,
-                size: CGSize(width: active.count * 2, height: 1), format: .RGBAf, colorSpace: nil)
+            parameters = CIImage(bitmapData: data, bytesPerRow: max(1, active.count) * 32,
+                size: CGSize(width: max(1, active.count) * 2, height: 1), format: .RGBAf, colorSpace: nil)
             cached = (active, geometry, parameters)
         }
         let e = source.extent
+        let redScale = 1 / (1 + chromaticAberration.red / 100)
+        let blueScale = 1 / (1 + chromaticAberration.blue / 100)
+        let center = CGPoint(x: e.midX, y: e.midY)
+        func sampled(_ rect: CGRect, scale: Double) -> CGRect {
+            CGRect(x: center.x + (rect.minX-center.x)*scale,
+                   y: center.y + (rect.minY-center.y)*scale,
+                   width: rect.width*scale, height: rect.height*scale)
+        }
+        // Alignment and dust share one kernel and one final source bake.
+        let input = chromaticAberration.isIdentity ? source : source.clampedToExtent()
         guard let image = kernel?.apply(extent: e, roiCallback: { index, rect in
-            index == 0 ? rect : parameters.extent
-        }, arguments: [source, parameters, active.count,
-                       CIVector(x: e.minX, y: e.minY, z: e.width, w: e.height)]) else {
+            if index != 0 { return parameters.extent }
+            return rect.union(sampled(rect, scale: redScale)).union(sampled(rect, scale: blueScale))
+                .insetBy(dx: -2, dy: -2).intersection(e)
+        }, arguments: [input, parameters, active.count,
+                       CIVector(x: e.minX, y: e.minY, z: e.width, w: e.height),
+                       CIVector(x: redScale, y: blueScale)]) else {
             throw DustFailure.kernel
         }
         return image

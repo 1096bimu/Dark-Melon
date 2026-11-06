@@ -7,6 +7,7 @@ import CoreGraphics
         // Normalized white point and encoded axes keep a linear tone diagonal.
         for white in [ToneMapping.minimumRange, 0.001, 0.18, 0.5, 1, 2] {
             var mapping = ToneMapping.fresh(isRAW: false, sourceHeadroom: 1)
+            mapping.grain.output = .additive
             mapping.white = white
             let ramp = mapping.neutralSDRRamp()
             precondition(ramp.count == 257)
@@ -17,6 +18,7 @@ import CoreGraphics
         let worker = RAWDeveloper(colorSpace: .sRGB)
         for white in [0.18, 0.5, 1] {
             var mapping = ToneMapping.fresh(isRAW: false, sourceHeadroom: 1)
+            mapping.grain.output = .additive
             mapping.white = white; mapping.tonePosition = 0.08 * white; mapping.concentration = 0.4
             mapping.contrastDistribution = ToneContrastDistribution(black: 0.2, shadowWidth: 0.1, highlightWidth: 0.8, white: 0.4)
             let ramp = mapping.neutralSDRRamp()

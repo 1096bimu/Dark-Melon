@@ -127,6 +127,7 @@ import AppKit
         if old.rawSettings != new.rawSettings { return String(localized: "RAW") }
         let a = old.mapping, b = new.mapping
         if a.lutID != b.lutID || a.lutStrength != b.lutStrength { return String(localized: "LUT") }
+        if a.chromaticAberration != b.chromaticAberration { return String(localized: "Chromatic Aberration") }
         if a.dustSpots != b.dustSpots { return String(localized: "Dust Correction") }
         if a.transform != b.transform { return String(localized: "Transform") }
         if a.whiteBalance != b.whiteBalance || a.rawWhiteBalance != b.rawWhiteBalance { return String(localized: "White Balance") }

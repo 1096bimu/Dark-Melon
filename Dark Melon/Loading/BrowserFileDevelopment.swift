@@ -30,9 +30,9 @@ struct BrowserFileDevelopment {
             interactive: comparisonCanvas != nil, memoryLimitMB: comparisonCanvas == nil ? nil : max(128, min(512, BatchExportBudget.singleFileMegabytes / 32)))
         var development: RAWDevelopment
         if let comparisonSources, let comparisonCanvas {
-            development = try await comparisonSources.preview(key: .init(url: url.standardizedFileURL, space: space, raw: recipe.rawSettings, balance: recipe.mapping.rawWhiteBalance, doubleExposure: recipe.mapping.doubleExposure, dustSpots: recipe.mapping.dustSpots ?? []), worker: worker, canvas: comparisonCanvas)
+            development = try await comparisonSources.preview(key: .init(url: url.standardizedFileURL, space: space, raw: recipe.rawSettings, balance: recipe.mapping.rawWhiteBalance, doubleExposure: recipe.mapping.doubleExposure, dustSpots: recipe.mapping.dustSpots ?? [], chromaticAberration: recipe.mapping.chromaticAberration), worker: worker, canvas: comparisonCanvas)
         } else {
-            development = try await worker.develop(url, previewCanvas: comparisonCanvas ?? CGSize(width: 2560, height: 2560), progressive: comparisonCanvas != nil, dustSpots: recipe.mapping.dustSpots ?? [])
+            development = try await worker.develop(url, previewCanvas: comparisonCanvas ?? CGSize(width: 2560, height: 2560), progressive: comparisonCanvas != nil, dustSpots: recipe.mapping.dustSpots ?? [], chromaticAberration: recipe.mapping.chromaticAberration)
         }
         if development.isRAW, recipe.mapping.rawWhiteBalance == nil, let reference = development.whitePoint {
             recipe.mapping.rawWhiteBalance = RAWWhiteBalance(reference)
@@ -42,9 +42,9 @@ struct BrowserFileDevelopment {
         }
         if let film {
             let updated = film.applying(to: recipe)
-            if updated.mapping.dustSpots != recipe.mapping.dustSpots || updated.mapping.doubleExposure != recipe.mapping.doubleExposure || updated.rawSettings != recipe.rawSettings || updated.mapping.rawWhiteBalance != recipe.mapping.rawWhiteBalance {
+            if updated.mapping.chromaticAberration != recipe.mapping.chromaticAberration || updated.mapping.dustSpots != recipe.mapping.dustSpots || updated.mapping.doubleExposure != recipe.mapping.doubleExposure || updated.rawSettings != recipe.rawSettings || updated.mapping.rawWhiteBalance != recipe.mapping.rawWhiteBalance {
                 worker = RAWDeveloper(colorSpace: space, rawSettings: updated.rawSettings, rawWhiteBalance: updated.mapping.rawWhiteBalance, doubleExposure: updated.mapping.doubleExposure, interactive: comparisonCanvas != nil)
-                development = try await worker.develop(url, previewCanvas: comparisonCanvas ?? CGSize(width: 2560, height: 2560), progressive: comparisonCanvas != nil, dustSpots: updated.mapping.dustSpots ?? [])
+                development = try await worker.develop(url, previewCanvas: comparisonCanvas ?? CGSize(width: 2560, height: 2560), progressive: comparisonCanvas != nil, dustSpots: updated.mapping.dustSpots ?? [], chromaticAberration: updated.mapping.chromaticAberration)
             }
             recipe = updated
         }

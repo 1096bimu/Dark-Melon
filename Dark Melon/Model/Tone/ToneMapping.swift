@@ -11,6 +11,11 @@ nonisolated struct ToneMapping: Codable, Equatable, Sendable {
         get { lutAmount ?? 1 }
         set { lutAmount = newValue == 1 ? nil : newValue }
     }
+    private var storedChromaticAberration: ChromaticAberration?
+    var chromaticAberration: ChromaticAberration {
+        get { storedChromaticAberration ?? ChromaticAberration() }
+        set { storedChromaticAberration = newValue.isIdentity ? nil : newValue }
+    }
     var dustSpots: [DustSpot]? = nil
     var transform: TransformSettings? = nil
     var whiteBalance = WhiteBalance()

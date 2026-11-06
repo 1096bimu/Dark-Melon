@@ -96,6 +96,20 @@ nonisolated struct DevelopmentRecipe: Codable, Equatable, Sendable {
                grain["offset"] == nil, grain["colorScale"] == nil, grain["output"] == nil {
                 mapping["grain"] = ["strength": grain["strength"] ?? 0]
             }
+            var grain = mapping["grain"] as? [String: Any] ?? [:]
+            if grain["output"] == nil || grain["output"] is NSNull {
+                // Preserve actual legacy dye edits, without introducing a film
+                // response into otherwise untouched photos or presets.
+                let channels = mapping["channelContrast"] as? [Double] ?? [0,0,0]
+                let response = channels.count == 3 && channels.contains { abs($0-channels[0]) > 1e-12 }
+                let purity = mapping["storedDyePurity"] as? [Double] ?? [1,1,1]
+                let mixers = mapping["dyeMixers"] as? [String: Any] ?? [:]
+                let a = mixers["a"] as? [Double] ?? DyeMixers.identity
+                let b = mixers["b"] as? [Double] ?? DyeMixers.identity
+                let edited = response || purity != [1,1,1] || a != DyeMixers.identity || b != DyeMixers.identity
+                grain["output"] = edited ? "filmDensity" : "additive"
+                mapping["grain"] = grain
+            }
             document["mapping"] = mapping
         }
         // Missing fields inherit current defaults; unknown fields are ignored by Codable.
@@ -152,6 +166,7 @@ nonisolated struct DevelopmentRecipe: Codable, Equatable, Sendable {
     }
 
     private func validate() throws {
+        guard mapping.chromaticAberration.isValid else { throw RecipeError.invalid }
         if let spots = mapping.dustSpots {
             guard spots.count <= 128, spots.allSatisfy(\.isValid), Set(spots.map(\.id)).count == spots.count else { throw RecipeError.invalid }
         }

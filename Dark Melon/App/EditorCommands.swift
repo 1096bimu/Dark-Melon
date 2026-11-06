@@ -35,9 +35,7 @@ private struct EditorPanelFocus: FocusedValueKey {
 private struct TutorialFocus: FocusedValueKey {
     typealias Value = () -> Void
 }
-#if DEBUG
 private struct LUTVisualizerFocus: FocusedValueKey { typealias Value = () -> Void }
-#endif
 private struct VariationExportFocus: FocusedValueKey { typealias Value = () -> Void }
 private struct BatchExportFocus: FocusedValueKey {
     typealias Value = () -> Void
@@ -45,12 +43,10 @@ private struct BatchExportFocus: FocusedValueKey {
 private struct CopyDevelopmentFocus: FocusedValueKey { typealias Value = () -> Void }
 private struct PasteDevelopmentFocus: FocusedValueKey { typealias Value = () -> Void }
 extension FocusedValues {
-    #if DEBUG
     var showLUTVisualizer: (() -> Void)? {
         get { self[LUTVisualizerFocus.self] }
         set { self[LUTVisualizerFocus.self] = newValue }
     }
-    #endif
     var variationExport: (() -> Void)? {
         get { self[VariationExportFocus.self] }
         set { self[VariationExportFocus.self] = newValue }
@@ -90,9 +86,7 @@ struct EditorCommands: Commands {
     @FocusedValue(\.editorUndo) private var editUndo
     @FocusedValue(\.toggleEditorPicker) private var togglePicker
     @FocusedBinding(\.editorPanel) private var panel
-    #if DEBUG
     @FocusedValue(\.showLUTVisualizer) private var showLUTVisualizer
-    #endif
     @FocusedValue(\.variationExport) private var variationExport
     @FocusedValue(\.batchExport) private var batchExport
     @FocusedValue(\.startTutorial) private var startTutorial
@@ -196,13 +190,13 @@ struct EditorCommands: Commands {
                 .disabled(startTutorial == nil)
         }
         CommandMenu("Tools") {
-            #if DEBUG
             Button("LUT Visualizer…") { showLUTVisualizer?() }
                 .disabled(showLUTVisualizer == nil)
+            #if DEBUG
             Button("Variation Export…") { variationExport?() }
                 .disabled(variationExport == nil)
-            Divider()
             #endif
+            Divider()
             Button("White Balance Picker") { togglePicker?(.whiteBalance) }
                 .keyboardShortcut("w", modifiers: [])
                 .disabled(togglePicker == nil)

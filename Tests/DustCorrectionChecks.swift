@@ -96,7 +96,7 @@ import ImageIO
         let refitProfile=try await baking.dustProfile(baked,spot:spot,spots:[spot])
         let originalProfile=try await baking.dustProfile(clean,spot:spot,spots:[spot])
         precondition(zip(refitProfile.values,originalProfile.values).allSatisfy{abs($0-$1)<0.001},"Refit sampled corrected pixels")
-        let removed=try await baking.replacingDust(baked,spots:[],canvas:size)
+        let removed=try await baking.replacingSourceCorrections(baked,spots:[],canvas:size)
         precondition(removed.dustSpots.isEmpty)
         precondition(zip(pixels(removed.linearSource),pixels(clean.linearSource)).allSatisfy{abs($0-$1)<0.001})
         // The source cache must replace, rather than retain, the uncorrected variant.

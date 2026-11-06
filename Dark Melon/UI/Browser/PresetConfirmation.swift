@@ -55,10 +55,10 @@ struct PresetPreview {
             before = try await renderer.previews(source, mapping: original.mapping, sourceURL: development.url, sourceSize: CGSize(width: development.width, height: development.height))
         }
         try Task.checkCancellation()
-        let needsDecode = recipe.mapping.dustSpots != original.mapping.dustSpots || recipe.mapping.doubleExposure != original.mapping.doubleExposure || recipe.rawSettings != original.rawSettings
+        let needsDecode = recipe.mapping.chromaticAberration != original.mapping.chromaticAberration || recipe.mapping.dustSpots != original.mapping.dustSpots || recipe.mapping.doubleExposure != original.mapping.doubleExposure || recipe.rawSettings != original.rawSettings
             || recipe.mapping.rawWhiteBalance != original.mapping.rawWhiteBalance
         let afterDevelopment = needsDecode
-            ? try await worker.develop(development.url, previewCanvas: canvas, dustSpots: recipe.mapping.dustSpots ?? []) : development
+            ? try await worker.develop(development.url, previewCanvas: canvas, dustSpots: recipe.mapping.dustSpots ?? [], chromaticAberration: recipe.mapping.chromaticAberration) : development
         let source = try await worker.overview(afterDevelopment, canvas: canvas)
         let after = try await worker.previews(source, mapping: recipe.mapping, sourceURL: afterDevelopment.url, sourceSize: CGSize(width: afterDevelopment.width, height: afterDevelopment.height))
         try Task.checkCancellation()

@@ -11,8 +11,17 @@ extern "C" float4 doubleExposureAdd(sample_t a, sample_t b) {
 
 
 extern "C" float4 dustCorrection(coreimage::sampler source, coreimage::sampler parameters,
-                                       float count, float4 extent, destination dest) {
+                                       float count, float4 extent, float2 channelScale, destination dest) {
     float4 pixel = source.sample(source.transform(dest.coord()));
+    if (any(channelScale != float2(1.0))) {
+        float2 center = extent.xy + extent.zw * 0.5;
+        float2 delta = dest.coord() - center;
+        float4 red = unpremultiply(source.sample(source.transform(center + delta * channelScale.x)));
+        float4 blue = unpremultiply(source.sample(source.transform(center + delta * channelScale.y)));
+        // Green and coverage remain at the original position.
+        pixel.r = red.r * pixel.a;
+        pixel.b = blue.b * pixel.a;
+    }
     float2 uv = (dest.coord() - extent.xy) / extent.zw;
     uv.y = 1.0 - uv.y;
     float transmission = 1.0;

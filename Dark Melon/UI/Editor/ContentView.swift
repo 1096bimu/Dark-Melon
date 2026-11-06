@@ -171,7 +171,7 @@ struct ContentView: View {
     @State private var histogram: HistogramData?
     @State private var histogramError: String?
     @State private var exportSettings = HEIFSettings.restored()
-    #if DEBUG && os(macOS)
+    #if os(macOS)
     @State private var lutVisualizer = LUTVisualizerWindow()
     private var lutVisualizerInput: LUTVisualizerInput { LUTVisualizerInput(mapping: mapping, colorSpace: colorSpace) }
     #endif
@@ -220,6 +220,7 @@ struct ContentView: View {
         return renderedPreviewImages
     }
     @State private var dustEditor = DustEditor()
+    @State private var chromaticEditor = ChromaticEdgeEditor()
     @State private var dustTask: Task<Void, Never>?
     @State private var dustGeneration = UUID()
     @State private var adjustingTone = false
@@ -291,6 +292,7 @@ struct ContentView: View {
         result.rawWhiteBalance = mapping.rawWhiteBalance
         result.transform = mapping.transform
         result.dustSpots = mapping.dustSpots
+        result.chromaticAberration = mapping.chromaticAberration
         return result
     }
 
@@ -299,7 +301,7 @@ struct ContentView: View {
             : ([.color, .effects].contains(panel) ? comparisonMapping(panel) : originalMapping)
         return DetailPreviewRequest(sourceID: previewDevelopment?.id, mapping: previewMapping,
             counterpart: counterpart, comparing: comparing || confirmingPreset != nil, hdr: hdrPreview,
-            region: previewRegion, enabled: !comparingMultiple && previewDevelopment?.dustSpots == (previewMapping.dustSpots ?? []) && previewDevelopment?.fullResolutionReady == true && !loading && !cropping && !adjustingTone && !adjustingWhitePoint
+            region: previewRegion, enabled: !comparingMultiple && previewDevelopment?.matchesSourceCorrections(previewMapping) == true && previewDevelopment?.fullResolutionReady == true && !loading && !cropping && !adjustingTone && !adjustingWhitePoint
                 && (!editHistory.interacting || comparing))
     }
 
@@ -414,6 +416,20 @@ struct ContentView: View {
         #endif
     }
 
+    private func activateChromaticEdge() {
+        if chromaticEditor.enabled { chromaticEditor.stop(); return }
+        guard let development, development.matchesSourceCorrections(mapping), !loading else { return }
+        if cropping { toggleTransform() }
+        dustEditor.enabled = false
+        pickingWhiteBalance = false
+        let sourceID = development.id
+        chromaticEditor.start(development, worker: fullSourceWorker, transform: mapping.transform) { value in
+            guard self.development?.id == sourceID, lockedFilm?.selection.contains(.chromaticAberration) != true else { return }
+            mapping.chromaticAberration = value
+            commitHistory()
+        }
+    }
+
     private func configureDustEditor() {
         dustEditor.spots = mapping.dustSpots ?? []
         dustEditor.geometry = development?.dustGeometry ?? DustGeometry()
@@ -430,6 +446,7 @@ struct ContentView: View {
         dustTask?.cancel()
         let revision = UUID(); dustGeneration = revision
         let worker = developer, originalSpots = mapping.dustSpots
+        let originalCorrection = mapping.chromaticAberration
         let spots = originalSpots ?? []
         dustEditor.busy = true; dustEditor.message = nil
         dustTask = Task {
@@ -440,16 +457,16 @@ struct ContentView: View {
                 let profile = try await worker.dustProfile(source, spot: spot, spots: spots)
                 try Task.checkCancellation()
                 guard dustGeneration == revision, self.development?.id == development.id,
-                      mapping.dustSpots == originalSpots else { return }
+                      mapping.dustSpots == originalSpots && mapping.chromaticAberration == originalCorrection else { return }
                 if fit {
                     let nativeSize = source.dustGeometry.nativeSize(source.linearSource.extent.size)
                     let fitted = try await Task.detached(priority: .userInitiated) { try DustFitter.fit(profile, spot: spot, nativeSize: nativeSize) }.value
                     try Task.checkCancellation()
-                    guard dustGeneration == revision, mapping.dustSpots == originalSpots else { return }
+                    guard dustGeneration == revision, mapping.dustSpots == originalSpots && mapping.chromaticAberration == originalCorrection else { return }
                     // Re-sample after recentering so the graph and correction share coordinates.
                     let centered = try await worker.dustProfile(source, spot: fitted.0, spots: spots)
                     try Task.checkCancellation()
-                    guard dustGeneration == revision, mapping.dustSpots == originalSpots else { return }
+                    guard dustGeneration == revision, mapping.dustSpots == originalSpots && mapping.chromaticAberration == originalCorrection else { return }
                     dustEditor.update(fitted.0)
                     var graph = centered
                     let background = fitted.1.background
@@ -471,7 +488,7 @@ struct ContentView: View {
                     dustEditor.profile = graph
                 }
             } catch is CancellationError {} catch {
-                if dustGeneration == revision, mapping.dustSpots == originalSpots {
+                if dustGeneration == revision, mapping.dustSpots == originalSpots && mapping.chromaticAberration == originalCorrection {
                     dustEditor.message = error.localizedDescription
                     // Keep a failed new fit as an editable, zero-strength spot.
                     if !spots.contains(where: { $0.id == spot.id }) {
@@ -598,6 +615,7 @@ struct ContentView: View {
                                 cropInsets: CGSize(width: 24, height: 72),
                                 panelEdgePadding: cropping ? 0 : 16,
                                 dustEditor: panel == .transform && dustEditor.enabled && !cropping && lockedFilm?.selection.contains(.dustCorrection) != true ? dustEditor : nil,
+                                chromaticEditor: panel == .transform && !cropping && lockedFilm?.selection.contains(.chromaticAberration) != true ? chromaticEditor : nil,
                                 sampleTool: pickingWhiteBalance ? .whiteBalance : nil,
                                 hover: { previewHover.position = $0 }) { center, radius in
                     let sampleCenter = originalPreviewPoint(center)
@@ -633,6 +651,9 @@ struct ContentView: View {
                     .overlay {
                         if panel == .transform, dustEditor.enabled, lockedFilm?.selection.contains(.dustCorrection) != true {
                             DustMobileOverlay(editor: dustEditor, aspect: Double(previewImages.sdr.width) / Double(previewImages.sdr.height))
+                        }
+                        if panel == .transform, chromaticEditor.enabled, lockedFilm?.selection.contains(.chromaticAberration) != true {
+                            ChromaticEdgeMobileOverlay(editor: chromaticEditor, aspect: Double(previewImages.sdr.width) / Double(previewImages.sdr.height))
                         }
                     }
                     .padding(16)
@@ -746,7 +767,9 @@ struct ContentView: View {
                         resetPerspective: { if !cropping { toggleTransform() }; cropTransform.horizontal = resetDefaults.mapping.transform?.horizontal ?? 0; cropTransform.vertical = resetDefaults.mapping.transform?.vertical ?? 0 },
                         resetRotation: { if !cropping { toggleTransform() }; cropTransform.rotation = resetDefaults.mapping.transform?.rotation ?? 0 },
                         resetAll: resetTransform)
+                    ChromaticAberrationControls(settings: $mapping.chromaticAberration, sampleEdge: activateChromaticEdge, sampling: chromaticEditor.enabled, drawingEdge: chromaticEditor.drawing).filmLock(.chromaticAberration)
                     DustControls(editor: dustEditor, spots: $mapping.dustSpots, activate: {
+                        chromaticEditor.stop()
                         if cropping { toggleTransform() }
                         pickingWhiteBalance = false
                         configureDustEditor()
@@ -846,7 +869,7 @@ struct ContentView: View {
                         .keyboardShortcut("e", modifiers: [.command, .shift])
                         .disabled(comparingMultiple || development == nil || loading || exporting)
                         .modifier(ShellToolbarItem())
-                    Toggle("Film Lock", systemImage: "lock", isOn: Binding(get: { lockedFilm != nil }, set: {
+                    Toggle("Film Lock", systemImage: lockedFilm == nil ? "lock.open" : "lock", isOn: Binding(get: { lockedFilm != nil }, set: {
                         confirmingPreset = nil
                         if $0 { if !comparingMultiple { requestFilmLock() } }
                         else { lockedFilm = nil; comparisonReload += 1 }
@@ -895,34 +918,44 @@ struct ContentView: View {
             .focusedSceneValue(\.pasteDevelopmentSettings, paste)
     }
 
-    private var editorScene: some View {
+    private var editorSceneTools: some View {
         AnyView(editorLayoutWithShortcuts)
             // Panel selection and sliders draw their own indicators. Suppress
             // automatic button focus decoration without disabling keyboard input.
             .focusEffectDisabled()
             .onChange(of: mapping.dustSpots) { _, _ in configureDustEditor() }
-            .onChange(of: mapping.transform) { _, _ in configureDustEditor() }
-            .onChange(of: development?.id) { _, _ in configureDustEditor() }
+            .onChange(of: mapping.transform) { _, _ in configureDustEditor(); chromaticEditor.stop() }
+            .onChange(of: development?.id) { _, value in
+                configureDustEditor()
+                if chromaticEditor.sourceID != value { chromaticEditor.stop() }
+            }
+            .onChange(of: mapping.chromaticAberration) { _, _ in chromaticEditor.stop() }
+            .onChange(of: lockedFilm?.selection.contains(.chromaticAberration)) { _, locked in if locked == true { chromaticEditor.stop() } }
+            .onDisappear { chromaticEditor.stop() }
             .onChange(of: development?.url) { _, _ in
                 dustTask?.cancel(); dustGeneration = UUID(); dustEditor.enabled = false
                 dustEditor.selected = nil; dustEditor.profile = nil; configureDustEditor()
             }
-            .onChange(of: panel) { _, _ in dustEditor.enabled = false }
-            .onChange(of: cropping) { _, active in if active { dustEditor.enabled = false } }
-            .onChange(of: pickingWhiteBalance) { _, active in if active { dustEditor.enabled = false } }
+            .onChange(of: panel) { _, _ in dustEditor.enabled = false; chromaticEditor.stop() }
+            .onChange(of: cropping) { _, active in if active { dustEditor.enabled = false; chromaticEditor.stop() } }
+            .onChange(of: pickingWhiteBalance) { _, active in if active { dustEditor.enabled = false; chromaticEditor.stop() } }
             .onChange(of: comparingMultiple) { _, active in
-                if active { dustEditor.enabled = false; dustTask?.cancel(); dustGeneration = UUID(); dustEditor.busy = false }
+                if active { chromaticEditor.stop(); dustEditor.enabled = false; dustTask?.cancel(); dustGeneration = UUID(); dustEditor.busy = false }
             }
 
+    }
+
+    private var editorScene: some View {
+        AnyView(editorSceneTools)
             .focusedSceneValue(\.editorUndo, undoActions)
             .focusedSceneValue(\.editorPanel, Binding<EditorPanel>(get: { panel }, set: { selectPanel($0) }))
             .focusedSceneValue(\.startTutorial, { startTutorial() })
             .focusedSceneValue(\.toggleEditorPicker, pickerShortcutAction)
             #if os(macOS)
-            #if DEBUG
             .focusedSceneValue(\.showLUTVisualizer, comparingMultiple || development == nil || loading ? nil : { lutVisualizer.open(lutVisualizerInput) })
             .onChange(of: lutVisualizerInput) { _, input in lutVisualizer.update(input) }
             .onDisappear { lutVisualizer.close() }
+            #if DEBUG
             .focusedSceneValue(\.variationExport, comparingMultiple || development == nil || loading ? nil : { beginExportOptions(variation: true) })
             #endif
             .focusedSceneValue(\.batchExport, browserModel.directory == nil ? nil : { showingBatchExport = true })
@@ -1071,16 +1104,17 @@ struct ContentView: View {
                     }
                 } catch is CancellationError {} catch { errorMessage = error.localizedDescription }
             }
-            .task(id: DustSourceRequest(source: development?.id, spots: mapping.dustSpots ?? [], loading: loading)) {
-                guard !loading, let current = development, current.dustSpots != (mapping.dustSpots ?? []) else { return }
+            .task(id: SourceCorrectionsRequest(source: development?.id, spots: mapping.dustSpots ?? [], chromaticAberration: mapping.chromaticAberration, loading: loading)) {
+                guard !loading, let current = development, !current.matchesSourceCorrections(mapping) else { return }
                 let spots = mapping.dustSpots ?? []
+                let correction = mapping.chromaticAberration
                 do {
                     try await Task.sleep(for: .milliseconds(150))
                     await fullSourceWorker.discardSourcePixels()
                     try Task.checkCancellation()
-                    let rebuilt = try await developer.replacingDust(current, spots: spots, canvas: overviewCanvas)
+                    let rebuilt = try await developer.replacingSourceCorrections(current, spots: spots, canvas: overviewCanvas, chromaticAberration: correction)
                     try Task.checkCancellation()
-                    guard development?.id == current.id, (mapping.dustSpots ?? []) == spots else { return }
+                    guard development?.id == current.id, (mapping.dustSpots ?? []) == spots, mapping.chromaticAberration == correction else { return }
                     previewDetails.removeAll()
                     development = rebuilt
                     configureDustEditor()
@@ -1091,7 +1125,7 @@ struct ContentView: View {
                                      sourceID: previewDevelopment?.id, loading: loading || comparingMultiple, canvas: overviewCanvas, lutRevision: lutRevision,
                                      refinementReady: overviewRefinementReady)) {
                 guard let development = previewDevelopment, !loading, !comparingMultiple, confirmingPreset == nil,
-                      development.dustSpots == (previewMapping.dustSpots ?? []) else { return }
+                      development.matchesSourceCorrections(previewMapping) else { return }
                 do {
                     let renderedMapping = previewMapping
                     let canvas = overviewCanvas
@@ -1114,9 +1148,9 @@ struct ContentView: View {
                 } catch { errorMessage = error.localizedDescription }
             }
             .task(id: FullSourceRequest(source: development?.id, previewReady: renderedPreviewImages != nil,
-                loading: loading || comparingMultiple || development?.dustSpots != (mapping.dustSpots ?? []))) {
+                loading: loading || comparingMultiple || development?.matchesSourceCorrections(mapping) != true)) {
                 guard !comparingMultiple, !loading, renderedPreviewImages != nil, let current = development,
-                      !current.fullResolutionReady, current.dustSpots == (mapping.dustSpots ?? []) else { return }
+                      !current.fullResolutionReady, current.matchesSourceCorrections(mapping) else { return }
                 // A separate actor keeps decoding from blocking overview edits and hover work.
                 let worker = fullSourceWorker
                 do {
@@ -1417,7 +1451,7 @@ struct ContentView: View {
                 }
                 guard openingID == requestID, !Task.isCancelled else { return }
                 histogramWorker = RAWDeveloper(colorSpace: colorSpace, rawSettings: options, rawWhiteBalance: mapping.rawWhiteBalance)
-                let loaded = try await developer.develop(url, previewCanvas: overviewCanvas, progressive: true, dustSpots: mapping.dustSpots ?? [])
+                let loaded = try await developer.develop(url, previewCanvas: overviewCanvas, progressive: true, dustSpots: mapping.dustSpots ?? [], chromaticAberration: mapping.chromaticAberration)
                 guard openingID == requestID, !Task.isCancelled else { return }
                 let defaults = loaded.rawDefaults ?? RAWSettings()
                 rawSettings = options?.resolved(using: defaults) ?? defaults
@@ -2316,8 +2350,9 @@ private struct ImageExportSession: Identifiable {
     let recipe: DevelopmentRecipe
 }
 
-private struct DustSourceRequest: Equatable {
+private struct SourceCorrectionsRequest: Equatable {
     let source: UUID?
     let spots: [DustSpot]
+    let chromaticAberration: ChromaticAberration
     let loading: Bool
 }
