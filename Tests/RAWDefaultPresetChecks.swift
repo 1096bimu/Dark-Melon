@@ -36,8 +36,8 @@ import CoreImage
         let applied = preset.applying(to: fallback)
         assert(applied.mapping.concentration == 0.4)
         assert(applied.mapping.grain.strength == 0.3)
-        assert(applied.mapping.white == 1) // Unselected preset value must not leak.
-        assert(applied.mapping.tonePosition == 0.183)
+        assert(applied.mapping.white == fallback.mapping.white) // Unselected preset value must not leak.
+        assert(applied.mapping.tonePosition == fallback.mapping.tonePosition)
         assert(applied.mapping.halation == fallback.mapping.halation)
         assert(applied.colorSpace == .displayP3)
         library.rename(id, to: "Renamed")

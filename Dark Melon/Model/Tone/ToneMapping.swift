@@ -27,12 +27,6 @@ nonisolated struct ToneMapping: Codable, Equatable, Sendable {
     var grain = FilmGrainSettings()
     var halation = HalationSettings()
     var vignette = VignetteSettings()
-    /// Equivalent 8-bit SDR output code, independent of the tone curve.
-    private var storedShadowFloorCode: Double?
-    var shadowFloor: Double {
-        get { storedShadowFloorCode ?? 0 }
-        set { storedShadowFloorCode = newValue == 0 ? nil : newValue }
-    }
     var white = 0.5
     var tonePosition = 0.040
     var toneUsesSourceLuminance = true
@@ -67,8 +61,9 @@ nonisolated struct ToneMapping: Codable, Equatable, Sendable {
         return max(1, endpoint * hdrGain)
     }
 
-    static func fresh(isRAW: Bool, sourceHeadroom: Double) -> ToneMapping {
+    static func fresh(isRAW: Bool, sourceHeadroom: Double, sourceSize: CGSize? = nil) -> ToneMapping {
         var result = ToneMapping()
+        result.grain.size = FilmGrainSettings.defaultSize(for: sourceSize)
         if !isRAW {
             result.white = 1
             result.concentration = 0

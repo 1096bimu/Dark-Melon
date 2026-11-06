@@ -135,7 +135,6 @@ import AppKit
         if a.vignette != b.vignette || a.clarity != b.clarity || a.hdf != b.hdf || a.grain != b.grain || a.halation != b.halation || a.badHDR != b.badHDR || a.clarityRadius != b.clarityRadius || a.hdfRadius != b.hdfRadius { return String(localized: "Effects") }
         if a.tonePosition != b.tonePosition { return String(localized: "Tone") }
         if a.dyePurity != b.dyePurity || a.dyeMixers != b.dyeMixers || a.channelContrast != b.channelContrast { return String(localized: "Cross Processing") }
-        if a.shadowFloor != b.shadowFloor { return String(localized: "Shadow Floor") }
         if a.concentration != b.concentration { return String(localized: "Contrast") }
         if a.contrastDistribution != b.contrastDistribution { return String(localized: "Contrast Distribution") }
         if a.white != b.white { return String(localized: "White point") }

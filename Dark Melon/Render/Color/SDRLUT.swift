@@ -14,6 +14,7 @@ nonisolated struct SDRLUT: Sendable {
         settings.vignette.amount = 0
         settings.halation.inputCurve = 0
         settings.grain.strength = 0
+        settings.grain.output = .additive
         settings.badHDR.strength = 0
         settings.clarity = 0
         return settings

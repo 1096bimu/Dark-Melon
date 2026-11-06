@@ -95,7 +95,7 @@ import SceneKit
         let model = LUTVisualizerModel()
         model.update(LUTVisualizerInput(mapping: mapping, colorSpace: .sRGB))
         for i in 0..<20 {
-            var edit = mapping; edit.shadowFloor = Double(i)
+            var edit = mapping; edit.whiteBalance.red = 1 + Double(i)/100
             model.update(LUTVisualizerInput(mapping: edit, colorSpace: .sRGB))
             model.settings.density = i.isMultiple(of: 2) ? 33 : 17
         }
@@ -108,7 +108,9 @@ import SceneKit
         }
         try await wait()
         precondition(model.lut?.dimension == 17 && model.pointCount == 4913)
-        precondition(abs(model.output(.zero).x - 19.0/255) < 0.0001, "Obsolete transform published")
+        var latest = mapping; latest.whiteBalance.red = 1.19
+        let latestLUT = try await worker.sampleSDRLUT(mapping: latest, dimension: 17)
+        precondition(model.lut!.values == latestLUT.values, "Obsolete transform published")
         let old = model.lut!.values
         model.settings.opacity = 0.4
         model.settings.clipping = .unclipped
@@ -123,7 +125,7 @@ import SceneKit
         withObservationTracking {
             _ = model.settings
         } onChange: { changed.withLock { $0 = true } }
-        var edited = mapping; edited.shadowFloor = 27
+        var edited = mapping; edited.whiteBalance.red = 1.27
         model.update(LUTVisualizerInput(mapping: edited, colorSpace: .sRGB))
         try await wait()
         precondition(!changed.withLock { $0 }, "LUT update invalidated inspector settings")

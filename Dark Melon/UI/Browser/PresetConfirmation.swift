@@ -52,7 +52,7 @@ struct PresetPreview {
         else {
             let renderer = RAWDeveloper(colorSpace: original.colorSpace, interactive: true)
             let source = try await renderer.overview(development, canvas: canvas)
-            before = try await renderer.previews(source, mapping: original.mapping)
+            before = try await renderer.previews(source, mapping: original.mapping, sourceURL: development.url, sourceSize: CGSize(width: development.width, height: development.height))
         }
         try Task.checkCancellation()
         let needsDecode = recipe.mapping.dustSpots != original.mapping.dustSpots || recipe.mapping.doubleExposure != original.mapping.doubleExposure || recipe.rawSettings != original.rawSettings
@@ -60,7 +60,7 @@ struct PresetPreview {
         let afterDevelopment = needsDecode
             ? try await worker.develop(development.url, previewCanvas: canvas, dustSpots: recipe.mapping.dustSpots ?? []) : development
         let source = try await worker.overview(afterDevelopment, canvas: canvas)
-        let after = try await worker.previews(source, mapping: recipe.mapping)
+        let after = try await worker.previews(source, mapping: recipe.mapping, sourceURL: afterDevelopment.url, sourceSize: CGSize(width: afterDevelopment.width, height: afterDevelopment.height))
         try Task.checkCancellation()
         return Self(id: preset.id, recipe: recipe, before: before, after: after,
                     development: afterDevelopment, worker: worker)

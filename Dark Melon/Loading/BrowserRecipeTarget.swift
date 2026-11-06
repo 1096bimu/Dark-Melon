@@ -32,6 +32,9 @@ nonisolated struct BrowserRecipeTarget: Sendable {
         guard let container = CGImageSourceCreateWithURL(url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary),
               let identifier = CGImageSourceGetType(container) else { throw CocoaError(.fileReadCorruptFile) }
         let raw = UTType(identifier as String)?.conforms(to: .rawImage) == true
+        let properties = CGImageSourceCopyPropertiesAtIndex(container, 0, nil) as? [String: Any]
+        let sourceSize = CGSize(width: (properties?[kCGImagePropertyPixelWidth as String] as? NSNumber)?.doubleValue ?? 0,
+                                height: (properties?[kCGImagePropertyPixelHeight as String] as? NSNumber)?.doubleValue ?? 0)
         if let restored { return Self(url: url, recipe: restored, savedRecipe: saved, isRAW: raw) }
         let space: ProcessingColorSpace
         let headroom: Double
@@ -45,6 +48,6 @@ nonisolated struct BrowserRecipeTarget: Sendable {
             headroom = Double(image.contentHeadroom)
         }
         return Self(url: url, recipe: DevelopmentRecipe(colorSpace: space,
-            mapping: .fresh(isRAW: raw, sourceHeadroom: headroom)), savedRecipe: saved, isRAW: raw)
+            mapping: .fresh(isRAW: raw, sourceHeadroom: headroom, sourceSize: sourceSize)), savedRecipe: saved, isRAW: raw)
     }
 }

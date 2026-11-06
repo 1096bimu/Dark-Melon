@@ -80,6 +80,24 @@ nonisolated struct DevelopmentRecipe: Codable, Equatable, Sendable {
             mapping["color"] = color
             document["mapping"] = mapping
         }
+        // Retire incompatible controls before merging defaults. Otherwise new
+        // grain fields hide the old schema and its Size can fail current bounds.
+        if var mapping = document["mapping"] as? [String: Any] {
+            mapping.removeValue(forKey: "contrastDistribution")
+            mapping.removeValue(forKey: "storedShadowFloor")
+            mapping.removeValue(forKey: "storedShadowFloorCode")
+            if mapping["storedContrastDistribution"] != nil {
+                let distribution = mapping["storedContrastDistribution"] as? [String: Any]
+                if distribution?["shadowWidth"] == nil || distribution?["highlightWidth"] == nil {
+                    mapping.removeValue(forKey: "storedContrastDistribution")
+                }
+            }
+            if let grain = mapping["grain"] as? [String: Any],
+               grain["offset"] == nil, grain["colorScale"] == nil, grain["output"] == nil {
+                mapping["grain"] = ["strength": grain["strength"] ?? 0]
+            }
+            document["mapping"] = mapping
+        }
         // Missing fields inherit current defaults; unknown fields are ignored by Codable.
         // This allows additive controls without invalidating existing recipes.
         let defaults = try JSONSerialization.jsonObject(with: Self(colorSpace: .sRGB, mapping: ToneMapping()).encoded()) as! [String: Any]
@@ -104,14 +122,6 @@ nonisolated struct DevelopmentRecipe: Codable, Equatable, Sendable {
             result.mapping.doubleExposure!.secondRAW.orientation = result.mapping.doubleExposure!.secondRAW.orientation.halfTurnsOnly
         }
         try result.validate()
-        if let mapping = document["mapping"] as? [String: Any],
-           mapping["storedShadowFloorCode"] == nil,
-           let stored = mapping["storedShadowFloor"], !(stored is NSNull) {
-            guard let old = stored as? Double, old.isFinite,
-                  (0...Double(Float.greatestFiniteMagnitude)).contains(old) else { throw RecipeError.invalid }
-            let black = result.mapping.curve(hdr: false).value(at: old)
-            result.mapping.shadowFloor = result.colorSpace.sdrCode(forLinear: black)
-        }
         result.snapshots = try snapshots.map { item in
             guard let idString = item["id"] as? String, let id = UUID(uuidString: idString),
                   let name = item["name"] as? String, !name.isEmpty,
@@ -175,7 +185,7 @@ nonisolated struct DevelopmentRecipe: Codable, Equatable, Sendable {
               m.vertexWarp.allSatisfy({ within($0.monochromeResponse, -1...1) && within($0.darkerHue, -Double.pi...Double.pi) && within($0.lighterHue, -Double.pi...Double.pi) && within($0.chroma, AdjustmentLimits.chroma) && within($0.lightness, AdjustmentLimits.density) && within($0.rotation, -1...1) && ($0.hueOffset.map { within($0, -Double.pi...Double.pi) } ?? true) }),
               m.hls.count == 6,
               within(m.white, 0...2), m.white >= ToneMapping.minimumRange * 0.999,
-              within(m.shadowFloor, 0...255), within(m.tonePosition, 0...2), within(m.concentration, -1...1),
+              within(m.tonePosition, 0...2), within(m.concentration, -1...1),
               within(m.contrastDistribution.black, 0...1),
               within(m.contrastDistribution.shadowWidth, 0...1), within(m.contrastDistribution.highlightWidth, 0...1),
               within(m.contrastDistribution.white, 0...1),
@@ -188,7 +198,8 @@ nonisolated struct DevelopmentRecipe: Codable, Equatable, Sendable {
               within(m.vignette.amount, AdjustmentLimits.vignetteStops), within(m.vignette.spread, 0...1),
               within(m.badHDR.strength, AdjustmentLimits.signedStrength), within(m.badHDR.radius, AdjustmentLimits.radius),
               within(m.halation.inputCurve, 0...1), within(m.halation.radius, AdjustmentLimits.radius), within(m.halation.transmission, 0...1),
-              within(m.grain.size, AdjustmentLimits.grainSize), within(m.grain.strength, AdjustmentLimits.strength), within(m.grain.distribution, 0...1),
+              within(m.grain.size, AdjustmentLimits.grainSize), within(m.grain.strength, AdjustmentLimits.strength),
+              within(m.grain.offset, -1...1), within(m.grain.colorScale, 0...1),
               [m.whiteBalance.red, m.whiteBalance.green, m.whiteBalance.blue].allSatisfy({ within($0, 0.000001...10000) }),
               (0..<5).allSatisfy({ within(m.blackAndWhite.value(at: $0), 0...2) }),
               m.hls.allSatisfy({ within($0.shadowHue, -30...30) && within($0.midtoneHue, -30...30) && within($0.highlightHue, -30...30) && within($0.saturation, 0...2) && within($0.lightness, -1...1) }),

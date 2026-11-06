@@ -131,6 +131,8 @@ actor RAWDeveloper {
 
     private let lutPipeline: LUTPipeline
     func useLUTConfiguration(_ value: LUTConfiguration?) { lutPipeline.configurationOverride = value }
+    private var grainSeed: UInt32 = 1
+    private var grainSourceSize: CGSize?
     private var filmGrain: FilmGrain?
     private lazy var halation = Halation()
     private lazy var vignette = Vignette()
@@ -166,6 +168,8 @@ actor RAWDeveloper {
     private var overviewCache: (UUID, CGSize, CGImage)?
 
     func overview(_ development: RAWDevelopment, canvas: CGSize) throws -> CGImage {
+        grainSeed = FilmGrain.seed(for: development.url)
+        grainSourceSize = CGSize(width: development.width, height: development.height)
         dustGeometry = development.dustGeometry
         try Task.checkCancellation()
         let source = development.linearSource
@@ -190,6 +194,8 @@ actor RAWDeveloper {
     /// extent preserves effect scale, perspective geometry, and blur neighborhoods.
     func detail(_ development: RAWDevelopment, mapping: ToneMapping, hdr: Bool,
                 region: PreviewRegion) throws -> PreviewDetail {
+        grainSeed = FilmGrain.seed(for: development.url)
+        grainSourceSize = CGSize(width: development.width, height: development.height)
         dustGeometry = development.dustGeometry
         try Task.checkCancellation()
         let access = development.url.startAccessingSecurityScopedResource()
@@ -219,7 +225,9 @@ actor RAWDeveloper {
     private var previewBatch: MTLCommandBuffer?
     private var toneTables: [(curves: [ToneCurve], image: CIImage)] = []
 
-    func previews(_ source: CGImage, mapping: ToneMapping) throws -> PreviewImages {
+    func previews(_ source: CGImage, mapping: ToneMapping, sourceURL: URL? = nil, sourceSize: CGSize? = nil) throws -> PreviewImages {
+        if let sourceURL { grainSeed = FilmGrain.seed(for: sourceURL) }
+        if let sourceSize { grainSourceSize = sourceSize }
         try Task.checkCancellation()
         let renderStart = ProcessInfo.processInfo.systemUptime
         if interactive {
@@ -246,8 +254,8 @@ actor RAWDeveloper {
         let sdr = try finishDevelopment(input, mapping: mapping, hdr: logLUT)
         let hdr = mapping.hdrEnabled && !logLUT ? try finishDevelopment(input, mapping: mapping, hdr: true) : sdr
         let full = try finalLUTPair(sdr: sdr, hdr: hdr, mapping: mapping)
-        let fullSDRSurface = try displaySurface(applyingShadowFloor(full.sdr, mapping: mapping), hdr: false)
-        let fullHDRSurface = outputHDR ? try displaySurface(applyingShadowFloor(full.hdr, mapping: mapping), hdr: true) : fullSDRSurface
+        let fullSDRSurface = try displaySurface(full.sdr, hdr: false)
+        let fullHDRSurface = outputHDR ? try displaySurface(full.hdr, hdr: true) : fullSDRSurface
         guard let transform = mapping.transform else {
             try finishPreviewBatch()
             let fullSDR = try displayPreview(fullSDRSurface.image, hdr: false, headroom: mapping.hdrMax)
@@ -261,8 +269,8 @@ actor RAWDeveloper {
         }
         let cropped = try finalLUTPair(sdr: transform.apply(to: sdr),
                                       hdr: mapping.hdrEnabled ? transform.apply(to: hdr) : sdr, mapping: mapping)
-        let croppedSDRSurface = try displaySurface(applyingShadowFloor(cropped.sdr, mapping: mapping), hdr: false)
-        let croppedHDRSurface = outputHDR ? try displaySurface(applyingShadowFloor(cropped.hdr, mapping: mapping), hdr: true) : croppedSDRSurface
+        let croppedSDRSurface = try displaySurface(cropped.sdr, hdr: false)
+        let croppedHDRSurface = outputHDR ? try displaySurface(cropped.hdr, hdr: true) : croppedSDRSurface
         try finishPreviewBatch()
         let fullSDR = try displayPreview(fullSDRSurface.image, hdr: false, headroom: mapping.hdrMax)
         let fullHDR = outputHDR
@@ -292,6 +300,8 @@ actor RAWDeveloper {
     /// Reference windows retain final pixels, so source deletion or later edits
     /// cannot change them. This worker uses eager, non-interactive CGImage output.
     func referenceImages(_ development: RAWDevelopment, mapping: ToneMapping) throws -> PreviewImages {
+        grainSeed = FilmGrain.seed(for: development.url)
+        grainSourceSize = CGSize(width: development.width, height: development.height)
         dustGeometry = development.dustGeometry
         try Task.checkCancellation()
         let access = development.url.startAccessingSecurityScopedResource()
@@ -303,8 +313,8 @@ actor RAWDeveloper {
         let pair = try finalLUTPair(sdr: mapping.transform?.apply(to: sdr) ?? sdr,
             hdr: mapping.transform?.apply(to: hdr) ?? hdr, mapping: mapping)
         let outputHDR = mapping.hdrEnabled && !logLUT
-        let sdrBitmap = try displayPreview(applyingShadowFloor(pair.sdr, mapping: mapping), hdr: false, headroom: 1)
-        let hdrBitmap = outputHDR ? try displayPreview(applyingShadowFloor(pair.hdr, mapping: mapping), hdr: true, headroom: mapping.hdrMax) : sdrBitmap
+        let sdrBitmap = try displayPreview(pair.sdr, hdr: false, headroom: 1)
+        let hdrBitmap = outputHDR ? try displayPreview(pair.hdr, hdr: true, headroom: mapping.hdrMax) : sdrBitmap
         return PreviewImages(source: development.preview, sdr: sdrBitmap, hdr: hdrBitmap,
             fullSDR: sdrBitmap, fullHDR: hdrBitmap, hasHDROutput: outputHDR)
     }
@@ -358,7 +368,7 @@ actor RAWDeveloper {
     /// Same defaults used by Reset Tone and file-browser exports without saved edits.
     func automaticMapping(for development: RAWDevelopment, bins: Int,
                           histogram: HistogramData? = nil) async throws -> ToneMapping {
-        ToneMapping.fresh(isRAW: development.isRAW, sourceHeadroom: development.sourceHeadroom)
+        ToneMapping.fresh(isRAW: development.isRAW, sourceHeadroom: development.sourceHeadroom, sourceSize: CGSize(width: development.width, height: development.height))
     }
 
     func sampleWhiteBalance(_ source: CGImage, center: CGPoint, radius: CGFloat, mapping: ToneMapping) throws -> WhiteBalance {
@@ -459,7 +469,7 @@ actor RAWDeveloper {
     }
 
     func mappedImage(_ image: CIImage, mapping: ToneMapping, hdr: Bool) throws -> CIImage {
-        try applyingShadowFloor(gradedImage(image, mapping: mapping, hdr: hdr), mapping: mapping)
+        try gradedImage(image, mapping: mapping, hdr: hdr)
     }
 
     private func gradedImage(_ image: CIImage, mapping: ToneMapping, hdr: Bool) throws -> CIImage {
@@ -481,19 +491,6 @@ actor RAWDeveloper {
         let transformed = try mapping.transform?.apply(to: developed) ?? developed
         return try lutPipeline.apply(transformed, id: lutPipeline.activeID(mapping), strength: mapping.lutStrength)
     }
-
-    private lazy var shadowFloorKernel = MetalImageKernels.color("shadowFloor")
-
-    private func applyingShadowFloor(_ image: CIImage, mapping: ToneMapping) throws -> CIImage {
-        guard mapping.shadowFloor > 0 else { return image }
-        // Clamp the finished RGB channels, rather than moving the tone curve's input black point.
-        let floor = colorSpace.linearSDRValue(forCode: mapping.shadowFloor)
-        guard let output = shadowFloorKernel?.apply(extent: image.extent, arguments: [image, floor]) else {
-            throw DevelopmentError.decode
-        }
-        return output
-    }
-
 
     /// Render only a narrow, rotated strip; never read a full-resolution bitmap to fit a spot.
     func dustProfile(_ development: RAWDevelopment, spot: DustSpot, spots: [DustSpot]) throws -> DustProfile {
@@ -548,20 +545,36 @@ actor RAWDeveloper {
 
     private func adjustedInput(_ source: CIImage, mapping: ToneMapping) throws -> CIImage {
         try Task.checkCancellation()
-        var image = source
-        image = try applyHDF(image, mapping: mapping)
-        image = try vignette.apply(to: image, settings: mapping.vignette, transform: mapping.transform)
-        if mapping.hdrEnabled && mapping.halation.inputCurve > 0 {
-            image = try halation.apply(to: image, source: image, settings: mapping.halation,
-                                       hdrBrightness: mapping.hdrMax, ceiling: 0, monochrome: mapping.color.monochrome)
+        var image = try vignette.apply(to: source, settings: mapping.vignette, transform: mapping.transform)
+        let hasHalation = mapping.hdrEnabled && mapping.halation.inputCurve > 0
+        let needsBlur = mapping.hdf != 0 || mapping.badHDR.strength != 0 || hasHalation
+        // Each blur sees the same vignette-adjusted source. Only the full-size
+        // composites run in sequence; blur branches stay independent and lazy.
+        let reduced = needsBlur ? OpticalBlur.source(image) : nil
+        let scale = EffectResolution.scale(shortSide: min(source.extent.width, source.extent.height))
+        if mapping.hdf != 0, let low = reduced {
+            let blur = OpticalBlur.gaussian(low, radius: max(0, mapping.hdfRadius) * scale)
+            image = try applyHDF(image, blurred: OpticalBlur.expanded(blur, extent: image.extent), amount: mapping.hdf)
         }
-        if mapping.grain.strength > 0 {
+        if mapping.badHDR.strength != 0, let low = reduced {
+            let radius = 50 * mapping.badHDR.radius.clamped(to: AdjustmentLimits.radius) * scale
+            let blur = OpticalBlur.gaussian(low, radius: radius)
+            image = try badHDR.apply(to: image, blurred: OpticalBlur.expanded(blur, extent: image.extent),
+                                    settings: mapping.badHDR, whitePoint: mapping.white, weights: colorSpace.luminance)
+        }
+        if hasHalation, let low = reduced {
+            image = try halation.apply(to: image, source: low, settings: mapping.halation,
+                                       hdrBrightness: mapping.hdrMax, ceiling: 0, monochrome: mapping.color.monochrome,
+                                       sourceScale: OpticalBlur.scale)
+        }
+        if mapping.grain.isEnabled {
             if filmGrain == nil { filmGrain = try FilmGrain() }
-            image = try filmGrain!.apply(to: image, source: image, settings: mapping.grain,
-                                        weights: colorSpace.luminance, ceiling: 0)
+            let nativeShort = grainSourceSize.map { min($0.width, $0.height) }
+                ?? min(image.extent.width, image.extent.height)
+            let renderScale = min(image.extent.width, image.extent.height) / max(1, nativeShort)
+            image = try filmGrain!.apply(to: image, settings: mapping.grain, seed: grainSeed,
+                                        luminance: colorSpace.luminance, renderScale: renderScale)
         }
-        image = try badHDR.apply(to: image, settings: mapping.badHDR, whitePoint: mapping.white,
-                                weights: colorSpace.luminance)
         image = try filmResponse.apply(to: image, mapping: mapping)
         return image
     }
@@ -578,7 +591,7 @@ actor RAWDeveloper {
             color.saturationStart = 1; color.saturationEnd = 1; color.saturationMid = 1; color.saturationHDR = 1
             color.luminanceSaturationStart = 1; color.luminanceSaturationEnd = 1; color.luminanceSaturationMid = 1; color.luminanceSaturationHDR = 1
         }
-        // Shared by preview/export: HDF → vignette → halation → grain → BadHDR → film response (A → log curves → B) → tone → RGB WB → OKLab → clarity.
+        // Shared by preview/export: vignette → HDF → BadHDR → halation → grain → film response (A → log curves → B) → tone → RGB WB → OKLab → clarity.
         // RAW decoder white balance is already part of the decoded source.
         let toned = try applyTone(image, curves: mapping.channelCurves(hdr: hdr))
         let balanced = try applyWhiteBalance(toned, mapping: mapping)
@@ -589,17 +602,10 @@ actor RAWDeveloper {
         return try applyClarity(colored, mapping: mapping, hdr: hdr)
     }
 
-    private func applyHDF(_ base: CIImage, mapping: ToneMapping) throws -> CIImage {
-        guard mapping.hdf != 0 else { return base }
-        let scale = EffectResolution.scale(shortSide: min(base.extent.width, base.extent.height))
-        let radius = max(0, mapping.hdfRadius) * scale
-        // Preserve scene-linear highlight energy before either rendition clips or compresses it.
-        let blurred = base.clampedToExtent()
-            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: radius])
-            .cropped(to: base.extent)
-        guard let result = hdfKernel?.apply(extent: base.extent, arguments: [
-            base, blurred, mapping.hdf
-        ]) else { throw DevelopmentError.decode }
+    private func applyHDF(_ base: CIImage, blurred: CIImage, amount: Double) throws -> CIImage {
+        guard let result = hdfKernel?.apply(extent: base.extent, arguments: [base, blurred, amount]) else {
+            throw DevelopmentError.decode
+        }
         return result
     }
 
@@ -848,6 +854,7 @@ actor RAWDeveloper {
     }
 
     private func sourceImage(_ url: URL, whiteBalance: RAWWhiteBalance? = nil, previewLimit: CGFloat? = nil) throws -> (image: CIImage, headroom: Double, whitePoint: RAWWhitePoint?, isRAW: Bool, rawDefaults: RAWSettings?) {
+        defer { grainSeed = FilmGrain.seed(for: url) }
         dustGeometry = DustGeometry(exif: DoubleExposure.orientation(doubleExposure?.urls(relativeTo: url).first ?? url), orientation: rawSettings?.orientation ?? SourceOrientation())
         if DoubleExposure.isDocument(url), let pair = doubleExposure {
             let compositeGeometry = dustGeometry
@@ -885,6 +892,7 @@ actor RAWDeveloper {
                 images.append(image)
             }
             let sum = try DoubleExposure.combine(images[0], images[1], firstOrientation: DoubleExposure.orientation(urls[0]), secondOrientation: DoubleExposure.orientation(urls[1]), firstGeometry: original?.orientation ?? SourceOrientation(), secondGeometry: pair.secondRAW.orientation)
+            grainSourceSize = sum.extent.size
             return (sum, 2, point, true, firstConfiguration.defaults)
         }
         let image: CIImage
@@ -934,7 +942,9 @@ actor RAWDeveloper {
             ])
         }
         guard !image.extent.isEmpty, !image.extent.isInfinite else { throw DevelopmentError.decode }
-        return (rawSettings?.orientation.apply(to: image) ?? image, headroom, whitePoint, isRAW, rawDefaults)
+        let oriented = rawSettings?.orientation.apply(to: image) ?? image
+        grainSourceSize = oriented.extent.size
+        return (oriented, headroom, whitePoint, isRAW, rawDefaults)
     }
 
     func exportHEIF(_ url: URL, mapping: ToneMapping, settings: HEIFSettings) throws -> Data {
@@ -1109,7 +1119,7 @@ actor RAWDeveloper {
         guard let bitmap = canvas.makeImage() else { throw HEIFExportError.encoding }
         let properties = ExportMetadata.properties(ExportMetadata.read(doubleExposure?.urls(relativeTo: url).first ?? url), width: width, height: height,
             mapping: mapping, rawExposure: Double(rawSettings?.values[.exposure] ?? 0), effectiveISO: settings.effectiveISO)
-        let gallery = try applyingShadowFloor(CIImage(cgImage: bitmap), mapping: mapping).settingProperties(properties).settingContentHeadroom(1)
+        let gallery = CIImage(cgImage: bitmap).settingProperties(properties).settingContentHeadroom(1)
         return settings.format == .heif ? try encodeSDR(gallery, settings: settings) : try encodeStandardImage(gallery, settings: settings)
     }
 
@@ -1148,21 +1158,21 @@ actor RAWDeveloper {
                     "inputBVector": CIVector(x: 0, y: 0, z: scale, w: 0)
                 ])
             }
-            return try encodeStandardImage(applyingShadowFloor(image, mapping: mapping), settings: settings)
+            return try encodeStandardImage(image, settings: settings)
         }
         if settings.format == .heif && outputHDR && settings.heifHDRMode == .direct {
-            let hdr = try applyingShadowFloor(resized(image(true)), mapping: mapping)
+            let hdr = try resized(image(true))
                 .settingContentHeadroom(Float(mapping.hdrMax))
             try Task.checkCancellation()
             let encoded = try context.heif10Representation(of: hdr, colorSpace: colorSpace.pq,
                 options: [CIImageRepresentationOption(rawValue: kCGImageDestinationLossyCompressionQuality as String): settings.quality])
             return try ExportMetadata.retainingMetadata(in: encoded, properties: properties)
         }
-        let sdr = try applyingShadowFloor(resized(image(false)), mapping: mapping)
+        let sdr = try resized(image(false))
         guard outputHDR,
               !(settings.format == .heif && settings.heifHDRMode == .off)
         else { return try encodeSDR(sdr, settings: settings) }
-        let hdr = try applyingShadowFloor(resized(image(true)), mapping: mapping)
+        let hdr = try resized(image(true))
             .settingContentHeadroom(Float(mapping.hdrMax))
         return try encodeHEIF(sdr: sdr, hdr: hdr, settings: settings, reusePrepared: reusePreparedGainMap)
     }
@@ -1325,6 +1335,7 @@ actor RAWDeveloper {
     }
 
     func develop(_ url: URL, previewCanvas: CGSize = CGSize(width: 2560, height: 2560), progressive: Bool = false, dustSpots: [DustSpot] = []) throws -> RAWDevelopment {
+        grainSeed = FilmGrain.seed(for: url)
         try Task.checkCancellation()
         let accessed = url.startAccessingSecurityScopedResource()
         defer { if accessed { url.stopAccessingSecurityScopedResource() } }

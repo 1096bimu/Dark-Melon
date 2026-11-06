@@ -58,13 +58,6 @@ extern "C" float4 filmResponse(sample_t pixel, float3 a0, float3 a1, float3 a2,
 }
 
 
-// Final RGB output floor, supplied in output-profile linear light.
-extern "C" float4 shadowFloor(sample_t pixel, float floorValue) {
-    float4 p = unpremultiply(pixel);
-    p.rgb = max(p.rgb, float3(floorValue));
-    return premultiply(p);
-}
-
 extern "C" float4 hdfAdd(sample_t pixel, sample_t blurred, float amount) {
     float4 p = unpremultiply(pixel);
     float3 glow = unpremultiply(blurred).rgb;

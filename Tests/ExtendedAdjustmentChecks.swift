@@ -13,7 +13,7 @@ import Foundation
         mapping.badHDR.radius = 4
         mapping.halation.radius = 4
         mapping.halation.transmission = 0.8
-        mapping.grain.size = 4
+        mapping.grain.size = 8
         mapping.grain.strength = 7
         mapping.vignette.amount = 6
         mapping.vertexWarp[0].chroma = 3
@@ -29,9 +29,9 @@ import Foundation
         precondition(curve.allSatisfy { $0.isFinite && $0 >= 0 && $0 <= 1 })
         for i in 1..<curve.count { precondition(curve[i] >= curve[i-1]) }
         var invalid = recipe
-        invalid.mapping.grain.distribution = 1.1
+        invalid.mapping.grain.size = 0.01
         do { _ = try DevelopmentRecipe.decode(invalid.encoded()); fatalError("Normalized bounds lost") }
         catch RecipeError.invalid { }
-        print("PASS: out-of-slider settings round-trip, normalized constraints, finite monotonic tone curves")
+        print("PASS: out-of-slider settings round-trip, parameter constraints, finite monotonic tone curves")
     }
 }

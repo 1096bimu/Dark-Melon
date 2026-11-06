@@ -212,12 +212,6 @@ struct EditorSettingsView: View {
                     .foregroundStyle(.secondary)
                 Link("Source code", destination: URL(string: "https://github.com/1096bimu/Dark-Melon")!)
             }
-            Section("Cinegrain 2") {
-                Text("Film grain adapted from cinegrain2 by mr-berndt.")
-                Text("Copyright © 2026 mr-berndt. GPL-3.0-or-later.")
-                    .foregroundStyle(.secondary)
-                Link("Cinegrain 2 source", destination: URL(string: "https://github.com/mr-berndt/cinegrain2")!)
-            }
             Section("GNU GPL v3 — full license") {
                 if let url = Bundle.main.url(forResource: "Cinegrain2-LICENSE", withExtension: "txt"),
                    let text = try? String(contentsOf: url, encoding: .utf8) {

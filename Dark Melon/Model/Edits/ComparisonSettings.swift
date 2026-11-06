@@ -28,6 +28,7 @@ extension ToneMapping {
             result.clarity = 0
             result.hdf = 0
             result.grain.strength = 0
+            result.grain.output = .additive
             result.halation.inputCurve = 0
             result.vignette.amount = 0
             result.badHDR = BadHDRSettings()

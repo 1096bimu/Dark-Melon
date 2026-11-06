@@ -390,7 +390,7 @@ actor ComparisonSources {
     func render(development: RAWDevelopment, worker: RAWDeveloper, source: CGImage, mapping: ToneMapping, canvas: CGSize) async throws -> PreviewImages {
         let key = RenderKey(source: development.id, mapping: mapping, canvas: canvas)
         if let task = renders.first(where: { $0.0 == key })?.1 { return try await task.value }
-        let task = Task { try await worker.previews(source, mapping: mapping) }
+        let task = Task { try await worker.previews(source, mapping: mapping, sourceURL: development.url, sourceSize: CGSize(width: development.width, height: development.height)) }
         renders.append((key, task))
         return try await task.value
     }

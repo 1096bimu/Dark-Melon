@@ -8,6 +8,6 @@ nonisolated enum AdjustmentLimits {
     static let radius = 0.0...32.0
     static let chroma = 0.0...16.0
     static let density = -1.0...1.0
-    static let grainSize = 0.05...16.0
+    static let grainSize = 1.0...8.0
     static let vignetteStops = 0.0...32.0
 }

@@ -1,6 +1,91 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Analogue adds fog and compresses highlights, even at zero grain strength." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "アナログは、粒子の強度がゼロでもカブリを加え、ハイライトを圧縮します。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "模拟模式会抬高黑位并压缩高光，即使颗粒强度为零也会生效。"
+          }
+        }
+      }
+    },
+    "Grain output" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "粒子の出力"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "颗粒输出"
+          }
+        }
+      }
+    },
+    "Digital" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "デジタル"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "数码"
+          }
+        }
+      }
+    },
+    "Analogue" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "アナログ"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "模拟"
+          }
+        }
+      }
+    },
+    "Color Scale" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "カラーのスケール"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "彩色尺度"
+          }
+        }
+      }
+    },
     "Highlight" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1302,23 +1387,6 @@
         }
       }
     },
-    "Black peak" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "黒側のピーク"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "黑色峰值"
-          }
-        }
-      }
-    },
     "Blue" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1648,26 +1716,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "色度范围"
-          }
-        }
-      }
-    },
-    "Cinegrain 2" : {
-      "shouldTranslate" : false
-    },
-    "Cinegrain 2 source" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cinegrain 2のソース"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cinegrain 2 源代码"
           }
         }
       }
@@ -2306,23 +2354,6 @@
         }
       }
     },
-    "Copyright © 2026 mr-berndt. GPL-3.0-or-later." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Copyright © 2026 mr-berndt. GPL-3.0-or-later."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "版权所有 © 2026 mr-berndt。GPL-3.0-or-later。"
-          }
-        }
-      }
-    },
     "Core Image could not decode this image." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2952,23 +2983,6 @@
         }
       }
     },
-    "Distribution" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "分布"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "分布"
-          }
-        }
-      }
-    },
     "Done" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -3566,23 +3580,6 @@
         }
       }
     },
-    "Film grain adapted from cinegrain2 by mr-berndt." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "フィルム粒子処理はmr-berndt作のcinegrain2を基にしています。"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "胶片颗粒改编自 mr-berndt 的 cinegrain2。"
-          }
-        }
-      }
-    },
     "Film Lock" : {
       "localizations" : {
         "ja" : {
@@ -3929,40 +3926,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "GPU 表示色调映射前及最终预览的 GPU 执行时间。总计包含 CPU 准备和等待。两者均包含 SDR 和可用的 HDR 渲染，不包含 RAW 解码、示波器或导出编码。百分比为预览像素数占完整图像像素数的比例。"
-          }
-        }
-      }
-    },
-    "Grain distribution" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "粒子分布"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "颗粒分布"
-          }
-        }
-      }
-    },
-    "Grain distribution from shadows to highlights" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "シャドウからハイライトへの粒子分布"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "颗粒从阴影到高光的分布"
           }
         }
       }
@@ -5384,23 +5347,6 @@
         }
       }
     },
-    "Midtone peak" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "中間調のピーク"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "中间调峰值"
-          }
-        }
-      }
-    },
     "Midtones" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -5414,22 +5360,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "中间调"
-          }
-        }
-      }
-    },
-    "Minimum SDR RGB value on a 0–255 scale, applied after tone, color, and LUT adjustments. Zero disables the floor." : {
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "SDRのRGB最小値を0〜255で指定します。トーン、カラー、LUTの調整後に適用します。0では無効になります。"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "以0–255设置SDR的RGB最小值，在色调、颜色和LUT调整后应用。0表示禁用。"
           }
         }
       }
@@ -7512,22 +7442,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "阴影偏置"
-          }
-        }
-      }
-    },
-    "Shadow Floor" : {
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "シャドウ下限"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "阴影下限"
           }
         }
       }

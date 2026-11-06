@@ -17,6 +17,12 @@ nonisolated final class BadHDR {
         let blurred = image.clampedToExtent()
             .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: radius])
             .cropped(to: image.extent)
+        return try apply(to: image, blurred: blurred, settings: settings, whitePoint: whitePoint, weights: weights)
+    }
+
+    func apply(to image: CIImage, blurred: CIImage, settings: BadHDRSettings,
+               whitePoint: Double, weights: SIMD3<Double>) throws -> CIImage {
+        guard settings.strength != 0 else { return image }
         guard let result = kernel?.apply(extent: image.extent, arguments: [
             image, blurred, settings.strength.clamped(to: AdjustmentLimits.signedStrength), max(ToneMapping.minimumRange, whitePoint),
             CIVector(x: weights.x, y: weights.y, z: weights.z)

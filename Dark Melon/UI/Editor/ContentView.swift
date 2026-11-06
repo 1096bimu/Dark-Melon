@@ -275,7 +275,8 @@ struct ContentView: View {
     private var resetDefaults: DevelopmentRecipe {
         defaultsCache.resolve(space: colorSpace, isRAW: development?.isRAW == true,
             headroom: development?.sourceHeadroom ?? 1, raw: development?.rawDefaults,
-            balance: asShotBalance, preset: EditLibrary.shared.rawDefaultPreset)
+            balance: asShotBalance, preset: EditLibrary.shared.rawDefaultPreset,
+            sourceSize: development.map { CGSize(width: $0.width, height: $0.height) })
     }
 
     private var comparing: Bool { comparingOriginal || comparingChromaRange || comparingColor || comparingCrossProcessing || comparingEffects }
@@ -1096,7 +1097,7 @@ struct ContentView: View {
                     let canvas = overviewCanvas
                     if canvas != renderedCanvas { try await Task.sleep(for: .milliseconds(100)) }
                     let source = try await developer.overview(development, canvas: canvas)
-                    let images = try await developer.previews(source, mapping: renderedMapping)
+                    let images = try await developer.previews(source, mapping: renderedMapping, sourceURL: development.url, sourceSize: CGSize(width: development.width, height: development.height))
                     try Task.checkCancellation()
                     guard self.previewDevelopment?.id == development.id,
                           previewMapping == renderedMapping, !loading else { return }
@@ -1427,7 +1428,7 @@ struct ContentView: View {
                     }
                 }
                 if initializeEdits {
-                    mapping = initialRecipe?.mapping ?? ToneMapping.fresh(isRAW: loaded.isRAW, sourceHeadroom: loaded.sourceHeadroom)
+                    mapping = initialRecipe?.mapping ?? ToneMapping.fresh(isRAW: loaded.isRAW, sourceHeadroom: loaded.sourceHeadroom, sourceSize: CGSize(width: loaded.width, height: loaded.height))
                 }
                 if loaded.isRAW, mapping.rawWhiteBalance == nil, let reference = loaded.whitePoint {
                     mapping.rawWhiteBalance = RAWWhiteBalance(reference)
@@ -1504,7 +1505,7 @@ struct ContentView: View {
                 guard self.development?.id == development.id, mapping == original,
                       rawSettings == originalRAW else { return }
                 var baseline = DevelopmentRecipe(colorSpace: colorSpace,
-                    mapping: .fresh(isRAW: development.isRAW, sourceHeadroom: development.sourceHeadroom))
+                    mapping: .fresh(isRAW: development.isRAW, sourceHeadroom: development.sourceHeadroom, sourceSize: CGSize(width: development.width, height: development.height)))
                 if let preset { baseline = preset.applying(to: baseline) }
                 let automatic = baseline.mapping
                 mapping = SettingsPasteSelection(tone: true, whiteBalance: false, color: false,

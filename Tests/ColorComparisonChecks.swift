@@ -15,7 +15,6 @@ import Foundation
         mapping.color.saturationMid = 0.7
         mapping.color.luminanceSaturationEnd = 1.2
         mapping.whiteBalance.red = 1.3
-        mapping.shadowFloor = 0.01
         mapping.clarity = 0.4
         let original = mapping
 

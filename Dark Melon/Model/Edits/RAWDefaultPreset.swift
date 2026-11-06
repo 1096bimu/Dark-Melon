@@ -24,6 +24,7 @@ final class EditorDefaultsCache {
         let space: ProcessingColorSpace
         let isRAW: Bool
         let headroom: Double
+        let sourceSize: CGSize?
         let raw: RAWSettings?
         let balance: RAWWhiteBalance?
         let preset: RAWDefaultPreset?
@@ -32,12 +33,12 @@ final class EditorDefaultsCache {
     private var recipe: DevelopmentRecipe?
 
     func resolve(space: ProcessingColorSpace, isRAW: Bool, headroom: Double,
-                 raw: RAWSettings?, balance: RAWWhiteBalance?, preset: RAWDefaultPreset?) -> DevelopmentRecipe {
-        let next = Key(space: space, isRAW: isRAW, headroom: headroom, raw: raw,
+                 raw: RAWSettings?, balance: RAWWhiteBalance?, preset: RAWDefaultPreset?, sourceSize: CGSize? = nil) -> DevelopmentRecipe {
+        let next = Key(space: space, isRAW: isRAW, headroom: headroom, sourceSize: sourceSize, raw: raw,
                        balance: balance, preset: isRAW ? preset : nil)
         if key == next, let recipe { return recipe }
         var result = DevelopmentRecipe(colorSpace: space,
-            mapping: .fresh(isRAW: isRAW, sourceHeadroom: headroom), rawSettings: raw)
+            mapping: .fresh(isRAW: isRAW, sourceHeadroom: headroom, sourceSize: sourceSize), rawSettings: raw)
         result.mapping.rawWhiteBalance = balance
         if let preset = next.preset { result = preset.applying(to: result) }
         key = next

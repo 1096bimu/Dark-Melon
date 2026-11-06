@@ -8,7 +8,7 @@ import UIKit
 nonisolated enum PasteItem: String, CaseIterable, Codable, Sendable, Identifiable {
     // Preserve saved selections from the experimental Skew control.
     case contrastDistribution = "skew"
-    case shadowFloor, tone, contrast, whitePoint, hdrGain, hdrRolloff, rgbWhiteBalance, rawWhiteBalance
+    case tone, contrast, whitePoint, hdrGain, hdrRolloff, rgbWhiteBalance, rawWhiteBalance
     case colorChrome, chromaCurve, lightnessChromaCurve, vertices, hueTwister, splitTone
     case dyeResponse, clarity, hdf, grain, halation, vignette, badHDR
     case transform, dustCorrection, lut
@@ -23,7 +23,6 @@ nonisolated enum PasteItem: String, CaseIterable, Codable, Sendable, Identifiabl
         case .contrastDistribution: "Contrast Distribution"
         case .whitePoint: "White Point"
         case .hdrGain: "HDR Gain"
-        case .shadowFloor: "Shadow Floor"
         case .hdrRolloff: "HDR Rolloff"
         case .rgbWhiteBalance: "RGB White Balance"
         case .rawWhiteBalance: "RAW Kelvin White Balance"
@@ -71,7 +70,7 @@ nonisolated enum PasteItem: String, CaseIterable, Codable, Sendable, Identifiabl
         default: nil
         }
     }
-    static let toneItems: [Self] = [.tone,.contrast,.contrastDistribution,.whitePoint,.hdrGain,.hdrRolloff,.shadowFloor]
+    static let toneItems: [Self] = [.tone,.contrast,.contrastDistribution,.whitePoint,.hdrGain,.hdrRolloff]
     static let balanceItems: [Self] = [.rgbWhiteBalance,.rawWhiteBalance]
     static let colorItems: [Self] = [.colorChrome,.chromaCurve,.lightnessChromaCurve,.vertices,.hueTwister,.splitTone]
     static let effectItems: [Self] = [.dyeResponse,.clarity,.hdf,.grain,.halation,.vignette,.badHDR]
@@ -109,7 +108,6 @@ nonisolated struct SettingsPasteSelection: Codable, Sendable, Equatable {
 
     func applying(_ source: ToneMapping, to destination: ToneMapping) -> ToneMapping {
         var result = destination
-        if contains(.shadowFloor) { result.shadowFloor = source.shadowFloor }
         if contains(.whitePoint) { result.white = source.white }
         if contains(.tone) { result.tonePosition = source.tonePosition }
         if contains(.contrast) { result.concentration = source.concentration }

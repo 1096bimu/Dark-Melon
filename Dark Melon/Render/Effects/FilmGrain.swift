@@ -2,197 +2,221 @@ import CoreImage
 import Foundation
 
 nonisolated struct FilmGrainSettings: Codable, Equatable, Sendable {
-    var size = 0.5
-    var strength = 0.0
-    var distribution = 0.0
+    enum Output: String, Codable, Sendable {
+        case additive, filmDensity
+    }
 
-    /// Peak-normalized envelope over source-linear luminance: shadow peak at zero, midtone peak at one.
-    func weight(at tone: Double) -> Double {
-        let x = min(1, max(0, tone)), peak = distribution.clamped(to: 0...1) * 0.5
-        if peak == 0 { return pow(1 - x, 4) }
-        if x == 0 || x == 1 { return 0 }
-        return exp(4 * peak * log(x / peak) + 4 * (1 - peak) * log((1 - x) / (1 - peak)))
+    var size = 2.0
+    var strength = 0.0
+    var offset = 0.0
+    var colorScale = 0.5
+    var output = Output.additive
+
+    var isEnabled: Bool { strength > 0 || output == .filmDensity }
+
+    static func defaultSize(for sourceSize: CGSize?) -> Double {
+        guard let sourceSize, sourceSize.width.isFinite, sourceSize.height.isFinite,
+              sourceSize.width > 0, sourceSize.height > 0 else { return 2 }
+        return (min(sourceSize.width, sourceSize.height) / 2000).clamped(to: AdjustmentLimits.grainSize)
+    }
+
+    private enum CodingKeys: String, CodingKey { case size, strength, offset, colorScale, output }
+    init() {}
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        strength = try values.decodeIfPresent(Double.self, forKey: .strength) ?? 0
+        output = try values.decodeIfPresent(Output.self, forKey: .output) ?? .additive
+        // Legacy grain inherits only the saved amount, without rescaling it.
+        // Its former size/distribution use incompatible units and are retired.
+        guard values.contains(.offset) || values.contains(.colorScale) || values.contains(.output) else { return }
+        size = try values.decodeIfPresent(Double.self, forKey: .size) ?? 2
+        offset = try values.decodeIfPresent(Double.self, forKey: .offset) ?? 0
+        colorScale = try values.decodeIfPresent(Double.self, forKey: .colorScale) ?? 0.5
     }
 }
 
-// Adapted from mr-berndt/cinegrain2, e4b27ad4cb5b1a6695b53e938e4b17e60e60fa32.
-// Copyright (C) 2026 mr-berndt. GPL-3.0-or-later; see Cinegrain2-LICENSE.txt.
-// Uses the current difference-of-Gaussians grain shape, with a fixed still-image
-// seed and a one-parameter tonal envelope instead of the upstream five-zone EQ.
+/// Source-linear Gaussian grain. Spatial shaping and luminance/chroma separation
+/// happen entirely on the GPU, before the shared SDR/HDR tone pipeline.
 nonisolated final class FilmGrain {
     private enum GrainError: LocalizedError {
         case kernel
         var errorDescription: String? { String(localized: "Unable to create the Film Grain processing kernels.") }
     }
+    private struct FieldKey: Equatable {
+        var seed: UInt32
+        var scale: Double
+        var color: Double
+        var luminance: SIMD3<Double>
+    }
+    private var fieldCache: (FieldKey, CIImage, CIImage, CIImage)?
     private let noise: CIKernel
-    private let downsample: CIKernel
-    private let blur: CIKernel
+    private let moments: CIKernel
     private let finish: CIKernel
+    private let response: CIColorKernel
+
+    /// Stable across launches; independent of Swift's randomized Hasher and edit metadata.
+    static func seed(for url: URL) -> UInt32 {
+        url.standardizedFileURL.path.utf8.reduce(UInt32(2166136261)) { ($0 ^ UInt32($1)) &* 16777619 } & 0x00ffffff
+    }
 
     private static let source = """
     #include <metal_stdlib>
     #include <CoreImage/CoreImage.h>
     using namespace metal;
     extern "C" { namespace coreimage {
-    float grainHash(float2 p) {
-        float sum = 0.0;
-        for (int i=0; i<4; ++i) {
-            float3 q = fract(float3(p.x,p.y,p.x)*float3(0.1031,0.1030,0.0973)+0.314159+float(i)*7.31);
-            q += dot(q,q.yzx+33.33);
-            sum += fract((q.x+q.y)*q.z);
-        }
-        return sum-2.0;
+    // PCG RXS-M-XS hash; Jarzynski & Olano, Hash Functions for GPU Rendering.
+    // https://jcgt.org/published/0009/03/02/
+    uint grainHash(uint value) {
+        uint state=value*747796405u+2891336453u;
+        uint word=((state>>((state>>28u)+4u))^state)*277803737u;
+        return (word>>22u)^word;
     }
-    [[stitchable]] float4 filmNoise(destination dest) {
-        float2 p = floor(dest.coord())+0.5;
-        float3 n = float3(grainHash(p+float2(137,-73)), grainHash(p), grainHash(p+float2(-82,235)));
-        return float4(n*0.25+0.5,1);
+    float gaussianNoise(uint2 p, uint seed) {
+        uint h=grainHash(p.x^grainHash(p.y^seed));
+        float u=(float(h>>8u)+0.5)/16777216.0;
+        float v=(float(grainHash(h^0x9e3779b9u)>>8u)+0.5)/16777216.0;
+        return sqrt(-2.0*log(u))*cos(6.28318530718*v);
     }
-    [[stitchable]] float4 filmDownsample(sampler field, destination dest) {
-        float2 p = dest.coord()*4.0;
-        return (field.sample(field.transform(p+float2(-1,-1)))+
-                field.sample(field.transform(p+float2(1,-1)))+
-                field.sample(field.transform(p+float2(-1,1)))+
-                field.sample(field.transform(p+float2(1,1))))*0.25;
+    float3 colorBand(float3 band, float colorWeight, float3 luminanceWeights) {
+        float luminance=dot(band,luminanceWeights);
+        return mix(float3(luminance),band,colorWeight);
     }
-    [[stitchable]] float4 filmBlur(sampler field, float sigma, float2 axis, float maximumRadius, destination dest) {
-        float2 p = dest.coord();
-        if (sigma<0.05) return field.sample(field.transform(p));
-        int radius = int(min(ceil(2.5*sigma),maximumRadius));
-        float3 sum=field.sample(field.transform(p)).rgb;
-        float total=1.0;
-        for (int i=1; i<=16; ++i) {
-            if (i>radius) break;
-            float w=exp(-0.5*float(i*i)/(sigma*sigma));
-            float2 d=axis*float(i);
-            sum += (field.sample(field.transform(p-d)).rgb+field.sample(field.transform(p+d)).rgb)*w;
-            total += 2*w;
-        }
-        return float4(sum/total,1);
+    float3 filmDensity(float3 exposure) {
+        // Fixed fog and a saturating characteristic curve. Matching maximum
+        // density and half-exposure keeps the initial density slope at one.
+        float3 e=max(exposure,0.0);
+        return 0.0025+4.0*(e/(e+4.0));
     }
-    [[stitchable]] float4 filmApply(sampler picture, sampler source, sampler narrow, sampler wide,
-                                    float4 parameters, float3 weights, float ceiling, destination dest) {
+    [[stitchable]] float4 grainResponse(sample_t picture) {
+        float4 color=unpremultiply(picture);
+        color.rgb=1.0-exp(-filmDensity(color.rgb));
+        return premultiply(color);
+    }
+    [[stitchable]] float4 grainWhite(float seed, destination dest) {
+        uint2 p=uint2(int2(floor(dest.coord())));
+        float red=gaussianNoise(p,uint(seed));
+        float3 value=float3(red);
+        value.g=gaussianNoise(p,uint(seed)^0x68bc21ebu);
+        value.b=gaussianNoise(p,uint(seed)^0x02e5be93u);
+        return float4(value,1.0);
+    }
+    [[stitchable]] float4 grainMoments(sampler white, sampler small, sampler medium,
+                                     float colorScale, float3 luminanceWeights, destination dest) {
         float2 p=dest.coord();
+        float3 a=white.sample(white.transform(p)).rgb;
+        float3 b=small.sample(small.transform(p)).rgb;
+        float3 c=medium.sample(medium.transform(p)).rgb;
+        // Three telescoping bands; no fourth blur or very-coarse stage.
+        float3 color=1.0-smoothstep(float3(0.0,1.0/3.0,2.0/3.0),
+                                 float3(1.0/3.0,2.0/3.0,1.0),float3(1.0-colorScale));
+        float3 value=colorBand(a-b,color.x,luminanceWeights)
+                    +1.414*colorBand(b-c,color.y,luminanceWeights)
+                    +2.0*colorBand(c,color.z,luminanceWeights);
+        return float4(value,1.0);
+    }
+    [[stitchable]] float4 grainFinish(sampler picture, sampler field, sampler means, sampler squares,
+                                    float strength, float offset, float densityOutput, destination dest) {
+        float2 p=dest.coord();
+        float3 mean=means.sample(means.transform(float2(0.5))).rgb;
+        float3 second=squares.sample(squares.transform(float2(0.5))).rgb;
+        float3 variance=max(float3(0.0),second-mean*mean);
+        // A common gain preserves the hybrid's neutral fine band.
+        variance=float3(dot(variance,float3(1.0/3.0)));
+        float3 value=field.sample(field.transform(p)).rgb;
+        float3 unit=select(float3(0.0),(value-mean)*rsqrt(max(variance,float3(1e-12))),variance>1e-12);
+        float amplitude=(densityOutput>0.5 ? 8.0:1.0)*strength*0.0008505;
         float4 color=unpremultiply(picture.sample(picture.transform(p)));
-        float3 n=(narrow.sample(narrow.transform(p)).rgb-0.5)*4.0;
-        float3 w=(wide.sample(wide.transform(p)).rgb-0.5)*4.0;
-        float3 unit=(n-0.95*w)*parameters.x;
-        float grain=dot(unit,float3(0.2126,0.7152,0.0722));
-        // Use incident linear luminance at the grain stage, before tone mapping.
-        float3 input=unpremultiply(source.sample(source.transform(p))).rgb;
-        float t=clamp(dot(input,weights),0.0,1.0);
-        float peak=parameters.w*0.5;
-        float envelope=0.0;
-        if (peak<=0.000001) envelope=pow(1-t,4.0);
-        else if (t>0 && t<1) envelope=exp(4*peak*log(t/peak)+4*(1-peak)*log((1-t)/(1-peak)));
-        float gain=exp(parameters.y*parameters.z*envelope*grain);
-        color.rgb=max(color.rgb*gain,0.0);
-        if (ceiling>0.0) color.rgb=min(color.rgb,ceiling);
+        if (densityOutput>0.5) {
+            // The same centered texture now varies developed density, with
+            // counting-statistics amplitude and Beer-Lambert transmission.
+            // Offset belongs only to the additive model; fog is fixed here.
+            float3 density=filmDensity(color.rgb);
+            density=max(density+amplitude*sqrt(density)*unit,0.0);
+            color.rgb=1.0-exp(-density);
+            return premultiply(color);
+        }
+        // Shift the centered field toward the former three-sigma positive
+        // floor, or its negative counterpart. Blend tail clipping smoothly.
+        float shift=3.0*offset;
+        float3 shifted=unit+shift;
+        float3 oneSided=offset>=0.0 ? max(shifted,0.0):min(shifted,0.0);
+        float3 exposure=amplitude*mix(shifted,oneSided,abs(offset));
+        color.rgb=max(color.rgb+exposure,0.0);
         return premultiply(color);
     }
     }}
     """
 
     init() throws {
-        // Compile each entry point separately so Core Image keeps its argument layout distinct.
-        let parts = Self.source.components(separatedBy: "[[stitchable]]")
-        var kernels: [CIKernel] = []
-        for index in 1..<parts.count {
-            let closing = index == parts.count - 1 ? "" : "\n}}"
-            kernels += try CIKernel.kernels(withMetalString: parts[0] + "[[stitchable]]" + parts[index] + closing)
+        // Separate entry points keep Core Image's sampler argument layouts distinct.
+        let pieces = Self.source.components(separatedBy: "[[stitchable]]")
+        var kernels = [CIKernel]()
+        for index in 1..<pieces.count {
+            let closing = index == pieces.count - 1 ? "" : "\n}}"
+            kernels += try CIKernel.kernels(withMetalString: pieces[0] + "[[stitchable]]" + pieces[index] + closing)
         }
-        guard let noise = kernels.first(where: { $0.name == "filmNoise" }),
-              let downsample = kernels.first(where: { $0.name == "filmDownsample" }),
-              let blur = kernels.first(where: { $0.name == "filmBlur" }),
-              let finish = kernels.first(where: { $0.name == "filmApply" }) else { throw GrainError.kernel }
-        self.noise = noise; self.downsample = downsample; self.blur = blur; self.finish = finish
-    }
-
-    func apply(to image: CIImage, source: CIImage, settings: FilmGrainSettings,
-               weights: SIMD3<Double>, ceiling: Double) throws -> CIImage {
-        guard settings.strength > 0 else { return image }
-        let extent = image.extent.integral
-        let shortSide = min(extent.width, extent.height)
-        let size = settings.size.clamped(to: AdjustmentLimits.grainSize)
-        let resolutionScale = EffectResolution.scale(shortSide: shortSide)
-        let grainReferenceRadius = size * EffectResolution.referenceShortSide / 2160
-        let sigma = max(grainReferenceRadius * resolutionScale, 0.05)
-        // A 6000 × 4000 image uses radius = Size × 1. Scale with the
-        // shorter dimension, just like grain, while keeping its existing size unchanged.
-        let baseBlurMultiplier = 1.0
-        let baseBlurRadius = size * baseBlurMultiplier * resolutionScale
-        let softened = image.clampedToExtent()
-            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: baseBlurRadius])
-            .cropped(to: image.extent)
-        let wideSigma = sqrt(max(pow(8.4*sigma,2)-3.92,0))/4
-        // Overscan avoids finite-image borders in the procedural field.
-        let padded = extent.insetBy(dx: -80, dy: -80)
-        guard let field = noise.apply(extent: padded, roiCallback: { _, rect in rect }, arguments: []) else {
+        guard let noise = kernels.first(where: { $0.name == "grainWhite" }),
+              let moments = kernels.first(where: { $0.name == "grainMoments" }),
+              let finish = kernels.first(where: { $0.name == "grainFinish" }),
+              let response = kernels.first(where: { $0.name == "grainResponse" }) as? CIColorKernel else {
             throw GrainError.kernel
         }
-        func gaussian(_ image: CIImage, sigma: Double, maxRadius: Double) throws -> CIImage {
-            guard sigma >= 0.05 else { return image }
-            let radius = min(ceil(2.5*sigma),maxRadius)
-            guard let horizontal = blur.apply(extent: image.extent,
-                roiCallback: { _, rect in rect.insetBy(dx: -radius, dy: 0) },
-                arguments: [image, sigma, CIVector(x: 1,y: 0), maxRadius]),
-                  let vertical = blur.apply(extent: image.extent,
-                roiCallback: { _, rect in rect.insetBy(dx: 0, dy: -radius) },
-                arguments: [horizontal, sigma, CIVector(x: 0,y: 1), maxRadius]) else { throw GrainError.kernel }
-            return vertical
-        }
-        let narrow = try gaussian(field, sigma: sigma, maxRadius: 8)
-        let quarterExtent = padded.applying(CGAffineTransform(scaleX: 0.25,y: 0.25)).integral
-        guard let quarter = downsample.apply(extent: quarterExtent,
-            roiCallback: { _, rect in rect.applying(CGAffineTransform(scaleX: 4,y: 4)).insetBy(dx: -2,dy: -2) },
-            arguments: [field]) else { throw GrainError.kernel }
-        let wide = try gaussian(quarter, sigma: wideSigma < 0.3 ? 0 : wideSigma, maxRadius: 16)
-            .transformed(by: CGAffineTransform(scaleX: 4,y: 4))
-        let radius = min(8,Int(ceil(2.5*sigma)))
-        var sum=1.0, squares=1.0
-        for i in 1...max(1,radius) {
-            let w=exp(-0.5*Double(i*i)/(sigma*sigma))
-            sum += 2*w; squares += 2*w*w
-        }
-        let a=squares/(sum*sum), s2=max(8.4*sigma,sqrt(3.92))
-        let variance=a*a-2*0.95/(2*Double.pi*(sigma*sigma+s2*s2))+0.95*0.95/(4*Double.pi*s2*s2)
-        let normalization=1/sqrt(max(variance/3,1e-8))
-        let amplitude=0.405*0.210*Self.resolutionAmplitude(size: size, shortSide: shortSide)
-        guard let result = finish.apply(extent: extent, roiCallback: { _, rect in rect }, arguments: [
-            softened, source, narrow, wide,
-            CIVector(x: normalization,y: settings.strength.clamped(to: AdjustmentLimits.strength),z: amplitude,w: settings.distribution.clamped(to: 0...1)),
-            CIVector(x: weights.x,y: weights.y,z: weights.z), ceiling
-        ]) else { throw GrainError.kernel }
-        return result
+        self.noise = noise; self.moments = moments; self.finish = finish
+        self.response = response
     }
 
-    /// Upstream's phase-averaged Hermite downsampling attenuation.
-    private static func resolutionAmplitude(size: Double, shortSide: Double) -> Double {
-        let scale=min((2160 / EffectResolution.referenceShortSide) / EffectResolution.scale(shortSide: shortSide),11)
-        guard scale>1 else { return 1 }
-        let radius=min(8,Int(ceil(2.5*size)))
-        let w=(0...8).map { $0<=radius ? exp(-0.5*Double($0*$0)/(size*size)) : 0 }
-        var rho=[Double](repeating:0,count:17)
-        for m in 0...16 {
-            for d in -radius...radius where abs(d+m)<=radius { rho[m] += w[abs(d)]*w[abs(d+m)] }
+    func apply(to image: CIImage, settings: FilmGrainSettings, seed: UInt32 = 1,
+               luminance: SIMD3<Double> = SIMD3(0.2126, 0.7152, 0.0722), renderScale: Double = 1) throws -> CIImage {
+        guard settings.isEnabled else { return image }
+        let extent = image.extent
+        // Zero Strength retains the film response without generating, blurring
+        // or reducing a noise field. Additive zero remains an exact bypass.
+        if settings.strength <= 0 {
+            guard let result = response.apply(extent: extent, arguments: [image]) else { throw GrainError.kernel }
+            return result
         }
-        let zero=rho[0]
-        rho=rho.map { $0/zero }
-        var variance=0.0
-        for phase in 0..<8 {
-            let center=(Double(phase)+0.5)/8
-            let origin=floor(center-scale)+1
-            let h=(0..<24).map { i -> Double in
-                let x=abs((origin+Double(i)-center)/scale)
-                return x<1 ? (2*x-3)*x*x+1 : 0
-            }
-            let total=h.reduce(0,+)
-            var v=0.0
-            for t in 0..<24 where h[t]>0 {
-                for u in 0..<24 where h[u]>0 && abs(t-u)<=2*radius { v += h[t]*h[u]*rho[abs(t-u)] }
-            }
-            variance += v/(total*total)
+        let size = settings.size.clamped(to: AdjustmentLimits.grainSize)
+        // Size is in source pixels. Only preview/detail downsampling changes
+        // the rendering scale; image dimensions already set the default Size.
+        let scale = size * max(0.000001, renderScale)
+        let key = FieldKey(seed: seed & 0x00ffffff, scale: scale,
+                           color: settings.colorScale.clamped(to: 0...1), luminance: luminance)
+        let field: CIImage, mean: CIImage, squares: CIImage
+        if let cached = fieldCache, cached.0 == key {
+            field = cached.1; mean = cached.2; squares = cached.3
+        } else {
+            // Infinite procedural fields let detail rendering evaluate only the
+            // visible region. No full-resolution noise bitmap is retained.
+            guard let white = noise.apply(extent: .infinite, roiCallback: { _, rect in rect },
+                                           arguments: [Double(key.seed)]) else { throw GrainError.kernel }
+            let small = white.applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 1.0])
+            let medium = white.applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 4.0])
+            let weights = CIVector(x: CGFloat(luminance.x), y: CGFloat(luminance.y), z: CGFloat(luminance.z))
+            guard let shaped = moments.apply(extent: .infinite, roiCallback: { _, rect in rect },
+                                            arguments: [white, small, medium, key.color, weights]) else { throw GrainError.kernel }
+            field = shaped.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+            // Normalize a bounded reference region on the GPU, rather than
+            // reducing a 100MP image every time grain controls change.
+            let sample = CGRect(x: 0, y: 0, width: 512, height: 512)
+            let reference = field.cropped(to: sample).insertingIntermediate(cache: true)
+            let area = [kCIInputExtentKey: CIVector(cgRect: sample)]
+            mean = reference.applyingFilter("CIAreaAverage", parameters: area).insertingIntermediate(cache: true)
+            let square = CIVector(x: 0, y: 0, z: 1, w: 0)
+            squares = reference.applyingFilter("CIColorPolynomial", parameters: [
+                "inputRedCoefficients": square, "inputGreenCoefficients": square, "inputBlueCoefficients": square
+            ]).applyingFilter("CIAreaAverage", parameters: area).insertingIntermediate(cache: true)
+            fieldCache = (key, field, mean, squares)
         }
-        return (variance/8).clamped(to: 0...1)
+        let softened = image.clampedToExtent()
+            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: scale / 2])
+            .cropped(to: extent)
+        guard let result = finish.apply(extent: extent, roiCallback: { index, rect in
+            index >= 2 ? mean.extent : rect
+        }, arguments: [softened, field, mean, squares,
+                       settings.strength.clamped(to: AdjustmentLimits.strength), settings.offset.clamped(to: -1...1),
+                       settings.output == .filmDensity ? 1.0 : 0.0]) else {
+            throw GrainError.kernel
+        }
+        return result
     }
 }

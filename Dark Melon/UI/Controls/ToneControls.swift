@@ -268,21 +268,7 @@ struct SlopeEditor: View {
                 }
             }
             .disabled(!mapping.hdrEnabled).filmLock(.hdrRolloff)
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("Shadow Floor")
-                    Spacer()
-                    AdjustmentField(title: "Shadow Floor", value: $mapping.shadowFloor, range: 0...255, digits: 0)
-                }
-                HStack {
-                    Image(systemName: "film.circle.fill").frame(width: 22).accessibilityHidden(true)
-                    EditorSlider(value: $mapping.shadowFloor, in: 0...100, step: 1, label: { Text("Shadow Floor") })
-                        .labelsHidden()
-                        .controlReset { mapping.shadowFloor = defaults.shadowFloor }
-                }
-            }
-            .filmLock(.shadowFloor)
-            .help("Minimum SDR RGB value on a 0–255 scale, applied after tone, color, and LUT adjustments. Zero disables the floor.")
+
 
         }
         .font(.callout.monospacedDigit())
@@ -297,12 +283,10 @@ struct HistogramToneCurve: View {
     let mapping: ToneMapping
     let hdrPreview: Bool
     var inputMaximum = 1.0
-    var colorSpace: ProcessingColorSpace = .sRGB
 
     var body: some View {
         Canvas { context, size in
             let sdrCurve = mapping.curve(hdr: false)
-            let outputFloor = colorSpace.linearSDRValue(forCode: mapping.shadowFloor)
             let hdrCurve = mapping.curve(hdr: true)
             let maximum = hdrPreview ? max(1.25, mapping.hdrMax * 1.08) : 1.25
             func point(_ input: Double, _ output: Double) -> CGPoint {
@@ -322,7 +306,7 @@ struct HistogramToneCurve: View {
                 var path = Path()
                 for index in 0...2000 {
                     let input = Double(index) / 2000 * inputMaximum
-                    let p = point(input, max(curve.value(at: input), outputFloor))
+                    let p = point(input, curve.value(at: input))
                     if index == 0 { path.move(to: p) } else { path.addLine(to: p) }
                 }
                 context.stroke(path, with: .color(.black.opacity(0.8)), lineWidth: 4)
