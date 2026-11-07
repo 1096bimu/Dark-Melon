@@ -42,6 +42,21 @@ import CoreImage
         assert(applied.colorSpace == .displayP3)
         library.rename(id, to: "Renamed")
         assert(library.rawDefaultID == id)
+        // Updating a preset replaces both its values and its included settings.
+        var replacement = recipe
+        replacement.mapping.white = 0.25
+        replacement.mapping.concentration = 0.9
+        let replacementSelection = SettingsPasteSelection(items: [.whitePoint])
+        library.updateEdit(id, with: replacement, selection: replacementSelection)
+        let updatedLibrary = EditLibrary(url: url, preferences: preferences)
+        let updatedEntry = updatedLibrary.entries.first { $0.id == id }!
+        assert(updatedEntry.name == "Renamed" && updatedEntry.parent == folder)
+        assert(updatedEntry.selection == replacementSelection)
+        let updatedDefault = updatedLibrary.rawDefaultPreset!.applying(to: fallback)
+        assert(updatedDefault.mapping.white == 0.25)
+        assert(updatedDefault.mapping.concentration == fallback.mapping.concentration)
+        assert(updatedDefault.mapping.grain.strength == fallback.mapping.grain.strength)
+        assert(updatedEntry.recipe?.mapping.concentration == ToneMapping().concentration)
         library.remove(folder)
         assert(library.rawDefaultID == nil && library.rawDefaultPreset == nil)
         assert(EditLibrary(url: url, preferences: preferences).rawDefaultID == nil)

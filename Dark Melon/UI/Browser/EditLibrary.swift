@@ -32,7 +32,7 @@ struct LibraryEntry: Identifiable, Codable {
         preferences.set(id?.uuidString, forKey: defaultKey)
     }
     private var readable = true
-    init(url: URL? = nil, lutStore: LUTStore = .shared, preferences: UserDefaults = .standard) {
+    init(url: URL? = nil, lutStore: LUTStore = .shared, preferences: UserDefaults = .standard, bundledPresetsURL: URL? = nil) {
         self.preferences = preferences
         defaultKey = url.map { "rawDefaultPreset:" + $0.path } ?? "rawDefaultPreset"
         rawDefaultID = preferences.string(forKey: defaultKey).flatMap(UUID.init(uuidString:))
@@ -42,16 +42,36 @@ struct LibraryEntry: Identifiable, Codable {
         do {
             if FileManager.default.fileExists(atPath: self.url.path) {
                 entries = try Self.decode(Data(contentsOf: self.url))
-            } else if url == nil, let bundled = Bundle.main.url(forResource: "BundledLUTLibrary", withExtension: "json", subdirectory: "BundledLUTs")
-                ?? Bundle.main.url(forResource: "BundledLUTLibrary", withExtension: "json") {
-                entries = try Self.decode(Data(contentsOf: bundled))
-                save(entries)
             }
             if let rawDefaultID, !entries.contains(where: { $0.id == rawDefaultID && $0.recipe != nil }) {
                 useAsRAWDefault(nil)
             }
-        } catch { readable = false; self.error = error.localizedDescription }
+        } catch { readable = false; self.error = error.localizedDescription; return }
+        if let bundled = bundledPresetsURL ?? (url == nil ? Bundle.main.url(forResource: "BundledPresets", withExtension: "json") : nil) {
+            do { try installBundledPresets(from: bundled) }
+            catch { self.error = error.localizedDescription }
+        }
     }
+    private func installBundledPresets(from source: URL) throws {
+        let document = try JSONSerialization.jsonObject(with: Data(contentsOf: source)) as? [String: Any]
+        guard let version = document?["version"] as? Int,
+              let items = document?["entries"] as? [[String: Any]],
+              let retired = document?["retiredLUTEntries"] as? [String] else {
+            throw CocoaError(.fileReadCorruptFile)
+        }
+        let key = "bundledPresets.version:" + url.path
+        guard preferences.integer(forKey: key) < version else { return }
+        let bundled = try Self.decode(JSONSerialization.data(withJSONObject: items))
+        let existingIDs = Set(entries.map(\.id))
+        let retiredIDs = Set(retired.compactMap(UUID.init(uuidString:)))
+        // Remove only the original seeded LUT entries; imported LUTs stay intact.
+        let updated = entries.filter { !retiredIDs.contains($0.id) || $0.lutID == nil }
+            + bundled.filter { !existingIDs.contains($0.id) }
+        // Record completion only after an atomic save. Deleting a preset later
+        // must not make it reappear on the next launch.
+        if save(updated) { preferences.set(version, forKey: key) }
+    }
+
     /// Library recipes use the same additive-field migrations as image sidecars.
     private static func decode(_ data: Data) throws -> [LibraryEntry] {
         guard var items = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
@@ -70,7 +90,7 @@ struct LibraryEntry: Identifiable, Codable {
         return try JSONDecoder().decode([LibraryEntry].self, from: JSONSerialization.data(withJSONObject: items))
     }
 
-    private func save(_ updated: [LibraryEntry]) {
+    @discardableResult private func save(_ updated: [LibraryEntry]) -> Bool {
         do {
             if !readable {
                 // Never replace an unreadable library until its original bytes are safe.
@@ -87,7 +107,8 @@ struct LibraryEntry: Identifiable, Codable {
             if let rawDefaultID, !entries.contains(where: { $0.id == rawDefaultID && $0.recipe != nil }) {
                 useAsRAWDefault(nil)
             }
-        } catch { self.error = error.localizedDescription }
+            return true
+        } catch { self.error = error.localizedDescription; return false }
     }
     func addFolder(_ name: String, parent: UUID?) {
         save(entries + [LibraryEntry(parent: parent, name: name)])
@@ -102,11 +123,11 @@ struct LibraryEntry: Identifiable, Codable {
         save(entries + [LibraryEntry(parent: parent, name: name,
             recipe: selectedRecipe(recipe, selection: selection), selection: selection)])
     }
-    func updateEdit(_ id: UUID, with recipe: DevelopmentRecipe) {
-        guard let index = entries.firstIndex(where: { $0.id == id && $0.recipe != nil }),
-              let selection = entries[index].selection else { return }
+    func updateEdit(_ id: UUID, with recipe: DevelopmentRecipe, selection: SettingsPasteSelection) {
+        guard let index = entries.firstIndex(where: { $0.id == id && $0.recipe != nil }) else { return }
         var updated = entries
         updated[index].recipe = selectedRecipe(recipe, selection: selection)
+        updated[index].selection = selection
         save(updated)
     }
     func addLUTs(_ sources: [URL], parent: UUID?) async {
@@ -166,12 +187,13 @@ struct LibraryEntry: Identifiable, Codable {
 struct EditLibraryView: View {
     @Environment(\.lockedFilmItems) private var lockedItems
     @State private var library = EditLibrary.shared
-    @State private var folder: UUID?
+    @Binding var folder: UUID?
     @State private var snapshot: DevelopmentRecipe?
     @State private var selection: SettingsPasteSelection?
     @State private var choosingParts = false
     @State private var choosingLUT = false
     @State private var configuringLUT: LibraryEntry?
+    @State private var updatingEdit: LibraryEntry?
     @State private var namingFolder = false
     @State private var namingEdit = false
     @State private var deleting: LibraryEntry?
@@ -235,7 +257,7 @@ struct EditLibraryView: View {
                         Button("Rename…", systemImage: "pencil") { name = entry.name; renaming = entry }
                         if entry.recipe != nil {
                             Button("Update with Current") {
-                                if let current { library.updateEdit(entry.id, with: current) }
+                                if let current { snapshot = current; updatingEdit = entry }
                             }.disabled(current == nil)
                             Button(LocalizedStringKey(library.rawDefaultID == entry.id ? "Clear RAW Default" : "Use as RAW Default"),
                                    systemImage: "camera.aperture") {
@@ -260,6 +282,16 @@ struct EditLibraryView: View {
                 }
             }.listStyle(.sidebar)
             if let error = library.error { Text(error).foregroundStyle(.red).font(.caption).padding() }
+        }
+        .onChange(of: library.entries.map(\.id), initial: true) { _, _ in
+            if let folder, !library.entries.contains(where: { $0.id == folder && $0.isFolder }) {
+                self.folder = nil
+            }
+        }
+        .sheet(item: $updatingEdit) { entry in
+            SettingsPasteOptions(apply: { parts in
+                if let snapshot { library.updateEdit(entry.id, with: snapshot, selection: parts) }
+            }, title: "Update with Current", actionTitle: "Save", initialSelection: entry.selection)
         }
         .sheet(item: $configuringLUT) { entry in
             if let id = entry.lutID { LUTConfigurationView(id: id, name: entry.name, hdrEnabled: current?.mapping.hdrEnabled) }

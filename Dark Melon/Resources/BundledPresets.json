@@ -1,0 +1,1888 @@
+{
+  "version": 1,
+  "retiredLUTEntries": [
+    "C6483AB1-4DC8-4104-9060-339D282B3DFC",
+    "CFEF641E-9C46-4A81-BEC7-5D4A1390AF99",
+    "E7C5F1EF-080F-4C4A-8390-46569BF5A882",
+    "F6A2A813-13B6-452F-BD52-DDB4B12F6289",
+    "39D13439-484D-447D-BF69-13BFE2D1E810",
+    "0D052BDA-E821-4D42-BD7F-239AF82F014A",
+    "9D5FE81B-70F2-4B94-ABE2-5040A828ACF3",
+    "4332DC9F-6D83-4B2E-9CCC-B20A5E2586EE"
+  ],
+  "entries": [
+    {
+      "recipe": {
+        "version": 1,
+        "mapping": {
+          "storedContrastDistribution": {
+            "white": 0.044953893442622905,
+            "highlightWidth": 0,
+            "black": 0,
+            "shadowWidth": 0.3985015368852459
+          },
+          "hdrTarget": 7.506118372810532,
+          "badHDR": {
+            "strength": 0,
+            "radius": 1
+          },
+          "halation": {
+            "inputCurve": 0.15912162162162163,
+            "radius": 0.75,
+            "transmission": 0.2
+          },
+          "whiteBalance": {
+            "blue": 1,
+            "red": 1,
+            "green": 1
+          },
+          "hls": [
+            {
+              "highlightHue": 0,
+              "saturation": 1,
+              "lightness": 0,
+              "shadowHue": 0,
+              "midtoneHue": 0
+            },
+            {
+              "highlightHue": 0,
+              "saturation": 1,
+              "lightness": 0,
+              "shadowHue": 0,
+              "midtoneHue": 0
+            },
+            {
+              "highlightHue": 0,
+              "saturation": 1,
+              "lightness": 0,
+              "shadowHue": 0,
+              "midtoneHue": 0
+            },
+            {
+              "highlightHue": 0,
+              "saturation": 1,
+              "lightness": 0,
+              "shadowHue": 0,
+              "midtoneHue": 0
+            },
+            {
+              "highlightHue": 0,
+              "saturation": 1,
+              "lightness": 0,
+              "shadowHue": 0,
+              "midtoneHue": 0
+            },
+            {
+              "highlightHue": 0,
+              "saturation": 1,
+              "lightness": 0,
+              "shadowHue": 0,
+              "midtoneHue": 0
+            }
+          ],
+          "concentration": 0.39798129562043805,
+          "blackAndWhite": {
+            "blue": 1,
+            "red": 1,
+            "yellow": 1,
+            "green": 1,
+            "cyan": 1,
+            "isEnabled": false
+          },
+          "clarityRadius": 30,
+          "dyeMixers": {
+            "generation": {
+              "strength": 50120,
+              "seed": 17121909621694363768
+            },
+            "a": [
+              0.6527293863427467,
+              0.12452323038040751,
+              0.22274738327684587,
+              0.2101960463666349,
+              0.6233752895887353,
+              0.1664286640446298,
+              0.24805384857622326,
+              0.14416334006980625,
+              0.6077828113539705
+            ],
+            "b": [
+              1.750087232997787,
+              -0.06775251291799284,
+              -0.6823347200797942,
+              -0.36702800958673626,
+              1.6803927427034504,
+              -0.3133647331167143,
+              -0.760764059823952,
+              -0.22949279001734854,
+              1.9902568498413007
+            ]
+          },
+          "clarity": 0,
+          "hdrGain": 1,
+          "toneUsesSourceLuminance": true,
+          "vertexWarp": [
+            {
+              "lighterHue": 0,
+              "monochromeResponse": 0,
+              "chroma": 1,
+              "lightness": 0,
+              "rotation": 0,
+              "darkerHue": 0
+            },
+            {
+              "lighterHue": 0,
+              "monochromeResponse": 0,
+              "chroma": 1,
+              "lightness": 0,
+              "rotation": 0,
+              "darkerHue": 0
+            },
+            {
+              "lighterHue": 0,
+              "monochromeResponse": 0,
+              "chroma": 1,
+              "lightness": 0,
+              "rotation": 0,
+              "darkerHue": 0
+            },
+            {
+              "lighterHue": 0,
+              "monochromeResponse": 0,
+              "chroma": 1,
+              "lightness": 0,
+              "rotation": 0,
+              "darkerHue": 0
+            },
+            {
+              "lighterHue": 0,
+              "monochromeResponse": 0,
+              "chroma": 1,
+              "lightness": 0,
+              "rotation": 0,
+              "darkerHue": 0
+            },
+            {
+              "lighterHue": 0,
+              "monochromeResponse": 0,
+              "chroma": 1,
+              "lightness": 0,
+              "rotation": 0,
+              "darkerHue": 0
+            },
+            {
+              "lighterHue": 0,
+              "monochromeResponse": 0,
+              "chroma": 1,
+              "lightness": 0,
+              "rotation": 0,
+              "darkerHue": 0
+            }
+          ],
+          "color": {
+            "luminanceSaturationStart": 1,
+            "saturationStart": 1,
+            "colorChrome": false,
+            "saturationHDR": 1,
+            "monochrome": false,
+            "saturationEnd": 1,
+            "saturationMid": 1,
+            "luminanceSaturationEnd": 1,
+            "luminanceSaturationMid": 1,
+            "splitTone": {
+              "highlightHue": 40,
+              "nodes": [],
+              "shadowAmount": 0,
+              "amountCurveA": 0,
+              "shadowHue": 220,
+              "highlightAmount": 0
+            },
+            "luminanceSaturationHDR": 1
+          },
+          "white": 0.5,
+          "tonePosition": 0.05,
+          "vignette": {
+            "amount": 0,
+            "spread": 0.5
+          },
+          "channelContrast": [
+            -0.0010385479041916112,
+            0.0011601796407185727,
+            0.0034711826347305352
+          ],
+          "hdrRolloff": 0,
+          "hdfRadius": 100,
+          "grain": {
+            "offset": 0,
+            "colorScale": 0.4950530337591241,
+            "strength": 2.5,
+            "size": 4,
+            "output": "filmDensity"
+          },
+          "hdf": 0
+        },
+        "colorSpace": "Display P3",
+        "snapshots": []
+      },
+      "parent": "AFC04380-381B-4F4E-B923-0DD066AEC7AD",
+      "selection": {
+        "color": true,
+        "whiteBalance": true,
+        "effects": true,
+        "items": [
+          "skew",
+          "contrast",
+          "dyeResponse",
+          "grain",
+          "halation",
+          "tone"
+        ],
+        "raw": true,
+        "tone": true
+      },
+      "name": "Film Victoria 800",
+      "id": "582796C0-AAB8-4AEB-A2B6-31E25EB5F29B"
+    },
+    {
+      "recipe": {
+        "version": 1,
+        "mapping": {
+          "storedContrastDistribution": {
+            "white": 0,
+            "highlightWidth": 1,
+            "black": 0,
+            "shadowWidth": 0.3069608094262295
+          },
+          "hdrTarget": 3.439837547920511,
+          "badHDR": {
+            "strength": -0.5051156583629894,
+            "radius": 1
+          },
+          "halation": {
+            "inputCurve": 0,
+            "radius": 0.75,
+            "transmission": 0.2
+          },
+          "whiteBalance": {
+            "blue": 1,
+            "red": 1,
+            "green": 1
+          },
+          "hls": [
+            {
+              "highlightHue": 0,
+              "saturation": 1,
+              "lightness": 0,
+              "shadowHue": 0,
+              "midtoneHue": 0
+            },
+            {
+              "highlightHue": 0,
+              "saturation": 1,
+              "lightness": 0,
+              "shadowHue": 0,
+              "midtoneHue": 0
+            },
+            {
+              "highlightHue": 0,
+              "saturation": 1,
+              "lightness": 0,
+              "shadowHue": 0,
+              "midtoneHue": 0
+            },
+            {
+              "highlightHue": 0,
+              "saturation": 1,
+              "lightness": 0,
+              "shadowHue": 0,
+              "midtoneHue": 0
+            },
+            {
+              "highlightHue": 0,
+              "saturation": 1,
+              "lightness": 0,
+              "shadowHue": 0,
+              "midtoneHue": 0
+            },
+            {
+              "highlightHue": 0,
+              "saturation": 1,
+              "lightness": 0,
+              "shadowHue": 0,
+              "midtoneHue": 0
+            }
+          ],
+          "concentration": 0.2,
+          "blackAndWhite": {
+            "blue": 1,
+            "red": 1,
+            "yellow": 1,
+            "green": 1,
+            "cyan": 1,
+            "isEnabled": false
+          },
+          "clarityRadius": 30,
+          "dyeMixers": {
+            "generation": {
+              "strength": 65535,
+              "seed": 11488411824679715886
+            },
+            "a": [
+              0.7122770148801969,
+              0.13018007348478602,
+              0.15754291163501707,
+              0.27366618602958276,
+              0.6112272363897513,
+              0.11510657758066586,
+              0.411871945028856,
+              0.12703575009127493,
+              0.46109230487986913
+            ],
+            "b": [
+              2.0407875688629553,
+              -0.30012672230078175,
+              -0.7406608465621736,
+              -0.6548689649263922,
+              2.248614889522064,
+              -0.5937459245956717,
+              -1.2715524607670465,
+              -0.4436567268940853,
+              2.7152091876611317
+            ]
+          },
+          "clarity": 0,
+          "hdrGain": 1,
+          "toneUsesSourceLuminance": true,
+          "vertexWarp": [
+            {
+              "lighterHue": 0,
+              "monochromeResponse": 0,
+              "chroma": 1,
+              "lightness": 0,
+              "rotation": 0,
+              "darkerHue": 0
+            },
+            {
+              "lighterHue": 0,
+              "monochromeResponse": 0,
+              "chroma": 1,
+              "lightness": 0,
+              "rotation": 0,
+              "darkerHue": 0
+            },
+            {
+              "lighterHue": 0,
+              "monochromeResponse": 0,
+              "chroma": 1,
+              "lightness": 0,
+              "rotation": 0,
+              "darkerHue": 0
+            },
+            {
+              "lighterHue": 0,
+              "monochromeResponse": 0,
+              "chroma": 1,
+              "lightness": 0,
+              "rotation": 0,
+              "darkerHue": 0
+            },
+            {
+              "lighterHue": 0,
+              "monochromeResponse": 0,
+              "chroma": 1,
+              "lightness": 0,
+              "rotation": 0,
+              "darkerHue": 0
+            },
+            {
+              "lighterHue": 0,
+              "monochromeResponse": 0,
+              "chroma": 1,
+              "lightness": 0,
+              "rotation": 0,
+              "darkerHue": 0
+            },
+            {
+              "lighterHue": 0,
+              "monochromeResponse": 0,
+              "chroma": 1,
+              "lightness": 0,
+              "rotation": 0,
+              "darkerHue": 0
+            }
+          ],
+          "color": {
+            "luminanceSaturationStart": 1,
+            "saturationStart": 1,
+            "colorChrome": false,
+            "saturationHDR": 1,
+            "monochrome": false,
+            "saturationEnd": 1,
+            "saturationMid": 1,
+            "luminanceSaturationEnd": 1,
+            "luminanceSaturationMid": 1,
+            "splitTone": {
+              "highlightHue": 40,
+              "nodes": [],
+              "shadowAmount": 0,
+              "amountCurveA": 0,
+              "shadowHue": 220,
+              "highlightAmount": 0
+            },
+            "luminanceSaturationHDR": 1
+          },
+          "white": 0.5,
+          "tonePosition": 0.1,
+          "vignette": {
+            "amount": 0,
+            "spread": 0.5
+          },
+          "channelContrast": [
+            0,
+            0,
+            0
+          ],
+          "hdrRolloff": 0,
+          "hdfRadius": 50,
+          "grain": {
+            "offset": -0.5453067974452555,
+            "colorScale": 0.5631700501824818,
+            "strength": 2.660954607664234,
+            "size": 5.876967381386862,
+            "output": "additive"
+          },
+          "hdf": 0.09438063063063064
+        },
+        "colorSpace": "Display P3",
+        "snapshots": []
+      },
+      "parent": "AFC04380-381B-4F4E-B923-0DD066AEC7AD",
+      "selection": {
+        "color": true,
+        "whiteBalance": true,
+        "effects": true,
+        "items": [
+          "grain",
+          "hdf",
+          "skew",
+          "dyeResponse",
+          "badHDR"
+        ],
+        "raw": true,
+        "tone": true
+      },
+      "name": "CCD 2004",
+      "id": "0FC0C9E6-302D-4FFC-AA1A-6B339EED1E3F"
+    },
+    {
+      "name": "Bundle Presets",
+      "id": "AFC04380-381B-4F4E-B923-0DD066AEC7AD"
+    },
+    {
+      "recipe": {
+        "version": 1,
+        "mapping": {
+          "hdrTarget": 4.539088246137003,
+          "badHDR": {
+            "strength": 0,
+            "radius": 1
+          },
+          "halation": {
+            "inputCurve": 0.1477759009009009,
+            "radius": 0.5,
+            "transmission": 0.2
+          },
+          "whiteBalance": {
+            "blue": 1,
+            "red": 1,
+            "green": 1
+          },
+          "hls": [
+            {
+              "highlightHue": 0,
+              "saturation": 1,
+              "lightness": 0,
+              "shadowHue": 0,
+              "midtoneHue": 0
+            },
+            {
+              "highlightHue": 0,
+              "saturation": 1,
+              "lightness": 0,
+              "shadowHue": 0,
+              "midtoneHue": 0
+            },
+            {
+              "highlightHue": 0,
+              "saturation": 1,
+              "lightness": 0,
+              "shadowHue": 0,
+              "midtoneHue": 0
+            },
+            {
+              "highlightHue": 0,
+              "saturation": 1,
+              "lightness": 0,
+              "shadowHue": 0,
+              "midtoneHue": 0
+            },
+            {
+              "highlightHue": 0,
+              "saturation": 1,
+              "lightness": 0,
+              "shadowHue": 0,
+              "midtoneHue": 0
+            },
+            {
+              "highlightHue": 0,
+              "saturation": 1,
+              "lightness": 0,
+              "shadowHue": 0,
+              "midtoneHue": 0
+            }
+          ],
+          "concentration": 0.30425980839416056,
+          "blackAndWhite": {
+            "blue": 1,
+            "red": 1,
+            "yellow": 1,
+            "green": 1,
+            "cyan": 1,
+            "isEnabled": false
+          },
+          "clarityRadius": 30,
+          "dyeMixers": {
+            "generation": {
+              "strength": 65535,
+              "seed": 969758919990553056
+            },
+            "a": [
+              0.7068379737119433,
+              0.05744059341382333,
+              0.23572143287423328,
+              0.06603491253810287,
+              0.6389297549068625,
+              0.2950353325550346,
+              0.36795921605021964,
+              0.23680493408498207,
+              0.3952358498647983
+            ],
+            "b": [
+              1.6716239849229118,
+              0.3039236293558608,
+              -0.9755476142787725,
+              0.6602797749914331,
+              2.155544529969995,
+              -1.8158243049614284,
+              -2.6510311838500176,
+              -1.5042727178190463,
+              5.155303901669063
+            ]
+          },
+          "clarity": 0,
+          "storedDyePurity": [
+            0.5007251122754491,
+            0.7057915419161677,
+            0.8487322230538922
+          ],
+          "hdrGain": 1,
+          "toneUsesSourceLuminance": true,
+          "vertexWarp": [
+            {
+              "lighterHue": 0,
+              "monochromeResponse": 0,
+              "chroma": 1,
+              "lightness": 0,
+              "rotation": 0,
+              "darkerHue": 0
+            },
+            {
+              "lighterHue": 0,
+              "monochromeResponse": 0,
+              "chroma": 1,
+              "lightness": 0,
+              "rotation": 0,
+              "darkerHue": 0
+            },
+            {
+              "lighterHue": 0,
+              "monochromeResponse": 0,
+              "chroma": 1,
+              "lightness": 0,
+              "rotation": 0,
+              "darkerHue": 0
+            },
+            {
+              "lighterHue": 0,
+              "monochromeResponse": 0,
+              "chroma": 1,
+              "lightness": 0,
+              "rotation": 0,
+              "darkerHue": 0
+            },
+            {
+              "lighterHue": 0,
+              "monochromeResponse": 0,
+              "chroma": 1,
+              "lightness": 0,
+              "rotation": 0,
+              "darkerHue": 0
+            },
+            {
+              "lighterHue": 0,
+              "monochromeResponse": 0,
+              "chroma": 1,
+              "lightness": 0,
+              "rotation": 0,
+              "darkerHue": 0
+            },
+            {
+              "lighterHue": 0,
+              "monochromeResponse": 0,
+              "chroma": 1,
+              "lightness": 0,
+              "rotation": 0,
+              "darkerHue": 0
+            }
+          ],
+          "color": {
+            "luminanceSaturationStart": 1,
+            "saturationStart": 1,
+            "colorChrome": false,
+            "saturationHDR": 1,
+            "monochrome": false,
+            "saturationEnd": 1,
+            "saturationMid": 1,
+            "luminanceSaturationEnd": 1,
+            "luminanceSaturationMid": 1,
+            "splitTone": {
+              "highlightHue": 40,
+              "nodes": [],
+              "shadowAmount": 0,
+              "amountCurveA": 0,
+              "shadowHue": 220,
+              "highlightAmount": 0
+            },
+            "luminanceSaturationHDR": 1
+          },
+          "white": 0.5,
+          "tonePosition": 0.1,
+          "vignette": {
+            "amount": 0,
+            "spread": 0.5
+          },
+          "channelContrast": [
+            0,
+            0,
+            -0.010329341317365265
+          ],
+          "hdrRolloff": 0,
+          "hdfRadius": 100,
+          "grain": {
+            "offset": 0,
+            "colorScale": 0.3397439552919708,
+            "strength": 3.5253193430656933,
+            "size": 3,
+            "output": "filmDensity"
+          },
+          "hdf": 0
+        },
+        "colorSpace": "Display P3",
+        "snapshots": []
+      },
+      "parent": "AFC04380-381B-4F4E-B923-0DD066AEC7AD",
+      "selection": {
+        "color": true,
+        "whiteBalance": true,
+        "effects": true,
+        "items": [
+          "halation",
+          "grain",
+          "skew",
+          "contrast",
+          "dyeResponse"
+        ],
+        "raw": true,
+        "tone": true
+      },
+      "name": "Film Soho 200",
+      "id": "B96E119E-3E49-448F-BAE8-D4B12A025371"
+    },
+    {
+      "recipe": {
+        "version": 1,
+        "mapping": {
+          "storedContrastDistribution": {
+            "white": 0,
+            "highlightWidth": 0.8224257172131147,
+            "black": 0,
+            "shadowWidth": 0.319640112704918
+          },
+          "hdrTarget": 4.488218954289286,
+          "badHDR": {
+            "strength": 0,
+            "radius": 1
+          },
+          "halation": {
+            "inputCurve": 0,
+            "radius": 0.75,
+            "transmission": 0.2
+          },
+          "whiteBalance": {
+            "blue": 1,
+            "red": 1,
+            "green": 1
+          },
+          "hls": [
+            {
+              "highlightHue": 0,
+              "saturation": 1,
+              "lightness": 0,
+              "shadowHue": 0,
+              "midtoneHue": 0
+            },
+            {
+              "highlightHue": 0,
+              "saturation": 1,
+              "lightness": 0,
+              "shadowHue": 0,
+              "midtoneHue": 0
+            },
+            {
+              "highlightHue": 0,
+              "saturation": 1,
+              "lightness": 0,
+              "shadowHue": 0,
+              "midtoneHue": 0
+            },
+            {
+              "highlightHue": 0,
+              "saturation": 1,
+              "lightness": 0,
+              "shadowHue": 0,
+              "midtoneHue": 0
+            },
+            {
+              "highlightHue": 0,
+              "saturation": 1,
+              "lightness": 0,
+              "shadowHue": 0,
+              "midtoneHue": 0
+            },
+            {
+              "highlightHue": 0,
+              "saturation": 1,
+              "lightness": 0,
+              "shadowHue": 0,
+              "midtoneHue": 0
+            }
+          ],
+          "concentration": 0.3,
+          "blackAndWhite": {
+            "blue": 1,
+            "red": 1,
+            "yellow": 1,
+            "green": 1,
+            "cyan": 1,
+            "isEnabled": false
+          },
+          "clarityRadius": 30,
+          "dyeMixers": {
+            "generation": {
+              "strength": 65535,
+              "seed": 285155606191207306
+            },
+            "a": [
+              0.7819477317786903,
+              0.04178141133250909,
+              0.17627085688880065,
+              0.038117217469837296,
+              0.6905399965155307,
+              0.271342786014632,
+              0.2961719987921992,
+              0.07826609266794406,
+              0.6255619085398568
+            ],
+            "b": [
+              1.3620879999840083,
+              0.09247917422634809,
+              -0.45456717421035625,
+              -0.005011021076197438,
+              1.4673044375864701,
+              -0.46229341651027284,
+              -0.7839743646511448,
+              -0.22120900579132668,
+              2.005183370442471
+            ]
+          },
+          "clarity": 0,
+          "hdrGain": 1,
+          "toneUsesSourceLuminance": true,
+          "vertexWarp": [
+            {
+              "lighterHue": 0,
+              "monochromeResponse": 0,
+              "chroma": 1,
+              "lightness": 0,
+              "rotation": 0,
+              "darkerHue": 0
+            },
+            {
+              "lighterHue": 0,
+              "monochromeResponse": 0,
+              "chroma": 1,
+              "lightness": 0,
+              "rotation": 0,
+              "darkerHue": 0
+            },
+            {
+              "lighterHue": 0,
+              "monochromeResponse": 0,
+              "chroma": 1,
+              "lightness": 0,
+              "rotation": 0,
+              "darkerHue": 0
+            },
+            {
+              "lighterHue": 0,
+              "monochromeResponse": 0,
+              "chroma": 1,
+              "lightness": 0,
+              "rotation": 0,
+              "darkerHue": 0
+            },
+            {
+              "lighterHue": 0,
+              "monochromeResponse": 0,
+              "chroma": 1,
+              "lightness": 0,
+              "rotation": 0,
+              "darkerHue": 0
+            },
+            {
+              "lighterHue": 0,
+              "monochromeResponse": 0,
+              "chroma": 1,
+              "lightness": 0,
+              "rotation": 0,
+              "darkerHue": 0
+            },
+            {
+              "lighterHue": 0,
+              "monochromeResponse": 0,
+              "chroma": 1,
+              "lightness": 0,
+              "rotation": 0,
+              "darkerHue": 0
+            }
+          ],
+          "color": {
+            "luminanceSaturationStart": 1,
+            "saturationStart": 1,
+            "colorChrome": false,
+            "saturationHDR": 1,
+            "monochrome": false,
+            "saturationEnd": 1,
+            "saturationMid": 1,
+            "luminanceSaturationEnd": 1,
+            "luminanceSaturationMid": 1,
+            "splitTone": {
+              "highlightHue": 40,
+              "nodes": [],
+              "shadowAmount": 0,
+              "amountCurveA": 0,
+              "shadowHue": 220,
+              "highlightAmount": 0
+            },
+            "luminanceSaturationHDR": 1
+          },
+          "white": 0.5,
+          "tonePosition": 0.1,
+          "vignette": {
+            "amount": 1.990818886861314,
+            "spread": 1
+          },
+          "channelContrast": [
+            0,
+            0,
+            0
+          ],
+          "hdrRolloff": 0,
+          "hdfRadius": 50,
+          "grain": {
+            "offset": -0.1013058850364964,
+            "colorScale": 1,
+            "strength": 2,
+            "size": 1,
+            "output": "additive"
+          },
+          "hdf": 0.05158783783783784
+        },
+        "colorSpace": "Display P3",
+        "snapshots": []
+      },
+      "parent": "AFC04380-381B-4F4E-B923-0DD066AEC7AD",
+      "selection": {
+        "color": true,
+        "whiteBalance": true,
+        "effects": true,
+        "items": [
+          "contrast",
+          "dyeResponse",
+          "skew",
+          "hdf",
+          "vignette",
+          "grain"
+        ],
+        "raw": true,
+        "tone": true
+      },
+      "name": "CCD M9",
+      "id": "7F28BBEC-267D-4203-A20B-DA3EC1307B9C"
+    },
+    {
+      "recipe": {
+        "version": 1,
+        "mapping": {
+          "storedContrastDistribution": {
+            "white": 0.18509861680327866,
+            "highlightWidth": 0.2519211065573771,
+            "black": 0,
+            "shadowWidth": 0.39830942622950816
+          },
+          "hdrTarget": 4.313261765913537,
+          "badHDR": {
+            "strength": 0,
+            "radius": 1
+          },
+          "halation": {
+            "inputCurve": 0,
+            "radius": 0.75,
+            "transmission": 0.2
+          },
+          "whiteBalance": {
+            "blue": 1,
+            "red": 1,
+            "green": 1
+          },
+          "hls": [
+            {
+              "highlightHue": 0,
+              "saturation": 1,
+              "lightness": 0,
+              "shadowHue": 0,
+              "midtoneHue": 0
+            },
+            {
+              "highlightHue": 0,
+              "saturation": 1,
+              "lightness": 0,
+              "shadowHue": 0,
+              "midtoneHue": 0
+            },
+            {
+              "highlightHue": 0,
+              "saturation": 1,
+              "lightness": 0,
+              "shadowHue": 0,
+              "midtoneHue": 0
+            },
+            {
+              "highlightHue": 0,
+              "saturation": 1,
+              "lightness": 0,
+              "shadowHue": 0,
+              "midtoneHue": 0
+            },
+            {
+              "highlightHue": 0,
+              "saturation": 1,
+              "lightness": 0,
+              "shadowHue": 0,
+              "midtoneHue": 0
+            },
+            {
+              "highlightHue": 0,
+              "saturation": 1,
+              "lightness": 0,
+              "shadowHue": 0,
+              "midtoneHue": 0
+            }
+          ],
+          "concentration": 0.3,
+          "blackAndWhite": {
+            "blue": 1,
+            "red": 1,
+            "yellow": 1,
+            "green": 1,
+            "cyan": 1,
+            "isEnabled": false
+          },
+          "clarityRadius": 30,
+          "dyeMixers": {
+            "generation": {
+              "strength": 65535,
+              "seed": 5592339677679514295
+            },
+            "a": [
+              0.7048679485037747,
+              0.235423275702923,
+              0.05970877579330232,
+              0.17861035911162926,
+              0.7831543009931748,
+              0.03823533989519592,
+              0.31688570406306077,
+              0.2504305034108864,
+              0.43268379252605277
+            ],
+            "b": [
+              1.657814039417812,
+              -0.4575905743890854,
+              -0.20022346502872668,
+              -0.2279481728415289,
+              1.2306324995621887,
+              -0.0026843267206597852,
+              -1.1947178795033746,
+              -0.28719516271207174,
+              2.4819130422154467
+            ]
+          },
+          "clarity": 0.3,
+          "hdrGain": 1,
+          "toneUsesSourceLuminance": true,
+          "vertexWarp": [
+            {
+              "darkerHue": 0,
+              "lighterHue": 0,
+              "chroma": 0,
+              "hueOffset": 0,
+              "lightness": 0,
+              "rotation": 0,
+              "monochromeResponse": 0
+            },
+            {
+              "darkerHue": 0,
+              "lighterHue": 0,
+              "chroma": 0,
+              "hueOffset": 0,
+              "lightness": 0,
+              "rotation": 0,
+              "monochromeResponse": 0
+            },
+            {
+              "darkerHue": 0,
+              "lighterHue": 0,
+              "chroma": 0,
+              "hueOffset": 0,
+              "lightness": 0,
+              "rotation": 0,
+              "monochromeResponse": 0
+            },
+            {
+              "darkerHue": 0,
+              "lighterHue": 0,
+              "chroma": 0,
+              "hueOffset": 0,
+              "lightness": 0,
+              "rotation": 0,
+              "monochromeResponse": 0
+            },
+            {
+              "darkerHue": 0,
+              "lighterHue": 0,
+              "chroma": 0,
+              "hueOffset": 0,
+              "lightness": 0,
+              "rotation": 0,
+              "monochromeResponse": 0
+            },
+            {
+              "darkerHue": 0,
+              "lighterHue": 0,
+              "chroma": 0,
+              "hueOffset": 0,
+              "lightness": 0,
+              "rotation": 0,
+              "monochromeResponse": 0
+            },
+            {
+              "darkerHue": 0,
+              "lighterHue": 0,
+              "chroma": 0,
+              "hueOffset": 0,
+              "lightness": 0,
+              "rotation": 0,
+              "monochromeResponse": 0
+            }
+          ],
+          "color": {
+            "luminanceSaturationStart": 1,
+            "saturationStart": 1,
+            "colorChrome": false,
+            "saturationHDR": 1,
+            "monochrome": true,
+            "saturationEnd": 1,
+            "saturationMid": 1,
+            "luminanceSaturationEnd": 1,
+            "luminanceSaturationMid": 1,
+            "splitTone": {
+              "highlightHue": 40,
+              "nodes": [],
+              "shadowAmount": 0,
+              "amountCurveA": 0,
+              "shadowHue": 220,
+              "highlightAmount": 0
+            },
+            "luminanceSaturationHDR": 1
+          },
+          "white": 0.5015530873493976,
+          "tonePosition": 0.1,
+          "vignette": {
+            "amount": 0,
+            "spread": 0.5
+          },
+          "channelContrast": [
+            -0.0714726796407186,
+            -0.13561002994011978,
+            0.06399700598802394
+          ],
+          "rawWhiteBalance": {
+            "tint": 0,
+            "temperature": 5500
+          },
+          "hdrRolloff": 0,
+          "hdfRadius": 100,
+          "grain": {
+            "offset": 0,
+            "colorScale": 0,
+            "strength": 2.3957858120437954,
+            "size": 2,
+            "output": "filmDensity"
+          },
+          "hdf": 0
+        },
+        "colorSpace": "Display P3",
+        "snapshots": []
+      },
+      "parent": "AFC04380-381B-4F4E-B923-0DD066AEC7AD",
+      "selection": {
+        "color": true,
+        "whiteBalance": true,
+        "effects": true,
+        "items": [
+          "rawWhiteBalance",
+          "vertices",
+          "dyeResponse",
+          "whitePoint",
+          "skew",
+          "clarity",
+          "grain",
+          "contrast"
+        ],
+        "raw": true,
+        "tone": true
+      },
+      "name": "Film B&W Ying 100",
+      "id": "F2C5A3AA-9E17-4AAC-BA0A-75F30978B76B"
+    },
+    {
+      "recipe": {
+        "version": 1,
+        "mapping": {
+          "storedContrastDistribution": {
+            "white": 0,
+            "highlightWidth": 0.06109118852459017,
+            "black": 0,
+            "shadowWidth": 1
+          },
+          "hdrTarget": 3.4389014179135993,
+          "badHDR": {
+            "strength": 0,
+            "radius": 1
+          },
+          "halation": {
+            "inputCurve": 0.1995213963963964,
+            "radius": 0.5,
+            "transmission": 0.2
+          },
+          "whiteBalance": {
+            "blue": 1,
+            "red": 1,
+            "green": 1
+          },
+          "hls": [
+            {
+              "highlightHue": 0,
+              "saturation": 1,
+              "lightness": 0,
+              "shadowHue": 0,
+              "midtoneHue": 0
+            },
+            {
+              "highlightHue": 0,
+              "saturation": 1,
+              "lightness": 0,
+              "shadowHue": 0,
+              "midtoneHue": 0
+            },
+            {
+              "highlightHue": 0,
+              "saturation": 1,
+              "lightness": 0,
+              "shadowHue": 0,
+              "midtoneHue": 0
+            },
+            {
+              "highlightHue": 0,
+              "saturation": 1,
+              "lightness": 0,
+              "shadowHue": 0,
+              "midtoneHue": 0
+            },
+            {
+              "highlightHue": 0,
+              "saturation": 1,
+              "lightness": 0,
+              "shadowHue": 0,
+              "midtoneHue": 0
+            },
+            {
+              "highlightHue": 0,
+              "saturation": 1,
+              "lightness": 0,
+              "shadowHue": 0,
+              "midtoneHue": 0
+            }
+          ],
+          "concentration": 0.2,
+          "blackAndWhite": {
+            "blue": 1,
+            "red": 1,
+            "yellow": 1,
+            "green": 1,
+            "cyan": 1,
+            "isEnabled": false
+          },
+          "clarityRadius": 30,
+          "dyeMixers": {
+            "generation": {
+              "strength": 50120,
+              "seed": 2359270533125727074
+            },
+            "a": [
+              0.7609171729167313,
+              0.2204389114134638,
+              0.018643915669804847,
+              0.061473340271469286,
+              0.72519397172967,
+              0.2133326879988606,
+              0.16157930972256848,
+              0.22900629434118303,
+              0.6094143959362485
+            ],
+            "b": [
+              1.2510354541189366,
+              -0.3543917629975923,
+              0.10335630887865599,
+              0.1016016524892616,
+              1.3450118714809598,
+              -0.4466135239702212,
+              -0.37310316565198326,
+              -0.32934214047840077,
+              1.702445306130384
+            ]
+          },
+          "clarity": 0,
+          "storedDyePurity": [
+            0.8700879491017964,
+            0.8352357784431138,
+            0.6963884730538922
+          ],
+          "hdrGain": 1,
+          "toneUsesSourceLuminance": true,
+          "vertexWarp": [
+            {
+              "lighterHue": 0,
+              "monochromeResponse": 0,
+              "chroma": 1,
+              "lightness": 0,
+              "rotation": 0,
+              "darkerHue": 0
+            },
+            {
+              "lighterHue": 0,
+              "monochromeResponse": 0,
+              "chroma": 1,
+              "lightness": 0,
+              "rotation": 0,
+              "darkerHue": 0
+            },
+            {
+              "lighterHue": 0,
+              "monochromeResponse": 0,
+              "chroma": 1,
+              "lightness": 0,
+              "rotation": 0,
+              "darkerHue": 0
+            },
+            {
+              "lighterHue": 0,
+              "monochromeResponse": 0,
+              "chroma": 1,
+              "lightness": 0,
+              "rotation": 0,
+              "darkerHue": 0
+            },
+            {
+              "lighterHue": 0,
+              "monochromeResponse": 0,
+              "chroma": 1,
+              "lightness": 0,
+              "rotation": 0,
+              "darkerHue": 0
+            },
+            {
+              "lighterHue": 0,
+              "monochromeResponse": 0,
+              "chroma": 1,
+              "lightness": 0,
+              "rotation": 0,
+              "darkerHue": 0
+            },
+            {
+              "lighterHue": 0,
+              "monochromeResponse": 0,
+              "chroma": 1,
+              "lightness": 0,
+              "rotation": 0,
+              "darkerHue": 0
+            }
+          ],
+          "color": {
+            "luminanceSaturationStart": 1,
+            "saturationStart": 1,
+            "colorChrome": false,
+            "saturationHDR": 1,
+            "monochrome": false,
+            "saturationEnd": 1,
+            "saturationMid": 1,
+            "luminanceSaturationEnd": 1,
+            "luminanceSaturationMid": 1,
+            "splitTone": {
+              "highlightHue": 40,
+              "nodes": [],
+              "shadowAmount": 0,
+              "amountCurveA": 0,
+              "shadowHue": 220,
+              "highlightAmount": 0
+            },
+            "luminanceSaturationHDR": 1
+          },
+          "white": 0.5,
+          "tonePosition": 0.1,
+          "vignette": {
+            "amount": 0,
+            "spread": 0.5
+          },
+          "channelContrast": [
+            0.013211077844311386,
+            -0.006399700598802405,
+            -0.017103293413173654
+          ],
+          "hdrRolloff": 0,
+          "hdfRadius": 100,
+          "grain": {
+            "offset": 0,
+            "colorScale": 0.5307652828467153,
+            "strength": 4.232008439781022,
+            "size": 3,
+            "output": "filmDensity"
+          },
+          "hdf": 0
+        },
+        "colorSpace": "Display P3",
+        "snapshots": []
+      },
+      "parent": "AFC04380-381B-4F4E-B923-0DD066AEC7AD",
+      "selection": {
+        "color": true,
+        "whiteBalance": true,
+        "effects": true,
+        "items": [
+          "halation",
+          "contrast",
+          "vertices",
+          "dyeResponse",
+          "skew",
+          "grain"
+        ],
+        "raw": true,
+        "tone": true
+      },
+      "name": "Film Ishigaki 200",
+      "id": "E219A214-AA67-492B-B548-D8D8B0DCAB24"
+    },
+    {
+      "recipe": {
+        "version": 1,
+        "mapping": {
+          "hdrTarget": 4.430933542497788,
+          "badHDR": {
+            "strength": 0,
+            "radius": 1
+          },
+          "halation": {
+            "inputCurve": 0,
+            "radius": 0.75,
+            "transmission": 0.2
+          },
+          "whiteBalance": {
+            "blue": 1,
+            "red": 1,
+            "green": 1
+          },
+          "hls": [
+            {
+              "highlightHue": 0,
+              "saturation": 1,
+              "lightness": 0,
+              "shadowHue": 0,
+              "midtoneHue": 0
+            },
+            {
+              "highlightHue": 0,
+              "saturation": 1,
+              "lightness": 0,
+              "shadowHue": 0,
+              "midtoneHue": 0
+            },
+            {
+              "highlightHue": 0,
+              "saturation": 1,
+              "lightness": 0,
+              "shadowHue": 0,
+              "midtoneHue": 0
+            },
+            {
+              "highlightHue": 0,
+              "saturation": 1,
+              "lightness": 0,
+              "shadowHue": 0,
+              "midtoneHue": 0
+            },
+            {
+              "highlightHue": 0,
+              "saturation": 1,
+              "lightness": 0,
+              "shadowHue": 0,
+              "midtoneHue": 0
+            },
+            {
+              "highlightHue": 0,
+              "saturation": 1,
+              "lightness": 0,
+              "shadowHue": 0,
+              "midtoneHue": 0
+            }
+          ],
+          "concentration": 0.29514712591240877,
+          "blackAndWhite": {
+            "blue": 1,
+            "red": 1,
+            "yellow": 1,
+            "green": 1,
+            "cyan": 1,
+            "isEnabled": false
+          },
+          "clarityRadius": 30,
+          "dyeMixers": {
+            "generation": {
+              "strength": 50120,
+              "seed": 14239775267529494224
+            },
+            "a": [
+              0.5235820447303061,
+              0.15426302129183617,
+              0.32215493397785777,
+              0.026566427462939985,
+              0.8638484939886533,
+              0.10958507854840674,
+              0.17718833359692324,
+              0.22200730460241386,
+              0.6008043618006629
+            ],
+            "b": [
+              2.3717122019713184,
+              -0.04077468882892033,
+              -1.3309375131423982,
+              0.08535893234545679,
+              0.997867775460491,
+              -0.0832267078059476,
+              -0.7041085653986099,
+              -0.42007078289261207,
+              2.1241793482912223
+            ]
+          },
+          "clarity": 0,
+          "hdrGain": 1,
+          "toneUsesSourceLuminance": true,
+          "vertexWarp": [
+            {
+              "lighterHue": 0,
+              "monochromeResponse": 0,
+              "chroma": 1,
+              "lightness": 0,
+              "rotation": 0,
+              "darkerHue": 0
+            },
+            {
+              "lighterHue": 0,
+              "monochromeResponse": 0,
+              "chroma": 1,
+              "lightness": 0,
+              "rotation": 0,
+              "darkerHue": 0
+            },
+            {
+              "lighterHue": 0,
+              "monochromeResponse": 0,
+              "chroma": 1,
+              "lightness": 0,
+              "rotation": 0,
+              "darkerHue": 0
+            },
+            {
+              "lighterHue": 0,
+              "monochromeResponse": 0,
+              "chroma": 1,
+              "lightness": 0,
+              "rotation": 0,
+              "darkerHue": 0
+            },
+            {
+              "lighterHue": 0,
+              "monochromeResponse": 0,
+              "chroma": 1,
+              "lightness": 0,
+              "rotation": 0,
+              "darkerHue": 0
+            },
+            {
+              "lighterHue": 0,
+              "monochromeResponse": 0,
+              "chroma": 1,
+              "lightness": 0,
+              "rotation": 0,
+              "darkerHue": 0
+            },
+            {
+              "lighterHue": 0,
+              "monochromeResponse": 0,
+              "chroma": 1,
+              "lightness": 0,
+              "rotation": 0,
+              "darkerHue": 0
+            }
+          ],
+          "color": {
+            "luminanceSaturationStart": 1,
+            "saturationStart": 1,
+            "colorChrome": false,
+            "saturationHDR": 1,
+            "monochrome": false,
+            "saturationEnd": 1,
+            "saturationMid": 1,
+            "luminanceSaturationEnd": 1,
+            "luminanceSaturationMid": 1,
+            "splitTone": {
+              "highlightHue": 40,
+              "nodes": [],
+              "shadowAmount": 0,
+              "amountCurveA": 0,
+              "shadowHue": 220,
+              "highlightAmount": 0
+            },
+            "luminanceSaturationHDR": 1
+          },
+          "white": 0.5,
+          "tonePosition": 0.1,
+          "vignette": {
+            "amount": 0,
+            "spread": 0.5
+          },
+          "channelContrast": [
+            0,
+            0,
+            0
+          ],
+          "hdrRolloff": 0,
+          "hdfRadius": 100,
+          "grain": {
+            "offset": -0.15887317518248179,
+            "colorScale": 0.5,
+            "strength": 2.834169708029197,
+            "size": 2,
+            "output": "additive"
+          },
+          "hdf": 0
+        },
+        "colorSpace": "Display P3",
+        "snapshots": []
+      },
+      "parent": "AFC04380-381B-4F4E-B923-0DD066AEC7AD",
+      "selection": {
+        "color": true,
+        "whiteBalance": true,
+        "effects": true,
+        "items": [
+          "skew",
+          "vertices",
+          "grain",
+          "dyeResponse",
+          "contrast"
+        ],
+        "raw": true,
+        "tone": true
+      },
+      "name": "CCD Toyotomi Gold",
+      "id": "B43907C7-698F-4AA4-835E-41EA9085C298"
+    },
+    {
+      "recipe": {
+        "version": 1,
+        "mapping": {
+          "storedContrastDistribution": {
+            "white": 0,
+            "highlightWidth": 0,
+            "black": 0,
+            "shadowWidth": 0
+          },
+          "hdrTarget": 5.238624407639366,
+          "badHDR": {
+            "strength": 0,
+            "radius": 1
+          },
+          "halation": {
+            "inputCurve": 0.11875,
+            "radius": 0.5,
+            "transmission": 0.2
+          },
+          "whiteBalance": {
+            "blue": 1,
+            "red": 1,
+            "green": 1
+          },
+          "hls": [
+            {
+              "highlightHue": 0,
+              "saturation": 1,
+              "lightness": 0,
+              "shadowHue": 0,
+              "midtoneHue": 0
+            },
+            {
+              "highlightHue": 0,
+              "saturation": 1,
+              "lightness": 0,
+              "shadowHue": 0,
+              "midtoneHue": 0
+            },
+            {
+              "highlightHue": 0,
+              "saturation": 1,
+              "lightness": 0,
+              "shadowHue": 0,
+              "midtoneHue": 0
+            },
+            {
+              "highlightHue": 0,
+              "saturation": 1,
+              "lightness": 0,
+              "shadowHue": 0,
+              "midtoneHue": 0
+            },
+            {
+              "highlightHue": 0,
+              "saturation": 1,
+              "lightness": 0,
+              "shadowHue": 0,
+              "midtoneHue": 0
+            },
+            {
+              "highlightHue": 0,
+              "saturation": 1,
+              "lightness": 0,
+              "shadowHue": 0,
+              "midtoneHue": 0
+            }
+          ],
+          "concentration": 0.27707002737226283,
+          "blackAndWhite": {
+            "blue": 1,
+            "red": 1,
+            "yellow": 1,
+            "green": 1,
+            "cyan": 1,
+            "isEnabled": false
+          },
+          "clarityRadius": 30,
+          "dyeMixers": {
+            "generation": {
+              "strength": 65535,
+              "seed": 1108463006706059527
+            },
+            "a": [
+              0.9297939598208095,
+              0.020777760128660186,
+              0.049428280050530335,
+              0.2332179128501055,
+              0.7405564481941558,
+              0.02622563895573871,
+              0.13629568989764662,
+              0.34566600893700666,
+              0.5180383011653467
+            ],
+            "b": [
+              1.211109882309476,
+              0.06386877956486402,
+              -0.2749786618743401,
+              -0.46832403271376793,
+              1.4145082296429576,
+              0.053815803070809874,
+              -0.1477947165466572,
+              -1.126241988390187,
+              2.2740367049368446
+            ]
+          },
+          "clarity": 0,
+          "storedDyePurity": [
+            0.8740409805389222,
+            0.8948119386227545,
+            0.925594124251497
+          ],
+          "hdrGain": 1,
+          "toneUsesSourceLuminance": true,
+          "vertexWarp": [
+            {
+              "lighterHue": 0,
+              "monochromeResponse": 0,
+              "chroma": 1,
+              "lightness": 0,
+              "rotation": 0,
+              "darkerHue": 0
+            },
+            {
+              "lighterHue": 0,
+              "monochromeResponse": 0,
+              "chroma": 1,
+              "lightness": 0,
+              "rotation": 0,
+              "darkerHue": 0
+            },
+            {
+              "lighterHue": 0,
+              "monochromeResponse": 0,
+              "chroma": 1,
+              "lightness": 0,
+              "rotation": 0,
+              "darkerHue": 0
+            },
+            {
+              "lighterHue": 0,
+              "monochromeResponse": 0,
+              "chroma": 1,
+              "lightness": 0,
+              "rotation": 0,
+              "darkerHue": 0
+            },
+            {
+              "lighterHue": 0,
+              "monochromeResponse": 0,
+              "chroma": 1,
+              "lightness": 0,
+              "rotation": 0,
+              "darkerHue": 0
+            },
+            {
+              "lighterHue": 0,
+              "monochromeResponse": 0,
+              "chroma": 1,
+              "lightness": 0,
+              "rotation": 0,
+              "darkerHue": 0
+            },
+            {
+              "lighterHue": 0,
+              "monochromeResponse": 0,
+              "chroma": 1,
+              "lightness": 0,
+              "rotation": 0,
+              "darkerHue": 0
+            }
+          ],
+          "color": {
+            "luminanceSaturationStart": 1,
+            "saturationStart": 1,
+            "colorChrome": false,
+            "saturationHDR": 1,
+            "monochrome": false,
+            "saturationEnd": 1,
+            "saturationMid": 1,
+            "luminanceSaturationEnd": 1,
+            "luminanceSaturationMid": 1,
+            "splitTone": {
+              "highlightHue": 40,
+              "nodes": [],
+              "shadowAmount": 0,
+              "amountCurveA": 0,
+              "shadowHue": 220,
+              "highlightAmount": 0
+            },
+            "luminanceSaturationHDR": 1
+          },
+          "white": 0.5,
+          "tonePosition": 0.05,
+          "vignette": {
+            "amount": 0,
+            "spread": 0.5
+          },
+          "channelContrast": [
+            0,
+            0,
+            0
+          ],
+          "hdrRolloff": 0,
+          "hdfRadius": 100,
+          "grain": {
+            "offset": 0,
+            "colorScale": 0.5,
+            "strength": 2,
+            "size": 2,
+            "output": "filmDensity"
+          },
+          "hdf": 0
+        },
+        "colorSpace": "Display P3",
+        "snapshots": []
+      },
+      "parent": "AFC04380-381B-4F4E-B923-0DD066AEC7AD",
+      "selection": {
+        "color": true,
+        "whiteBalance": true,
+        "effects": true,
+        "items": [
+          "tone",
+          "skew",
+          "contrast",
+          "dyeResponse",
+          "grain",
+          "halation"
+        ],
+        "raw": true,
+        "tone": true
+      },
+      "name": "Film Beihai 100",
+      "id": "581BE950-4700-4A0C-9E5A-41685AF6FD82"
+    }
+  ]
+}

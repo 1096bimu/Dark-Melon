@@ -82,9 +82,7 @@ nonisolated final class LUTStore: @unchecked Sendable {
         }
         NotificationCenter.default.post(name: .lutConfigurationChanged, object: id)
     }
-    private let bundledDirectory: URL?
     init(directory: URL? = nil) {
-        bundledDirectory = Bundle.main.resourceURL
         self.directory = directory ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Dark Melon/LUTs", isDirectory: true)
         cache.totalCostLimit = 64 * 1024 * 1024
@@ -107,11 +105,7 @@ nonisolated final class LUTStore: @unchecked Sendable {
         loadLock.lock()
         defer { loadLock.unlock() }
         let local = url(for: id)
-        let bundled = bundledDirectory.map { root in
-            let folder = root.appendingPathComponent("BundledLUTs").appendingPathComponent(local.lastPathComponent)
-            return FileManager.default.fileExists(atPath: folder.path) ? folder : root.appendingPathComponent(local.lastPathComponent)
-        }
-        let url = FileManager.default.fileExists(atPath: local.path) ? local : bundled ?? local
+        let url = local
         guard FileManager.default.fileExists(atPath: url.path) else {
             cache.removeObject(forKey: id as NSUUID)
             return nil

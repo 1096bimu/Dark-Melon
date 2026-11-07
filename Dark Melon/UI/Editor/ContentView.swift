@@ -133,6 +133,7 @@ struct ContentView: View {
     @State private var resettingTone = false
     @State private var browserModel = ImageBrowserModel(remembersFolder: true)
     @State private var showingFileBrowser = true
+    @State private var libraryFolder: UUID?
     @AppStorage("leftPanel.library") private var showingLibrary = false
     #if os(macOS)
     @State private var showingBatchExport = false
@@ -525,7 +526,7 @@ struct ContentView: View {
     private var libraryPanel: some View {
         GeometryReader { geometry in
             VStack(spacing: EditorSectionLayout.spacing) {
-                EditLibraryView(current: comparingMultiple || development == nil || loading ? nil : currentRecipe, selectedLUT: $mapping.lutID, filename: filename) { name, recipe, selection in
+                EditLibraryView(folder: $libraryFolder, current: comparingMultiple || development == nil || loading ? nil : currentRecipe, selectedLUT: $mapping.lutID, filename: filename) { name, recipe, selection in
                     commitHistory()
                     confirmingPreset = PresetApplication(name: name, recipe: recipe, selection: selection)
                 }.disabled(comparingMultiple)

@@ -259,6 +259,7 @@ struct SettingsPasteOptions: View {
     var title: LocalizedStringKey = "Paste Settings"
     var actionTitle: LocalizedStringKey = "Paste"
     var selectingLock = false
+    var initialSelection: SettingsPasteSelection? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var selection: SettingsPasteSelection = {
         let defaults = UserDefaults.standard
@@ -325,7 +326,9 @@ struct SettingsPasteOptions: View {
             .toggleStyle(.checkbox)
             #endif
             .onAppear {
-                if selectingLock {
+                if let initialSelection {
+                    selection = initialSelection
+                } else if selectingLock {
                     if let data = UserDefaults.standard.data(forKey: selectionPreferenceKey),
                        let saved = try? JSONDecoder().decode(SettingsPasteSelection.self, from: data) {
                         selection = FilmSettings.restoredSelection(saved)
@@ -335,6 +338,7 @@ struct SettingsPasteOptions: View {
                 }
             }
             .onChange(of: selection) { _, value in
+                guard initialSelection == nil else { return }
                 if let data = try? JSONEncoder().encode(value) {
                     UserDefaults.standard.set(data, forKey: selectionPreferenceKey)
                 }
