@@ -14,7 +14,7 @@ struct FilmGrainControls: View {
             }
             HStack {
                 Image(systemName: "circle.bottomrighthalf.pattern.checkered").frame(width: 22).accessibilityHidden(true)
-                EditorSlider(value: $settings.strength, in: 0...2.5, label: { Text(strengthTitle) })
+                EditorSlider(value: $settings.strength, in: 0...10, label: { Text(strengthTitle) })
                     .controlReset { settings.strength = defaults.grain.strength }.labelsHidden()
             }
             if settings.output == .additive {

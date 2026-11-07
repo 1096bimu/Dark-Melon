@@ -48,7 +48,7 @@ struct ChromaticAberrationSliders: View {
             }
             HStack {
                 Circle().fill(color).frame(width: 12, height: 12).frame(width: 22).accessibilityHidden(true)
-                EditorSlider(value: value, in: -1...1, label: { Text(title) })
+                EditorSlider(value: value, in: -0.1...0.1, label: { Text(title) })
                     .controlReset { value.wrappedValue = reset }.labelsHidden()
             }
         }

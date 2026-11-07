@@ -7,10 +7,12 @@ struct BatchExportView: View {
     var film: FilmSettings? = nil
     var recipeOverrides: [URL: DevelopmentRecipe] = [:]
     var pendingURLs: Set<URL> = []
+    var initialFiles: [URL] = []
     let queue: ExportQueue
     @Environment(\.dismiss) private var dismiss
     @State private var browser = ImageBrowserModel()
     @State private var selection: Set<URL> = []
+    @State private var preparedInitialSelection = false
     @State private var settings = HEIFSettings.restored()
     @State private var sample: RAWDevelopment?
     @State private var sampleRecipe: DevelopmentRecipe?
@@ -34,7 +36,7 @@ struct BatchExportView: View {
                     if busy { job?.cancel() } else { dismiss() }
                 }
                 .keyboardShortcut(.cancelAction)
-                Button("Export Selected…", action: prepareOptions)
+                Button("Export Selected…", action: { prepareOptions() })
                     .buttonStyle(.borderedProminent)
                     .keyboardShortcut(.defaultAction)
                     .disabled(busy || selection.isEmpty || browser.loading)
@@ -58,6 +60,12 @@ struct BatchExportView: View {
         .frame(minWidth: 600, minHeight: 500)
         .interactiveDismissDisabled(busy)
         .task { browser.choose(directory) }
+        .onChange(of: browser.loading) { _, loading in
+            guard !loading, browser.error == nil, !preparedInitialSelection, !initialFiles.isEmpty else { return }
+            preparedInitialSelection = true
+            selection = Set(initialFiles)
+            prepareOptions(initialFiles)
+        }
         .onDisappear { job?.cancel() }
         .onChange(of: settings) { _, value in value.remember() }
         .sheet(isPresented: $showingOptions, onDismiss: {
@@ -78,9 +86,9 @@ struct BatchExportView: View {
         }
     }
 
-    private func prepareOptions() {
+    private func prepareOptions(_ requestedFiles: [URL]? = nil) {
         settings.scale = min(1, max(0.25, (settings.scale * 20).rounded() / 20))
-        sources = browser.batchFiles.filter { selection.contains($0.url) }.map(\.url)
+        sources = requestedFiles ?? browser.batchFiles.filter { selection.contains($0.url) }.map(\.url)
         guard !sources.isEmpty else { return }
         busy = true; completed = 0; failures = []; status = String(localized: "Preparing export settings…")
         let capturedFilm = film

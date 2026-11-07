@@ -4,7 +4,10 @@ import ImageIO
 
 @main struct LegacyRecipeMigrationChecks {
     @MainActor static func main() async throws {
+        precondition(ToneMapping().tonePosition == 0.10)
+        precondition(ToneMapping.fresh(isRAW: true, sourceHeadroom: 1).tonePosition == 0.10)
         var original = DevelopmentRecipe(colorSpace: .displayP3, mapping: ToneMapping())
+        original.mapping.tonePosition = 0.04 // Explicit old edits must survive the new default.
         precondition(FilmGrainSettings().output == .additive)
         precondition(ToneMapping.fresh(isRAW: false, sourceHeadroom: 1).grain.output == .additive)
         original.mapping.grain.output = .filmDensity

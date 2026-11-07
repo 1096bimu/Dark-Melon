@@ -33,7 +33,7 @@ nonisolated struct ToneMapping: Codable, Equatable, Sendable {
     var halation = HalationSettings()
     var vignette = VignetteSettings()
     var white = 0.5
-    var tonePosition = 0.040
+    var tonePosition = 0.10
     var toneUsesSourceLuminance = true
     var peakPosition: Double { tonePosition }
     var concentration = 0.2

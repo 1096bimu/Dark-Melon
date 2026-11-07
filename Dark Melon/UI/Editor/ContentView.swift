@@ -136,6 +136,7 @@ struct ContentView: View {
     @AppStorage("leftPanel.library") private var showingLibrary = false
     #if os(macOS)
     @State private var showingBatchExport = false
+    @State private var batchExportFiles: [URL] = []
     @State private var exportQueue = ExportQueue.shared
     @State private var pendingSingleExport: (plan: ExportPlan, worker: RAWDeveloper)?
     @State private var exportPresentationWindow: NSWindow?
@@ -955,9 +956,7 @@ struct ContentView: View {
             .focusedSceneValue(\.showLUTVisualizer, comparingMultiple || development == nil || loading ? nil : { lutVisualizer.open(lutVisualizerInput) })
             .onChange(of: lutVisualizerInput) { _, input in lutVisualizer.update(input) }
             .onDisappear { lutVisualizer.close() }
-            #if DEBUG
             .focusedSceneValue(\.variationExport, comparingMultiple || development == nil || loading ? nil : { beginExportOptions(variation: true) })
-            #endif
             .focusedSceneValue(\.batchExport, browserModel.directory == nil ? nil : { showingBatchExport = true })
             #endif
     }
@@ -1230,8 +1229,11 @@ struct ContentView: View {
             #endif
             .navigationTitle("")
             #if os(macOS)
-            .sheet(isPresented: $showingBatchExport) {
-                if let directory = browserModel.directory { BatchExportView(directory: directory, film: lockedFilm, recipeOverrides: batchRecipeOverrides, pendingURLs: browserPendingURLs, queue: exportQueue) }
+            .sheet(isPresented: $showingBatchExport, onDismiss: { batchExportFiles = [] }) {
+                if let directory = browserModel.directory ?? batchExportFiles.first?.deletingLastPathComponent() {
+                    BatchExportView(directory: directory, film: lockedFilm, recipeOverrides: batchRecipeOverrides,
+                        pendingURLs: browserPendingURLs, initialFiles: batchExportFiles, queue: exportQueue)
+                }
             }
             #endif
             .sheet(isPresented: $showingFilmLock) {
@@ -1881,9 +1883,15 @@ struct ContentView: View {
         return {
             guard let sourceURL else { return }
             do {
-                activeRAWBalance.wrappedValue = try resetDefaults.mapping.rawWhiteBalance ?? RAWWhiteBalance.asShot(activeRAWURL ?? sourceURL)
-                mapping.whiteBalance = resetDefaults.mapping.whiteBalance
-                commitRAWWhiteBalance()
+                let rawLocked = lockedFilm?.selection.contains(.rawWhiteBalance) == true
+                let rgbLocked = lockedFilm?.selection.contains(.rgbWhiteBalance) == true
+                guard !rawLocked || !rgbLocked else { return }
+                if !rawLocked {
+                    activeRAWBalance.wrappedValue = try resetDefaults.mapping.rawWhiteBalance ?? RAWWhiteBalance.asShot(activeRAWURL ?? sourceURL)
+                }
+                if !rgbLocked { mapping.whiteBalance = resetDefaults.mapping.whiteBalance }
+                if rawLocked { commitHistory() }
+                else { commitRAWWhiteBalance() }
             } catch { errorMessage = error.localizedDescription }
         }
     }
@@ -2155,6 +2163,14 @@ struct ContentView: View {
         guard !fileActionBusy, !urls.isEmpty else { return }
         if action == .doubleExposure { createDoubleExposure(urls); return }
         if action == .deleteEdit { deleteEditURLs = urls; return }
+        if action == .export {
+            if urls.count == 1 { performFileAction(.export, urls[0]); return }
+            #if os(macOS)
+            batchExportFiles = urls
+            showingBatchExport = true
+            #endif
+            return
+        }
         do {
             pastedSettings = try SettingsClipboard.read()
             pasteEditURLs = urls

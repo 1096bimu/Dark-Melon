@@ -9,7 +9,6 @@ import CoreImage
         let grain = try FilmGrain()
         let extent = CGRect(x: 0, y: 0, width: 512, height: 512)
         let seed = FilmGrain.seed(for: URL(fileURLWithPath: "/photos/density.dng"))
-        let additiveAmplitude = 0.0008505
         let densityAmplitude = 8 * 0.0008505
         func image(_ level: Double, alpha: Double = 1) -> CIImage {
             CIImage(color: CIColor(red: level, green: level, blue: level, alpha: alpha, colorSpace: space.linear)!)
@@ -40,18 +39,19 @@ import CoreImage
             let expected = positive(density(level))
             precondition(values.allSatisfy { abs($0-expected) < 2e-6 }, "Incorrect zero-noise response at \(level)")
         }
-        // Recover the centered field from Additive, then independently evaluate
-        // the requested density model at every pixel. This also proves that
-        // switching the output mode preserves the underlying RGB texture.
+        // Recover the Analogue field by inverting its density response.
         for color in [0.0, 0.5, 1] {
             settings.colorScale = color
             settings.strength = 1
-            settings.output = .additive
-            let reference = pixels(try grain.apply(to: image(0.18), settings: settings, seed: seed))
-            let blurredReference = pixels(image(0.18).clampedToExtent()
-                .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: settings.size/2]).cropped(to: extent))
-            let unit = zip(reference, blurredReference).map { Double($0-$1)/additiveAmplitude }
             settings.output = .filmDensity
+            let reference = pixels(try grain.apply(to: image(0.18), settings: settings, seed: seed))
+            let sourceReference = pixels(image(0.18).clampedToExtent()
+                .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: settings.size/2]).cropped(to: extent))
+            let unit = reference.indices.map { i -> Double in
+                if i%4 == 3 { return 0 }
+                let d = density(Double(sourceReference[i]))
+                return (-log1p(-Double(reference[i]))-d)/(densityAmplitude*sqrt(d))
+            }
             for level in [0.0, 0.04, 0.18, 0.65, 8, 10000] {
                 let actual = pixels(try grain.apply(to: image(level), settings: settings, seed: seed))
                 let source = pixels(image(level).clampedToExtent()

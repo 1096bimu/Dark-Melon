@@ -711,19 +711,19 @@
         }
       }
     },
-    "Align the red and blue transitions with green. The graph previews your adjustments; Apply rebuilds the source." : {
+    "Red and blue are aligned to green automatically when a clear edge is found. Fine-tune if needed; Apply rebuilds the source." : {
       "extractionState" : "manual",
       "localizations" : {
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "赤と青のエッジを緑に合わせます。グラフで調整を確認し、「適用」でソースを再生成します。"
+            "value" : "明確なエッジが見つかると、赤と青を緑に自動で合わせます。必要に応じて微調整し、「適用」でソースを再生成します。"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "将红色和蓝色的边缘与绿色对齐。图表预览调整结果；点击“应用”重新生成源图像。"
+            "value" : "检测到清晰边缘时，会自动将红色和蓝色与绿色对齐。可按需微调；点击“应用”重新生成源图像。"
           }
         }
       }
@@ -8963,7 +8963,6 @@
       }
     },
     "Variation Export…" : {
-      "extractionState" : "stale",
       "localizations" : {
         "ja" : {
           "stringUnit" : {

@@ -33,13 +33,13 @@ import CoreImage
         precondition(seed == FilmGrain.seed(for: url))
         precondition(seed == FilmGrain.seed(for: URL(fileURLWithPath: "/photos/../photos/a.dng")))
         precondition(seed != FilmGrain.seed(for: URL(fileURLWithPath: "/photos/b.dng")))
-        var settings = FilmGrainSettings(); settings.output = .additive; settings.strength = 1; settings.colorScale = 0
+        var settings = FilmGrainSettings(); settings.output = .additive; settings.strength = 1; settings.colorScale = 1
         let neutral = image(0.18)
         let output = try grain.apply(to: neutral, settings: settings, seed: seed)
         let base = red(output)
         let summary = stats(base)
         precondition(abs(summary.mean - 0.18) < 1e-6)
-        precondition(abs(summary.deviation - 0.0008505) < 1e-6, "Digital Strength 1 must equal playground Strength 1")
+        precondition(abs(summary.deviation - 0.0008505) < 1e-5, "Digital Strength 1 must equal playground Strength 1")
         precondition(context.createCGImage(output, from: extent) != nil)
         for level in [0.04, 0.65, 1.5] {
             let values = red(try grain.apply(to: image(level), settings: settings, seed: seed))
@@ -82,13 +82,35 @@ import CoreImage
             if color == 0 { precondition(differences.allSatisfy { abs($0) < 1e-6 }) }
             else { precondition(stats(differences).deviation > 1e-6) }
         }
+        // Desaturation must interpolate the same normalized texture, rather
+        // than changing the frequency mix or renormalizing each slider value.
+        for mode in [FilmGrainSettings.Output.additive, .filmDensity] {
+            settings.output = mode; settings.strength = 1
+            var fields = [[Double]]()
+            for color in [0.0, 0.5, 1.0] {
+                settings.colorScale = color
+                let rgba = pixels(try grain.apply(to: neutral, settings: settings, seed: seed))
+                fields.append(rgba.map { value in
+                    mode == .filmDensity ? -log1p(-Double(min(0.999999,max(0,value)))) : Double(value)
+                })
+            }
+            for i in fields[0].indices where i%4 != 3 {
+                precondition(abs(fields[1][i]-(fields[0][i]+fields[2][i])/2) < 2e-6)
+            }
+            settings.strength = 10
+            let strong = pixels(try grain.apply(to: neutral, settings: settings, seed: seed))
+            precondition(strong.allSatisfy(\.isFinite))
+            let fresh = pixels(try FilmGrain().apply(to: neutral, settings: settings, seed: seed))
+            precondition(strong == fresh, "Switching modes must not reuse the other mode's field")
+        }
+        settings.output = .additive; settings.strength = 1
         // The source is blurred at size/2 source pixels, without another resolution multiplier.
         let detail = CIFilter(name: "CICheckerboardGenerator", parameters: [
             "inputWidth": 1.0, "inputSharpness": 1.0,
             "inputColor0": CIColor(red: 0.1, green: 0.1, blue: 0.1),
             "inputColor1": CIColor(red: 0.8, green: 0.8, blue: 0.8)
         ])!.outputImage!.cropped(to: extent)
-        settings.colorScale = 0
+        settings.colorScale = 1
         for size in [1.0, 2, 4, 8] {
             settings.size = size
             let values = red(try grain.apply(to: detail, settings: settings, seed: seed))

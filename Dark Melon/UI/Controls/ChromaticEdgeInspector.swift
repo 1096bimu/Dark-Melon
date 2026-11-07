@@ -49,7 +49,12 @@ import AppKit
             do {
                 let result=try await sample(line)
                 try Task.checkCancellation()
-                profile=result;busy=false;redraw()
+                let current = draft
+                let aligned = await Task.detached(priority: .userInitiated) {
+                    result.automaticallyAligned(from: current)
+                }.value
+                try Task.checkCancellation()
+                draft=aligned;profile=result;busy=false;redraw()
             } catch is CancellationError {} catch { busy=false;message=error.localizedDescription;redraw() }
         }
     }
@@ -90,7 +95,7 @@ struct ChromaticEdgeInspector: View {
                     if editor.busy { ProgressView().controlSize(.small) }
                 }.font(.caption)
                 Toggle("Normalize Channels",isOn:$normalize)
-                Text("Align the red and blue transitions with green. The graph previews your adjustments; Apply rebuilds the source.")
+                Text("Red and blue are aligned to green automatically when a clear edge is found. Fine-tune if needed; Apply rebuilds the source.")
                     .font(.caption).foregroundStyle(.secondary)
                 if editor.drawing {
                     Text("Draw across a high-contrast edge. The line follows a radius from the image center.")

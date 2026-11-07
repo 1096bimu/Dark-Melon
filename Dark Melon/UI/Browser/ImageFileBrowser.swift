@@ -546,7 +546,14 @@ struct ImageFileBrowser: View {
                                                     else { fileAction(.pasteEdit, entry.url) }
                                                 }
                                                 Divider()
-                                                Button("Export…") { fileAction(.export, entry.url) }
+                                                Button("Export…") {
+                                                    #if os(macOS)
+                                                    if targets.count > 1, let multipleFileAction { multipleFileAction(.export, targets) }
+                                                    else { fileAction(.export, entry.url) }
+                                                    #else
+                                                    fileAction(.export, entry.url)
+                                                    #endif
+                                                }
                                             }
                                         }
                                     }

@@ -27,7 +27,7 @@ import CoreImage
             mapping.grain.strength = strength
             let image = source([0.04,0.3,0.7])
             let a = pixels(try film.apply(to: image, mapping: mapping))
-            let b = pixels(try grain.apply(to: image, settings: mapping.grain))
+            let b = pixels(try grain.apply(to: image, settings: mapping.grain, fog: mapping.analogueFog))
             precondition(a == b)
         }
         mapping.grain.strength = 0
@@ -40,11 +40,11 @@ import CoreImage
             let slopes = mapping.dyeContrastOffsets.map { 1+$0 }
             let densities = (0..<3).map { i -> Double in
                 let h = log(max(exposed[i],1e-30)/4)
-                return 0.0025+4/(1+exp(-h*slopes[i]))
+                return mapping.analogueFog+4/(1+exp(-h*slopes[i]))
             }
             let developed = (0..<3).map { i -> Double in
                 var d = densities[i]
-                for j in 0..<3 { d += 3*weights[i][j]*(1-mapping.dyePurity[j])*(densities[j]-densities[i]) }
+                for j in 0..<3 { d += 1.5*weights[i][j]*(1-mapping.dyePurity[j])*(densities[j]-densities[i]) }
                 return 1-exp(-max(0,d))
             }
             let expected = matrix(mapping.dyeMixers.b, developed)
@@ -64,7 +64,7 @@ import CoreImage
             let d = (0..<3).map { -log(1-Double(a[index+$0])) }
             for i in 0..<3 {
                 var mixed = d[i]
-                for j in 0..<3 { mixed += 3*weights[i][j]*(1-mapping.dyePurity[j])*(d[j]-d[i]) }
+                for j in 0..<3 { mixed += 1.5*weights[i][j]*(1-mapping.dyePurity[j])*(d[j]-d[i]) }
                 precondition(abs(Double(b[index+i])-(1-exp(-mixed))) < 3e-6)
             }
         }

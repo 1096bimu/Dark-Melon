@@ -51,7 +51,7 @@ struct ColorTemperatureControls: View {
       HStack(spacing: 8) {
         Text("Color Temperature").font(.headline)
         Spacer()
-        if monochrome, let reset { Button("Reset WB", action: reset) }
+        if monochrome, let reset { Button("Reset WB", action: reset).filmLock(.rawWhiteBalance) }
         if !monochrome, let convert {
           Button("Convert to WB", action: convert)
             .disabled(

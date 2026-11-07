@@ -38,6 +38,7 @@ nonisolated struct FilmGrainSettings: Codable, Equatable, Sendable {
 /// Source-linear Gaussian grain. Spatial shaping and luminance/chroma separation
 /// happen entirely on the GPU, before the shared SDR/HDR tone pipeline.
 nonisolated final class FilmGrain {
+    static let defaultFog = 0.0025
     private enum GrainError: LocalizedError {
         case kernel
         var errorDescription: String? { String(localized: "Unable to create the Film Grain processing kernels.") }
@@ -45,8 +46,7 @@ nonisolated final class FilmGrain {
     private struct FieldKey: Equatable {
         var seed: UInt32
         var scale: Double
-        var color: Double
-        var luminance: SIMD3<Double>
+        var analogue: Bool
     }
     private var fieldCache: (FieldKey, CIImage, CIImage, CIImage)?
     private let noise: CIKernel
@@ -81,32 +81,39 @@ nonisolated final class FilmGrain {
         float luminance=dot(band,luminanceWeights);
         return mix(float3(luminance),band,colorWeight);
     }
-    float3 filmDensity(float3 exposure, float3 slopes) {
+    float3 filmDensity(float3 exposure, float3 slopes, float fog) {
         float3 e=max(exposure,0.0);
         float3 neutral=e/(e+4.0);
         // Tilt the same saturating density curve in log exposure. All layer
-        // curves keep the original fog, midpoint (E=4), and maximum density.
+        // curves share fog, midpoint (E=4), and density range.
         float3 h=log(max(e,float3(1e-30))/4.0);
         float3 shaped=1.0/(1.0+exp(-clamp(h*slopes,-80.0,80.0)));
-        return 0.0025+4.0*select(shaped,neutral,slopes==1.0);
+        shaped=select(float3(0.0),shaped,e>0.0);
+        return fog+4.0*select(shaped,neutral,slopes==1.0);
+    }
+    float3 filmPositive(float3 density) {
+        // Adaptive fog can be far below one float ULP around 1. Avoid losing
+        // it to cancellation in 1-exp(-D), which later brightening magnifies.
+        float3 small=density*(1.0-density*(0.5-density/6.0));
+        return select(1.0-exp(-density),small,density<0.001);
     }
     float3 filmExposure(float3 rgb, float3 a0, float3 a1, float3 a2) {
         return max(float3(dot(a0,rgb),dot(a1,rgb),dot(a2,rgb)),0.0);
     }
-    float3 filmOutput(float3 exposed, float3 unit, float strength, float offset, float analogue,
+    float3 filmOutput(float3 exposed, float3 unit, float strength, float offset, float analogue, float fog,
                       float3 slopes, float3 purity, float3 b0, float3 b1, float3 b2) {
         float3 developed;
         if (analogue>0.5) {
-            float3 density=filmDensity(exposed,slopes);
+            float3 density=filmDensity(exposed,slopes,fog);
             density=max(density+8.0*strength*0.0008505*sqrt(density)*unit,0.0);
             // Cross-absorption acts on the noisy layers before transmission.
             // Convex mixing preserves neutral density and finite headroom.
-            float3 impurity=3.0*(1.0-purity);
+            float3 impurity=1.5*(1.0-purity);
             float3 mixed=density+float3(
                 0.08*impurity.g*(density.g-density.r)+0.03*impurity.b*(density.b-density.r),
                 0.16*impurity.r*(density.r-density.g)+0.10*impurity.b*(density.b-density.g),
                 0.06*impurity.r*(density.r-density.b)+0.20*impurity.g*(density.g-density.b));
-            developed=1.0-exp(-max(mixed,0.0));
+            developed=filmPositive(max(mixed,0.0));
         } else {
             float3 shifted=unit+3.0*offset;
             float3 oneSided=offset>=0.0 ? max(shifted,0.0):min(shifted,0.0);
@@ -114,12 +121,12 @@ nonisolated final class FilmGrain {
         }
         return max(float3(dot(b0,developed),dot(b1,developed),dot(b2,developed)),0.0);
     }
-    [[stitchable]] float4 grainResponse(sample_t picture, float analogue,
+    [[stitchable]] float4 grainResponse(sample_t picture, float analogue, float fog,
                                       float3 a0, float3 a1, float3 a2, float3 b0, float3 b1, float3 b2,
                                       float3 slopes, float3 purity) {
         float4 color=unpremultiply(picture);
         float3 exposed=filmExposure(color.rgb,a0,a1,a2);
-        color.rgb=filmOutput(exposed,float3(0.0),0.0,0.0,analogue,slopes,purity,b0,b1,b2);
+        color.rgb=filmOutput(exposed,float3(0.0),0.0,0.0,analogue,fog,slopes,purity,b0,b1,b2);
         return premultiply(color);
     }
     [[stitchable]] float4 grainWhite(float seed, destination dest) {
@@ -130,35 +137,30 @@ nonisolated final class FilmGrain {
         value.b=gaussianNoise(p,uint(seed)^0x02e5be93u);
         return float4(value,1.0);
     }
-    [[stitchable]] float4 grainMoments(sampler white, sampler small, sampler medium,
-                                     float colorScale, float3 luminanceWeights, destination dest) {
+    [[stitchable]] float4 grainMoments(sampler white, sampler small, float analogue, destination dest) {
         float2 p=dest.coord();
         float3 a=white.sample(white.transform(p)).rgb;
         float3 b=small.sample(small.transform(p)).rgb;
-        float3 c=medium.sample(medium.transform(p)).rgb;
-        // Three telescoping bands; no fourth blur or very-coarse stage.
-        float3 color=1.0-smoothstep(float3(0.0,1.0/3.0,2.0/3.0),
-                                 float3(1.0/3.0,2.0/3.0,1.0),float3(1.0-colorScale));
-        float3 value=colorBand(a-b,color.x,luminanceWeights)
-                    +1.414*colorBand(b-c,color.y,luminanceWeights)
-                    +2.0*colorBand(c,color.z,luminanceWeights);
-        return float4(value,1.0);
+        // Analogue: (a-b) + 0*(b-c) + 0*c.
+        // Digital:  (a-b) + 1*(b-c) + 1*c = a; no broader blurs needed.
+        return float4(analogue>0.5 ? a-b:a,1.0);
     }
     [[stitchable]] float4 grainFinish(sampler picture, sampler field, sampler means, sampler squares,
-                                    float strength, float offset, float analogue,
+                                    float strength, float offset, float analogue, float fog,
                                     float3 a0, float3 a1, float3 a2, float3 b0, float3 b1, float3 b2,
-                                    float3 slopes, float3 purity, destination dest) {
+                                    float3 slopes, float3 purity, float colorScale, float3 luminanceWeights, destination dest) {
         float2 p=dest.coord();
         float3 mean=means.sample(means.transform(float2(0.5))).rgb;
         float3 second=squares.sample(squares.transform(float2(0.5))).rgb;
         float3 variance=max(float3(0.0),second-mean*mean);
-        // A common gain preserves the hybrid's neutral fine band.
+        // Normalize the RGB texture before applying simple desaturation.
         variance=float3(dot(variance,float3(1.0/3.0)));
         float3 value=field.sample(field.transform(p)).rgb;
         float3 unit=select(float3(0.0),(value-mean)*rsqrt(max(variance,float3(1e-12))),variance>1e-12);
+        unit=colorBand(unit,colorScale,luminanceWeights);
         float4 color=unpremultiply(picture.sample(picture.transform(p)));
         float3 exposed=filmExposure(color.rgb,a0,a1,a2);
-        color.rgb=filmOutput(exposed,unit,strength,offset,analogue,slopes,purity,b0,b1,b2);
+        color.rgb=filmOutput(exposed,unit,strength,offset,analogue,fog,slopes,purity,b0,b1,b2);
         return premultiply(color);
     }
     }}
@@ -185,16 +187,16 @@ nonisolated final class FilmGrain {
     func apply(to image: CIImage, settings: FilmGrainSettings, seed: UInt32 = 1,
                luminance: SIMD3<Double> = SIMD3(0.2126, 0.7152, 0.0722), renderScale: Double = 1,
                mixers: DyeMixers = DyeMixers(), slopes: SIMD3<Double> = SIMD3(repeating: 1),
-               purity: SIMD3<Double> = SIMD3(repeating: 1)) throws -> CIImage {
+               purity: SIMD3<Double> = SIMD3(repeating: 1), fog: Double = FilmGrain.defaultFog) throws -> CIImage {
         guard settings.isEnabled || !mixers.isIdentity else { return image }
-        guard mixers.isValid, (0..<3).allSatisfy({ slopes[$0].isFinite && slopes[$0] > 0
+        guard fog.isFinite, (0...Self.defaultFog).contains(fog), mixers.isValid, (0..<3).allSatisfy({ slopes[$0].isFinite && slopes[$0] > 0
             && purity[$0].isFinite && (0...1).contains(purity[$0]) }) else { throw GrainError.kernel }
         let rows = [mixers.a, mixers.b].flatMap { matrix in
             stride(from: 0, to: 9, by: 3).map { i in
                 CIVector(x: matrix[i], y: matrix[i + 1], z: matrix[i + 2])
             }
         }
-        let model: [Any] = [settings.output == .filmDensity ? 1.0 : 0.0] + rows + [
+        let model: [Any] = [settings.output == .filmDensity ? 1.0 : 0.0, fog] + rows + [
             CIVector(x: slopes.x, y: slopes.y, z: slopes.z),
             CIVector(x: purity.x, y: purity.y, z: purity.z)]
         let extent = image.extent
@@ -209,7 +211,7 @@ nonisolated final class FilmGrain {
         // the rendering scale; image dimensions already set the default Size.
         let scale = size * max(0.000001, renderScale)
         let key = FieldKey(seed: seed & 0x00ffffff, scale: scale,
-                           color: settings.colorScale.clamped(to: 0...1), luminance: luminance)
+                           analogue: settings.output == .filmDensity)
         let field: CIImage, mean: CIImage, squares: CIImage
         if let cached = fieldCache, cached.0 == key {
             field = cached.1; mean = cached.2; squares = cached.3
@@ -218,11 +220,9 @@ nonisolated final class FilmGrain {
             // visible region. No full-resolution noise bitmap is retained.
             guard let white = noise.apply(extent: .infinite, roiCallback: { _, rect in rect },
                                            arguments: [Double(key.seed)]) else { throw GrainError.kernel }
-            let small = white.applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 1.0])
-            let medium = white.applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 4.0])
-            let weights = CIVector(x: CGFloat(luminance.x), y: CGFloat(luminance.y), z: CGFloat(luminance.z))
+            let small = key.analogue ? white.applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 1.0]) : white
             guard let shaped = moments.apply(extent: .infinite, roiCallback: { _, rect in rect },
-                                            arguments: [white, small, medium, key.color, weights]) else { throw GrainError.kernel }
+                                            arguments: [white, small, key.analogue ? 1.0 : 0.0]) else { throw GrainError.kernel }
             field = shaped.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
             // Normalize a bounded reference region on the GPU, rather than
             // reducing a 100MP image every time grain controls change.
@@ -242,7 +242,9 @@ nonisolated final class FilmGrain {
         guard let result = finish.apply(extent: extent, roiCallback: { index, rect in
             index >= 2 ? mean.extent : rect
         }, arguments: [softened, field, mean, squares,
-                       settings.strength.clamped(to: AdjustmentLimits.strength), settings.offset.clamped(to: -1...1)] + model) else {
+                       settings.strength.clamped(to: AdjustmentLimits.strength), settings.offset.clamped(to: -1...1)] + model + [
+                       settings.colorScale.clamped(to: 0...1),
+                       CIVector(x: luminance.x, y: luminance.y, z: luminance.z)]) else {
             throw GrainError.kernel
         }
         return result

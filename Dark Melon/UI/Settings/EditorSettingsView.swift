@@ -213,7 +213,7 @@ struct EditorSettingsView: View {
                 Link("Source code", destination: URL(string: "https://github.com/1096bimu/Dark-Melon")!)
             }
             Section("GNU GPL v3 — full license") {
-                if let url = Bundle.main.url(forResource: "Cinegrain2-LICENSE", withExtension: "txt"),
+                if let url = Bundle.main.url(forResource: "GPL-3.0", withExtension: "txt"),
                    let text = try? String(contentsOf: url, encoding: .utf8) {
                     Text(text).font(.caption).textSelection(.enabled)
                 } else {

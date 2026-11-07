@@ -53,9 +53,12 @@ struct VectorscopeView: View {
                     #endif
                     if !mapping.color.monochrome || resetRAWBalance != nil {
                     Button("Reset WB") {
-                        if let resetRAWBalance { resetRAWBalance() } else { balance = WhiteBalance() }
+                        if let resetRAWBalance { resetRAWBalance() }
+                        else if !lockedItems.contains(.rgbWhiteBalance) { balance = WhiteBalance() }
                     }
-                        .disabled((resetRAWBalance == nil && balance == WhiteBalance()) || mapping.blackAndWhite.isEnabled)
+                        .disabled((resetRAWBalance == nil && (balance == WhiteBalance() || lockedItems.contains(.rgbWhiteBalance)))
+                            || (lockedItems.contains(.rawWhiteBalance) && lockedItems.contains(.rgbWhiteBalance))
+                            || mapping.blackAndWhite.isEnabled)
                     }
                 }
                 if pickingWhiteBalance {

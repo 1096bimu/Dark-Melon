@@ -192,10 +192,8 @@ struct EditorCommands: Commands {
         CommandMenu("Tools") {
             Button("LUT Visualizer…") { showLUTVisualizer?() }
                 .disabled(showLUTVisualizer == nil)
-            #if DEBUG
             Button("Variation Export…") { variationExport?() }
                 .disabled(variationExport == nil)
-            #endif
             Divider()
             Button("White Balance Picker") { togglePicker?(.whiteBalance) }
                 .keyboardShortcut("w", modifiers: [])
